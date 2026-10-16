@@ -3,6 +3,11 @@ project(adiummessagestyle)
 set(PLUGIN_NAME "adiummessagestyle")
 set(PLUGIN_DISPLAY_NAME "Adium message style")
 
+# The plugin is not ported to Qt 6 yet (it depends on Qt WebEngine), so it is
+# disabled by default. Enable it explicitly with -DPLUGIN_adiummessagestyle=ON
+# once the WebEngine port is complete.
+set(PLUGIN_adiummessagestyle NO CACHE BOOL "Enable adiummessagestyle plugin")
+
 include("adiummessagestyle.cmake")
 include("${CMAKE_SOURCE_DIR}/src/plugins/plugins.cmake")
 
