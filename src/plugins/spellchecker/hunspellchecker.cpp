@@ -118,7 +118,7 @@ bool HunspellChecker::isCorrect(const QString &AWord)
 	if(available())
 	{
 		QByteArray encWord = dictEncode(FDictEncoding,AWord);
-		return FHunSpell->spell(encWord.constData());
+		return FHunSpell->spell(encWord.toStdString());
 	}
 	return true;
 }
@@ -149,12 +149,10 @@ QList<QString> HunspellChecker::suggestions(const QString &AWord)
 	QList<QString> words;
 	if(available())
 	{
-		char **sugglist;
 		QByteArray encWord = dictEncode(FDictEncoding,AWord);
-		int count = FHunSpell->suggest(&sugglist, encWord.data());
-		for(int i = 0; i < count; ++i)
-			words.append(dictDecode(FDictEncoding, QByteArray(sugglist[i])));
-		FHunSpell->free_list(&sugglist, count);
+		std::vector<std::string> sugglist = FHunSpell->suggest(encWord.toStdString());
+		for(const std::string &suggestion : sugglist)
+			words.append(dictDecode(FDictEncoding, QByteArray::fromStdString(suggestion)));
 	}
 	return words;
 }
@@ -171,7 +169,7 @@ void HunspellChecker::loadHunspell(const QString &ALang)
 		{
 			QString rulesFile = QString("%1/%2.aff").arg(dictsPath).arg(ALang);
 			FHunSpell = new Hunspell(rulesFile.toLocal8Bit().constData(), dictFile.toLocal8Bit().constData());
-			FDictEncoding = dictEncodingFromName(FHunSpell->get_dic_encoding());
+			FDictEncoding = dictEncodingFromName(FHunSpell->get_dict_encoding().c_str());
 			loadPersonalDict();
 			break;
 		}

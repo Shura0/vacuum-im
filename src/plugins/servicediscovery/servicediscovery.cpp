@@ -1,4 +1,5 @@
 #include "servicediscovery.h"
+#include <utils/qtcompat.h>
 
 #include <QFile>
 #include <QCryptographicHash>
@@ -1038,7 +1039,7 @@ IDiscoInfo ServiceDiscovery::loadCapsInfo(const EntityCapabilities &ACaps) const
 		{
 			QString xmlError;
 			QDomDocument doc;
-			if (doc.setContent(&file,true,&xmlError))
+			if (setDomContent(doc,&file,true,&xmlError))
 			{
 				QDomElement capsElem = doc.documentElement();
 				discoInfoFromElem(capsElem,dinfo);
@@ -1129,9 +1130,9 @@ QString ServiceDiscovery::calcCapsHash(const IDiscoInfo &AInfo, const QString &A
 					if (field.var != "FORM_TYPE")
 					{
 						QStringList values;
-						if (field.value.type() == QVariant::StringList)
+						if (field.value.typeId() == QMetaType::QStringList)
 							values = field.value.toStringList();
-						else if (field.value.type() == QVariant::Bool)
+						else if (field.value.typeId() == QMetaType::Bool)
 							values +=(field.value.toBool() ? "1" : "0");
 						else
 							values += field.value.toString();

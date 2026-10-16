@@ -1,4 +1,5 @@
 #include "adiummessagestyle.h"
+#include <utils/qtcompat.h>
 
 #include <QUrl>
 #include <QDir>
@@ -290,7 +291,7 @@ QMap<QString, QVariant> AdiumMessageStyle::styleInfo(const QString &AStylePath)
 	{
 		QString xmlError;
 		QDomDocument doc;
-		if (doc.setContent(&file,true,&xmlError))
+		if (setDomContent(doc,&file,true,&xmlError))
 		{
 			QDomElement elem = doc.documentElement().firstChildElement("dict").firstChildElement("key");
 			while (!elem.isNull())

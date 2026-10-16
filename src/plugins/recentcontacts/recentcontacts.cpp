@@ -547,7 +547,7 @@ void RecentContacts::setItemProperty(const IRecentItem &AItem, const QString &AN
 			isItemChanged = true;
 		}
 
-		QVariant nullValue = QVariant(AValue.type());
+		QVariant nullValue = QVariant(AValue.typeId());
 		if (AValue != nullValue)
 		{
 			if (!item.properties.contains(AName))
@@ -1044,7 +1044,7 @@ QList<IRecentItem> RecentContacts::loadItemsFromFile(const QString &AFileName) c
 	{
 		QString xmlError;
 		QDomDocument doc;
-		if (doc.setContent(&file,true,&xmlError))
+		if (setDomContent(doc,&file,true,&xmlError))
 		{
 			QDomElement itemsElem = doc.firstChildElement(PST_RECENTCONTACTS);
 			items = loadItemsFromXML(itemsElem,false);

@@ -1146,7 +1146,7 @@ IDataForm SessionNegotiation::defaultForm(const QString &AActionVar, const QVari
 
 	IDataField actionField;
 	actionField.var = AActionVar;
-	actionField.type = AValue.type()==QVariant::Bool ? DATAFIELD_TYPE_BOOLEAN : DATAFIELD_TYPE_TEXTSINGLE;
+	actionField.type = AValue.typeId()==QMetaType::Bool ? DATAFIELD_TYPE_BOOLEAN : DATAFIELD_TYPE_TEXTSINGLE;
 	actionField.value = AValue;
 	actionField.required = true;
 

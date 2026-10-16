@@ -268,27 +268,27 @@ public:
 	{
 		QStyle *style = FOption.widget ? FOption.widget->style() : QApplication::style();
 		
-		switch (AValue.type())
+		switch (AValue.typeId())
 		{
-		case QVariant::Color:
+		case QMetaType::QColor:
 			{
 				QColor color = qvariant_cast<QColor>(AValue);
 				APainter->fillRect(FOption.rect,color);
 				break;
 			}
-		case QVariant::Pixmap:
+		case QMetaType::QPixmap:
 			{
 				QPixmap pixmap = qvariant_cast<QPixmap>(AValue);
 				style->proxy()->drawItemPixmap(APainter,FOption.rect,Qt::AlignCenter,pixmap);
 				break;
 			}
-		case QVariant::Image:
+		case QMetaType::QImage:
 			{
 				QImage image = qvariant_cast<QImage>(AValue);
 				APainter->drawImage(FOption.rect.topLeft(),image);
 				break;
 			}
-		case QVariant::Icon:
+		case QMetaType::QIcon:
 			{
 				QIcon::Mode mode = QIcon::Normal;
 				if (FOption.state & QStyle::State_Selected)
@@ -611,7 +611,7 @@ QWidget *AdvancedItemDelegate::createEditor(QWidget *AParent, const QStyleOption
 				value = items.value(FEditItemId).c->value;
 			}
 			
-			QVariant::Type type = static_cast<QVariant::Type>(value.userType());
+			QMetaType::Type type = static_cast<QMetaType::Type>(value.typeId());
 			widget = editorFactory()->createEditor(type, AParent);
 			
 			if (widget)
@@ -626,7 +626,7 @@ void AdvancedItemDelegate::setEditorData(QWidget *AEditor, const QModelIndex &AI
 	if (FEditProxy==NULL || !FEditProxy->setEditorData(this,AEditor,AIndex))
 	{
 		QVariant value = AEditor->property(ADVANCED_DELEGATE_EDITOR_VALUE_PROPERTY);
-		QByteArray name = editorFactory()->valuePropertyName(value.type());
+		QByteArray name = editorFactory()->valuePropertyName(value.typeId());
 		if (!name.isEmpty()) 
 			AEditor->setProperty(name, value);
 	}
@@ -637,7 +637,7 @@ void AdvancedItemDelegate::setModelData(QWidget *AEditor, QAbstractItemModel *AM
 	if (FEditProxy==NULL || !FEditProxy->setModelData(this,AEditor,AModel,AIndex))
 	{
 		QVariant value = AEditor->property(ADVANCED_DELEGATE_EDITOR_VALUE_PROPERTY);
-		QByteArray name = editorFactory()->valuePropertyName(value.type());
+		QByteArray name = editorFactory()->valuePropertyName(value.typeId());
 		if (!name.isEmpty())
 			AModel->setData(AIndex, AEditor->property(name), FEditRole);
 	}
@@ -721,7 +721,7 @@ AdvancedDelegateItems AdvancedItemDelegate::getIndexItems(const QModelIndex &AIn
 
 		it->c->value = itd->data;
 		if (itd->kind==AdvancedDelegateItem::Decoration || itd->kind==AdvancedDelegateItem::Display || itd->kind==AdvancedDelegateItem::CustomData)
-			if (itd->data.type() == QVariant::Int)
+			if (itd->data.typeId() == QMetaType::Int)
 				it->c->value = AIndex.data(itd->data.toInt());
 		
 		it->c->blinkOpacity = (itd->flags & AdvancedDelegateItem::Blink)>0 ? FBlinkOpacity : 1.0;
@@ -1072,23 +1072,23 @@ QSize AdvancedItemDelegate::itemSizeHint(const AdvancedDelegateItem &AItem, cons
 		}
 	default:
 		{
-			switch (AItem.c->value.type())
+			switch (AItem.c->value.typeId())
 			{
-			case QVariant::Pixmap:
+			case QMetaType::QPixmap:
 				{
 					QPixmap pixmap = qvariant_cast<QPixmap>(AItem.c->value);
 					if (!pixmap.isNull())
 						return pixmap.size();
 					break;
 				}
-			case QVariant::Image:
+			case QMetaType::QImage:
 				{
 					QImage image = qvariant_cast<QImage>(AItem.c->value);
 					if (!image.isNull())
 						return image.size();
 					break;
 				}
-			case QVariant::Icon:
+			case QMetaType::QIcon:
 				{
 					QIcon icon = qvariant_cast<QIcon>(AItem.c->value);
 					if (!icon.isNull())

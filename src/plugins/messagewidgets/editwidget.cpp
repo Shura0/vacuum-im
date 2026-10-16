@@ -271,7 +271,7 @@ bool EditWidget::eventFilter(QObject *AWatched, QEvent *AEvent)
 		if (AEvent->type() == QEvent::KeyPress)
 		{
 			QKeyEvent *keyEvent = static_cast<QKeyEvent *>(AEvent);
-			if (FSendShortcut[0] == keyEvent->key()+keyEvent->modifiers().toInt())
+			if (FSendShortcut[0] == keyEvent->keyCombination())
 			{
 				hooked = true;
 				onShortcutActivated(FSendShortcutId,ui.medEditor);

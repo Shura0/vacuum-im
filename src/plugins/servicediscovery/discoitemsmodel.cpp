@@ -260,9 +260,9 @@ QString DiscoItemsModel::itemToolTip(const IDiscoInfo &ADiscoInfo) const
 					if (field.var != "FORM_TYPE")
 					{
 						QStringList values;
-						if (field.value.type() == QVariant::StringList)
+						if (field.value.typeId() == QMetaType::QStringList)
 							values = field.value.toStringList();
-						else if (field.value.type() == QVariant::Bool)
+						else if (field.value.typeId() == QMetaType::Bool)
 							values +=(field.value.toBool() ? tr("true") : tr("false"));
 						else
 							values += field.value.toString();

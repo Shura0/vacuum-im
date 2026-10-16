@@ -27,31 +27,31 @@ void SortFilterProxyModel::invalidate()
 
 bool SortFilterProxyModel::compareVariant( const QVariant &ALeft, const QVariant &ARight ) const
 {
-	switch (ALeft.userType())
+	switch (ALeft.typeId())
 	{
-	case QVariant::Invalid:
-		return (ARight.type() != QVariant::Invalid);
-	case QVariant::Int:
+	case QMetaType::UnknownType:
+		return (ARight.typeId() != QMetaType::UnknownType);
+	case QMetaType::Int:
 		return ALeft.toInt() < ARight.toInt();
-	case QVariant::UInt:
+	case QMetaType::UInt:
 		return ALeft.toUInt() < ARight.toUInt();
-	case QVariant::LongLong:
+	case QMetaType::LongLong:
 		return ALeft.toLongLong() < ARight.toLongLong();
-	case QVariant::ULongLong:
+	case QMetaType::ULongLong:
 		return ALeft.toULongLong() < ARight.toULongLong();
 	case QMetaType::Float:
 		return ALeft.toFloat() < ARight.toFloat();
-	case QVariant::Double:
+	case QMetaType::Double:
 		return ALeft.toDouble() < ARight.toDouble();
-	case QVariant::Char:
+	case QMetaType::QChar:
 		return ALeft.toChar() < ARight.toChar();
-	case QVariant::Date:
+	case QMetaType::QDate:
 		return ALeft.toDate() < ARight.toDate();
-	case QVariant::Time:
+	case QMetaType::QTime:
 		return ALeft.toTime() < ARight.toTime();
-	case QVariant::DateTime:
+	case QMetaType::QDateTime:
 		return ALeft.toDateTime() < ARight.toDateTime();
-	case QVariant::String:
+	case QMetaType::QString:
 	default:
 		if (isSortLocaleAware())
 			return ALeft.toString().localeAwareCompare(ARight.toString()) < 0;

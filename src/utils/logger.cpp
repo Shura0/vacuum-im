@@ -73,7 +73,7 @@ void Logger::openLog(const QString &APath)
 		qInstallMessageHandler(qtMessagesHandler);
 #endif
 		q->logFile.setFileName(logDir.absoluteFilePath(DateTime(QDateTime::currentDateTime()).toX85DateTime().replace(":","-") +".log"));
-		q->logFile.open(QFile::WriteOnly|QFile::Truncate);
+		(void)q->logFile.open(QFile::WriteOnly|QFile::Truncate);
 	}
 }
 

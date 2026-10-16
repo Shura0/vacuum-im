@@ -18,24 +18,24 @@ OptionsDialogWidget::OptionsDialogWidget(const OptionsNode &ANode, const QString
 	FDateTimeEdit = NULL;
 	FDoubleSpinBox = NULL;
 
-	QVariant::Type valueType = ANode.value().type();
-	if (valueType == QVariant::Bool)
+	int valueType = ANode.value().typeId();
+	if (valueType == QMetaType::Bool)
 	{
 		QCheckBox *editor = new QCheckBox(ACaption,this);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType==QVariant::Time || valueType==QVariant::Date || valueType==QVariant::DateTime)
+	else if (valueType==QMetaType::QTime || valueType==QMetaType::QDate || valueType==QMetaType::QDateTime)
 	{
 		QDateTimeEdit *editor;
-		if (valueType == QVariant::Time)
+		if (valueType == QMetaType::QTime)
 			editor = new QTimeEdit(this);
-		else if (valueType == QVariant::Date)
+		else if (valueType == QMetaType::QDate)
 			editor = new QDateEdit(this);
 		else
 			editor = new QDateTimeEdit(this);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType == QVariant::Color)
+	else if (valueType == QMetaType::QColor)
 	{
 		QComboBox *editor = new QComboBox(this);
 		foreach(const QString &color, QColor::colorNames())
@@ -45,34 +45,34 @@ OptionsDialogWidget::OptionsDialogWidget(const OptionsNode &ANode, const QString
 		}
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType == QVariant::Font)
+	else if (valueType == QMetaType::QFont)
 	{
 		QFontComboBox *editor = new QFontComboBox(this);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType==QVariant::Int || valueType==QVariant::LongLong)
+	else if (valueType==QMetaType::Int || valueType==QMetaType::LongLong)
 	{
 		QSpinBox *editor = new QSpinBox(this);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType==QVariant::UInt || valueType==QVariant::ULongLong)
+	else if (valueType==QMetaType::UInt || valueType==QMetaType::ULongLong)
 	{
 		QSpinBox *editor = new QSpinBox(this);
 		editor->setMinimum(0);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType == QVariant::Double)
+	else if (valueType == QMetaType::Double)
 	{
 		QDoubleSpinBox *editor = new QDoubleSpinBox(this);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType == QVariant::ByteArray)
+	else if (valueType == QMetaType::QByteArray)
 	{
 		QLineEdit *editor = new QLineEdit(this);
 		editor->setEchoMode(QLineEdit::Password);
 		rigisterEditor(ANode,ACaption,editor);
 	}
-	else if (valueType==QVariant::String || valueType==QVariant::KeySequence)
+	else if (valueType==QMetaType::QString || valueType==QMetaType::QKeySequence)
 	{
 		QLineEdit *editor = new QLineEdit(this);
 		rigisterEditor(ANode,ACaption,editor);
@@ -133,11 +133,11 @@ void OptionsDialogWidget::apply()
 	}
 	else if (FSpinBox)
 	{
-		if (FValue.type() == QVariant::UInt)
+		if (FValue.typeId() == QMetaType::UInt)
 			FValue = (uint)FSpinBox->value();
-		else if (FValue.type() == QVariant::LongLong)
+		else if (FValue.typeId() == QMetaType::LongLong)
 			FValue = (qlonglong)FSpinBox->value();
-		else if (FValue.type() == QVariant::ULongLong)
+		else if (FValue.typeId() == QMetaType::ULongLong)
 			FValue = (qulonglong)FSpinBox->value();
 		else
 			FValue = FSpinBox->value();
@@ -194,7 +194,7 @@ void OptionsDialogWidget::reset()
 
 bool OptionsDialogWidget::eventFilter(QObject *AWatched, QEvent *AEvent)
 {
-	if (FValue.type()==QVariant::KeySequence && AWatched==FLineEdit && AEvent->type()==QEvent::KeyPress)
+	if (FValue.typeId()==QMetaType::QKeySequence && AWatched==FLineEdit && AEvent->type()==QEvent::KeyPress)
 	{
 		static const int extKeyMask = 0x01000000;
 		static const int modifMask = Qt::META|Qt::SHIFT|Qt::CTRL|Qt::ALT;
@@ -257,7 +257,7 @@ void OptionsDialogWidget::rigisterEditor(const OptionsNode &ANode, const QString
 	}
 	else if (FLineEdit != NULL)
 	{
-		if (FValue.type() == QVariant::KeySequence)
+		if (FValue.typeId() == QMetaType::QKeySequence)
 			FLineEdit->installEventFilter(this);
 
 		if (FLineEdit->echoMode() == QLineEdit::Password)

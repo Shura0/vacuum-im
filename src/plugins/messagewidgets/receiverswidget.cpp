@@ -1,4 +1,5 @@
 #include "receiverswidget.h"
+#include <utils/qtcompat.h>
 
 #include <QMessageBox>
 #include <QFileDialog>
@@ -52,8 +53,14 @@ void ReceiversProxyModel::setOfflineContactsVisible(bool AVisible)
 {
 	if (FOfflineVisible != AVisible)
 	{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+		beginFilterChange();
+		FOfflineVisible = AVisible;
+		endFilterChange();
+#else
 		FOfflineVisible = AVisible;
 		invalidateFilter();
+#endif
 	}
 }
 
@@ -668,7 +675,7 @@ void ReceiversWidget::selectionLoad(const QString &AFileName)
 		{
 			QString xmlError;
 			QDomDocument doc;
-			if (doc.setContent(&file,true,&xmlError))
+			if (setDomContent(doc,&file,true,&xmlError))
 			{
 				if (doc.documentElement().namespaceURI() == "vacuum:messagewidgets:receiverswidget:selection")
 				{

@@ -1666,7 +1666,7 @@ void MessageArchiver::loadPendingMessages(const Jid &AStreamJid)
 	{
 		QString xmlError;
 		QDomDocument doc;
-		if (doc.setContent(&file,true,&xmlError))
+		if (setDomContent(doc,&file,true,&xmlError))
 		{
 			if (AStreamJid.pBare() == doc.documentElement().attribute("jid"))
 			{
@@ -1968,7 +1968,7 @@ QDomDocument MessageArchiver::loadStanzaSessionsContexts(const Jid &AStreamJid) 
 	if (file.open(QFile::ReadOnly))
 	{
 		QString xmlError;
-		if (!sessions.setContent(&file,true,&xmlError))
+		if (!setDomContent(sessions,&file,true,&xmlError))
 		{
 			REPORT_ERROR(QString("Failed to load stanza sessions contexts from file content: %1").arg(xmlError));
 			sessions.clear();

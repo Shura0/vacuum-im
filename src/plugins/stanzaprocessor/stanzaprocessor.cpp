@@ -196,11 +196,11 @@ bool StanzaProcessor::checkCondition(const QDomElement &AElem, const QString &AC
 	QDomElement elem = AElem;
 
 	int pos = APos;
-	if (pos<ACondition.count() && ACondition[pos] == '/')
+	if (pos<ACondition.size() && ACondition[pos] == '/')
 		pos++;
 
 	QString tagName;
-	while (pos<ACondition.count() && !delimiters.contains(ACondition[pos]))
+	while (pos<ACondition.size() && !delimiters.contains(ACondition[pos]))
 		tagName.append(ACondition[pos++]);
 
 	if (!tagName.isEmpty() &&  elem.tagName() != tagName)
@@ -210,25 +210,25 @@ bool StanzaProcessor::checkCondition(const QDomElement &AElem, const QString &AC
 		return false;
 
 	QMultiHash<QString,QString> attributes;
-	while (pos<ACondition.count() && ACondition[pos] != '/')
+	while (pos<ACondition.size() && ACondition[pos] != '/')
 	{
 		if (ACondition[pos] == '[')
 		{
 			pos++;
 			QString attrName;
 			QString attrValue;
-			while (pos<ACondition.count() && ACondition[pos] != ']')
+			while (pos<ACondition.size() && ACondition[pos] != ']')
 			{
 				if (ACondition[pos] == '@')
 				{
 					pos++;
-					while (pos<ACondition.count() && !delimiters.contains(ACondition[pos]))
+					while (pos<ACondition.size() && !delimiters.contains(ACondition[pos]))
 						attrName.append(ACondition[pos++]);
 				}
 				else if (ACondition[pos]=='"' || ACondition[pos]=='\'')
 				{
 					QChar end = ACondition[pos++];
-					while (pos<ACondition.count() && ACondition[pos]!=end)
+					while (pos<ACondition.size() && ACondition[pos]!=end)
 						attrValue.append(ACondition[pos++]);
 					pos++;
 				}
@@ -247,7 +247,7 @@ bool StanzaProcessor::checkCondition(const QDomElement &AElem, const QString &AC
 		}
 	}
 
-	if (pos < ACondition.count() && !elem.hasChildNodes())
+	if (pos < ACondition.size() && !elem.hasChildNodes())
 		return false;
 
 	while (!elem.isNull())
@@ -288,7 +288,7 @@ bool StanzaProcessor::checkCondition(const QDomElement &AElem, const QString &AC
 			}
 		}
 
-		if (!elem.isNull() && pos<ACondition.count())
+		if (!elem.isNull() && pos<ACondition.size())
 		{
 			if (checkCondition(elem.firstChildElement(),ACondition,pos))
 				return true;

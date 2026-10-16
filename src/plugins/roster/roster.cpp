@@ -470,7 +470,7 @@ void Roster::loadRosterItems(const QString &AFileName)
 		{
 			QString xmlError;
 			QDomDocument doc;
-			if (doc.setContent(&file,true,&xmlError))
+			if (setDomContent(doc,&file,true,&xmlError))
 			{
 				QDomElement itemsElem = doc.firstChildElement("roster");
 				if (!itemsElem.isNull() && itemsElem.attribute("streamJid")==streamJid().pBare())

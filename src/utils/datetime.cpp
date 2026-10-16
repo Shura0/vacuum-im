@@ -2,12 +2,13 @@
 
 #include <QRegularExpression>
 #include <QStringList>
+#include <QTimeZone>
 
 DateTimeData::DateTimeData(const QDateTime &ADT, int ATZD)
 {
 	tzd = ATZD;
 	dt = ADT;
-	dt.setTimeSpec(Qt::LocalTime);
+	dt.setTimeZone(QTimeZone::LocalTime);
 }
 
 DateTimeData::DateTimeData(const DateTimeData &AOther) : QSharedData(AOther)
@@ -27,7 +28,7 @@ DateTime::DateTime(const QDateTime &ADateTime)
 	if (ADateTime.timeSpec() == Qt::LocalTime)
 	{
 		QDateTime utc = ADateTime.toUTC();
-		utc.setTimeSpec(Qt::LocalTime);
+		utc.setTimeZone(QTimeZone::LocalTime);
 		d = new DateTimeData(ADateTime,utc.secsTo(ADateTime));
 	}
 	else
@@ -69,13 +70,13 @@ QDateTime DateTime::dateTime() const
 void DateTime::setDateTime(const QDateTime &ADateTime)
 {
 	d->dt = ADateTime;
-	d->dt.setTimeSpec(Qt::LocalTime);
+	d->dt.setTimeZone(QTimeZone::LocalTime);
 }
 
 QDateTime DateTime::toUTC() const
 {
 	QDateTime utc = d->dt;
-	utc.setTimeSpec(Qt::UTC);
+	utc.setTimeZone(QTimeZone::UTC);
 	return utc.addSecs(-(d->tzd));
 }
 

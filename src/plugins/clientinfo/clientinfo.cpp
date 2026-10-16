@@ -574,7 +574,7 @@ QDateTime ClientInfo::entityTime(const Jid &AContactJid) const
 	{
 		TimeItem tItem = FTimeItems.value(AContactJid);
 		QDateTime dateTime = QDateTime::currentDateTime().toUTC();
-		dateTime.setTimeSpec(Qt::LocalTime);
+		dateTime.setTimeZone(QTimeZone::LocalTime);
 		return dateTime.addSecs(tItem.zone).addSecs(tItem.delta);
 	}
 	return QDateTime();

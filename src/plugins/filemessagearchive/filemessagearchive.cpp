@@ -540,7 +540,7 @@ IArchiveCollection FileMessageArchive::loadFileCollection(const Jid &AStreamJid,
 			{
 				QString xmlError;
 				QDomDocument doc;
-				doc.setContent(&file,true,&xmlError);
+				setDomContent(doc,&file,true,&xmlError);
 				FArchiver->elementToCollection(AStreamJid,doc.documentElement(),collection);
 				if (collection.header.with.isValid() && collection.header.start.isValid())
 					collection.header.engineId = engineId();

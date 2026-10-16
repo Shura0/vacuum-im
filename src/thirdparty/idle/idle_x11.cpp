@@ -82,10 +82,14 @@ bool IdlePlatform::init()
 	if(d->ss_info)
 		return true;
 
+	Display *display = idleX11Display();
+	if(!display)
+		return false;
+
 	old_handler = XSetErrorHandler(xerrhandler);
 
 	int event_base, error_base;
-	if(XScreenSaverQueryExtension(idleX11Display(), &event_base, &error_base)) {
+	if(XScreenSaverQueryExtension(display, &event_base, &error_base)) {
 		d->ss_info = XScreenSaverAllocInfo();
 		return true;
 	}
@@ -96,7 +100,12 @@ int IdlePlatform::secondsIdle()
 {
 	if(!d->ss_info)
 		return 0;
-	if(!XScreenSaverQueryInfo(idleX11Display(), DefaultRootWindow(idleX11Display()), d->ss_info))
+
+	Display *display = idleX11Display();
+	if(!display)
+		return 0;
+
+	if(!XScreenSaverQueryInfo(display, DefaultRootWindow(display), d->ss_info))
 		return 0;
 	return d->ss_info->idle / 1000;
 }

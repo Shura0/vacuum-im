@@ -11,8 +11,14 @@ ConnectionOptionsWidget::ConnectionOptionsWidget(IConnectionManager *AManager, c
 	FProxySettings = NULL;
 
 	ui.cmbSslProtocol->addItem(tr("Auto"),QSsl::SecureProtocols);
+	// Qt 6.3 deprecated QSsl::TlsV1_0/TlsV1_1, but we keep offering them for
+	// compatibility with legacy servers; the values remain functional, so
+	// silence the deprecation warning here.
+	QT_WARNING_PUSH
+	QT_WARNING_DISABLE_DEPRECATED
 	ui.cmbSslProtocol->addItem(tr("TLSv1.0"),QSsl::TlsV1_0);
 	ui.cmbSslProtocol->addItem(tr("TLSv1.1"),QSsl::TlsV1_1);
+	QT_WARNING_POP
 	ui.cmbSslProtocol->addItem(tr("TLSv1.2"),QSsl::TlsV1_2);
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 12, 0))
 	ui.cmbSslProtocol->addItem(tr("TLSv1.3"),QSsl::TlsV1_3);

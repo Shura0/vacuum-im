@@ -164,8 +164,8 @@ QString SpellChecker::dictionaryName(const QString &ADict) const
 				suffix.remove(0,1);
 
 			name = QLocale::languageToString(locale.language());
-			if (locale.country()>QLocale::AnyCountry && localeName.contains('_'))
-				name += "/" + QLocale::countryToString(locale.country());
+			if (locale.territory()>QLocale::AnyTerritory && localeName.contains('_'))
+				name += "/" + QLocale::territoryToString(locale.territory());
 			if (!suffix.isEmpty())
 				name += QString(" (%1)").arg(suffix);
 		}

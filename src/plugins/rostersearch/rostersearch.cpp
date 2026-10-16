@@ -374,7 +374,7 @@ bool RosterSearch::filterAcceptsRow(int ARow, const QModelIndex &AParent) const
 				{
 					accept = false;
 					QVariant fieldData = index.data(dataField);
-					QString string = fieldData.type()==QVariant::StringList ? fieldData.toStringList().join("\t") : fieldData.toString();
+					QString string = fieldData.typeId()==QMetaType::QStringList ? fieldData.toStringList().join("\t") : fieldData.toString();
 					if (string.contains(regExp))
 						return true;
 				}

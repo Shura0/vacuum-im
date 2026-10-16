@@ -289,7 +289,7 @@ bool Bookmarks::setModelData(const AdvancedItemDelegate *ADelegate, QWidget *AEd
 			IBookmark &bookmark = bookmarkList[index];
 
 			QVariant value = AEditor->property(ADVANCED_DELEGATE_EDITOR_VALUE_PROPERTY);
-			QByteArray name = ADelegate->editorFactory()->valuePropertyName(value.type());
+			QByteArray name = ADelegate->editorFactory()->valuePropertyName(value.typeId());
 			QString newName = AEditor->property(name).toString();
 
 			if (!newName.isEmpty() && bookmark.name!=newName)

@@ -217,7 +217,7 @@ void NotifyWidget::resizeEvent(QResizeEvent *AEvent)
 void NotifyWidget::mouseReleaseEvent(QMouseEvent *AEvent)
 {
 	QWidget::mouseReleaseEvent(AEvent);
-	if (geometry().contains(AEvent->globalPos()))
+	if (geometry().contains(AEvent->globalPosition().toPoint()))
 	{
 		if (AEvent->button() == Qt::LeftButton)
 			emit notifyActivated();

@@ -1,4 +1,5 @@
 #include <QStandardPaths>
+#include <utils/qtcompat.h>
 #include "optionsmanager.h"
 
 #include <QRandomGenerator>
@@ -69,7 +70,9 @@ OptionsManager::OptionsManager()
 	FAutoSaveTimer.setInterval(AUTO_SAVE_TIMEOUT);
 	connect(&FAutoSaveTimer, SIGNAL(timeout()),SLOT(onAutoSaveTimerTimeout()));
 
-	QRandomGenerator::global()->seed(QDateTime::currentDateTime().toSecsSinceEpoch());
+	// Qt 6 seeds QRandomGenerator::global() from the system RNG, and reseeding
+	// it is a fatal error ("Attempted to overwrite a QRandomGenerator to
+	// system() or global()"), so no explicit seeding is required here.
 }
 
 OptionsManager::~OptionsManager()
@@ -201,7 +204,7 @@ QMultiMap<int, IOptionsDialogWidget *> OptionsManager::optionsDialogWidgets(cons
 			if (locale.language() != QLocale::C)
 			{
 				QString langName = locale.nativeLanguageName();
-				QString countryName = locale.nativeCountryName();
+				QString countryName = locale.nativeTerritoryName();
 				if (!langName.isEmpty() && !countryName.isEmpty())
 				{
 					langName[0] = langName[0].toUpper();
@@ -293,7 +296,7 @@ bool OptionsManager::setCurrentProfile(const QString &AProfile, const QString &A
 			// Loading options from file
 			QString xmlError;
 			QFile optionsFile(profileDir.filePath(FILE_OPTIONS));
-			if (!optionsFile.open(QFile::ReadOnly) || !FProfileOptions.setContent(&optionsFile,true,&xmlError))
+			if (!optionsFile.open(QFile::ReadOnly) || !setDomContent(FProfileOptions,&optionsFile,true,&xmlError))
 			{
 				if (!xmlError.isEmpty())
 					REPORT_ERROR(QString("Failed to load options from file content: %1").arg(xmlError));
@@ -305,7 +308,7 @@ bool OptionsManager::setCurrentProfile(const QString &AProfile, const QString &A
 
 				// Trying to open valid copy of options
 				optionsFile.setFileName(profileDir.filePath(FILE_OPTIONS_COPY));
-				if (!optionsFile.open(QFile::ReadOnly) || !FProfileOptions.setContent(&optionsFile,true,&xmlError))
+				if (!optionsFile.open(QFile::ReadOnly) || !setDomContent(FProfileOptions,&optionsFile,true,&xmlError))
 				{
 					if (!xmlError.isEmpty())
 						REPORT_ERROR(QString("Failed to load options backup from file content: %1").arg(xmlError));
@@ -664,7 +667,7 @@ QDomDocument OptionsManager::profileDocument(const QString &AProfile) const
 	if (file.open(QFile::ReadOnly))
 	{
 		QString xmlError;
-		if (!doc.setContent(&file,true,&xmlError))
+		if (!setDomContent(doc,&file,true,&xmlError))
 		{
 			REPORT_ERROR(QString("Failed to load profile options from file content: %1").arg(xmlError));
 			doc.clear();
@@ -775,7 +778,7 @@ QMap<QString, QVariant> OptionsManager::loadOptionValues(const QString &AFilePat
 
 		QString xmlError;
 		QDomDocument doc;
-		if (doc.setContent(data,true,&xmlError))
+		if (setDomContent(doc,data,true,&xmlError))
 		{
 			if (doc.documentElement().tagName() == "options")
 			{
@@ -846,7 +849,7 @@ void OptionsManager::onOptionsChanged(const OptionsNode &ANode)
 	else if (ANode.path() == OPV_COMMON_LANGUAGE)
 	{
 		QLocale locale(ANode.value().toString());
-		FPluginManager->setLocale(locale.language(),locale.country());
+		FPluginManager->setLocale(locale.language(),locale.territory());
 	}
 
 	LOG_DEBUG(QString("Options node value changed, node=%1, value=%2").arg(ANode.path(),ANode.value().toString()));

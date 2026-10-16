@@ -302,7 +302,7 @@ bool BitsOfBinary::loadBinary(const QString &AContentId, QString &AType, QByteAr
 	{
 		QString xmlError;
 		QDomDocument doc;
-		if (doc.setContent(&file,true,&xmlError))
+		if (setDomContent(doc,&file,true,&xmlError))
 		{
 			if (AContentId == doc.documentElement().attribute("cid"))
 			{

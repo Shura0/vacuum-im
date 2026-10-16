@@ -1247,7 +1247,7 @@ void RostersView::mouseMoveEvent(QMouseEvent *AEvent)
 
 		if (actions != Qt::IgnoreAction)
 		{
-			QAbstractItemDelegate *itemDeletage = itemDelegate(FPressedIndex);
+			QAbstractItemDelegate *itemDeletage = itemDelegateForIndex(FPressedIndex);
 			if (itemDeletage)
 			{
 				QStyleOptionViewItem option = indexOption(viewOptions(),FPressedIndex);
@@ -1317,7 +1317,7 @@ void RostersView::keyReleaseEvent(QKeyEvent *AEvent)
 
 void RostersView::dropEvent(QDropEvent *AEvent)
 {
-	IRosterIndex *index = FRostersModel!=NULL ? FRostersModel->rosterIndexFromModelIndex(mapToModel(indexAt(AEvent->pos()))) : NULL;
+	IRosterIndex *index = FRostersModel!=NULL ? FRostersModel->rosterIndexFromModelIndex(mapToModel(indexAt(AEvent->position().toPoint()))) : NULL;
 	if (index)
 	{
 		Menu *dropMenu = new Menu(this);
@@ -1329,7 +1329,7 @@ void RostersView::dropEvent(QDropEvent *AEvent)
 		
 		if (accepted && !dropMenu->isEmpty())
 		{
-			if (dropMenu->exec(mapToGlobal(AEvent->pos())))
+			if (dropMenu->exec(mapToGlobal(AEvent->position().toPoint())))
 				AEvent->acceptProposedAction();
 			else
 				AEvent->ignore();
@@ -1372,7 +1372,7 @@ void RostersView::dragEnterEvent(QDragEnterEvent *AEvent)
 void RostersView::dragMoveEvent(QDragMoveEvent *AEvent)
 {
 	FMovedDragHandlers.clear();
-	QModelIndex modelIndex = indexAt(AEvent->pos());
+	QModelIndex modelIndex = indexAt(AEvent->position().toPoint());
 	IRosterIndex *index = FRostersModel!=NULL ? FRostersModel->rosterIndexFromModelIndex(mapToModel(modelIndex)) : NULL;
 	if (index)
 	{
