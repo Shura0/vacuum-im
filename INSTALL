@@ -1,47 +1,50 @@
 [Requirements]
   ==Common==
-    Qt 4.8.x
-    OpenSSL 1.0.0
+    Qt 6.8 (or newer) with the modules: Core Gui Widgets Network Xml Sql Svg
+    PrintSupport Multimedia LinguistTools
+    OpenSSL 1.1 or newer
+    CMake 3.16 or newer
+    C++17 compiler
   ==Linux==
-    libidn
+    libidn (or use the bundled copy)
     libXScrnSaver
-    zlib with minizip
+    zlib with minizip (or use the bundled copy)
     hunspell or enchant or aspell
+
+  Note: the qmake project files have been removed; the only supported build
+  system is CMake.
 
 
 [Common]
-  ==qmake parametrs==
-    INSTALL_PREFIX  - installation prefix
-    INSTALL_APP_DIR - directory name for application
-    INSTALL_LIB_DIR - directory name for libraries
-    INSTALL_RES_DIR - directory name for resources
+  The build is configured with CMake. Useful options:
+
+    CMAKE_INSTALL_PREFIX     installation prefix
+    CMAKE_BUILD_TYPE         Release / Debug (Debug enables extra logging)
+    PLUGIN_adiummessagestyle build the adiummessagestyle plugin (OFF by default;
+                             it is not ported to Qt 6 yet)
+    SPELLCHECKER_BACKEND     HUNSPELL / ENCHANT / ASPELL / NONE
 
 
 [Windows]
   * Default install directory c:\vacuum
-  ==Visual Studio==
-    qmake CONFIG-=debug_and_release CONFIG-=debug -recursive vacuum.pro
-    nmake
-    nmake install
-
-  ==MinGW==
-    qmake CONFIG-=debug_and_release CONFIG-=debug -recursive vacuum.pro
-    mingw32-make.exe
-    mingw32-make.exe install
+  cmake -S . -B build -G "Visual Studio 17 2022" -A x64 ^
+        -DCMAKE_INSTALL_PREFIX=C:/vacuum
+  cmake --build build --config Release
+  cmake --install build --config Release
 
 
 [Linux/Unix]
   * Default install prefix /usr/local
-  * By default libvacuumutils.so is copied to /usr/local/lib. On some distributives
-  * you may receive message that libvacuumutils.so is not found. In this case configure
-  * your system to search libraries in /usr/local/lib.
-  qmake CONFIG-=debug_and_release CONFIG-=debug -recursive vacuum.pro
-  make
-  make install
+  * By default libvacuumutils.so is installed to /usr/local/lib. On some
+    distributions you may receive a message that libvacuumutils.so is not found.
+    In this case configure your system to search libraries in /usr/local/lib.
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build build
+  sudo cmake --install build
 
 
 [MacOS X]
   * Default install directory /Applications/vacuum.app
-  qmake CONFIG-=debug_and_release CONFIG-=debug -recursive vacuum.pro
-  make
-  make install
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build build
+  cmake --install build
