@@ -2,6 +2,7 @@
 #define IOPTIONSMANAGER_H
 
 #include <QList>
+#include <QObject>
 #include <QString>
 #include <QLayout>
 #include <QDialog>
@@ -90,8 +91,8 @@ protected:
 	virtual void optionsDialogNodeRemoved(const IOptionsDialogNode &ANode) =0;
 };
 
-Q_DECLARE_INTERFACE(IOptionsDialogWidget,"Vacuum.Plugin.IOptionsDialogWidget/1.1")
-Q_DECLARE_INTERFACE(IOptionsDialogHolder,"Vacuum.Plugin.IOptionsDialogWidget/1.1")
-Q_DECLARE_INTERFACE(IOptionsManager,"Vacuum.Plugin.IOptionsManager/1.1")
+Q_DECLARE_INTERFACE(IOptionsDialogWidget,"Vacuum.Plugin.IOptionsDialogWidget/1.1");
+Q_DECLARE_INTERFACE(IOptionsDialogHolder,"Vacuum.Plugin.IOptionsDialogWidget/1.1");
+Q_DECLARE_INTERFACE(IOptionsManager,"Vacuum.Plugin.IOptionsManager/1.1");
 
 #endif //IOPTIONSMANAGER_H

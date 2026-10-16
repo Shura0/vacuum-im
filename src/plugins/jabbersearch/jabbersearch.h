@@ -2,6 +2,7 @@
 #define JABBERSEARCH_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ijabbersearch.h>
 #include <interfaces/idataforms.h>
 #include <interfaces/istanzaprocessor.h>
@@ -25,7 +26,7 @@ public:
 	~JabberSearch();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return JABBERSEARCH_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(JABBERSEARCH_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

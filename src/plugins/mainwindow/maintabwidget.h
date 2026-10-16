@@ -2,6 +2,7 @@
 #define MAINTABWIDGET_H
 
 #include <QTabWidget>
+#include <QObject>
 #include <interfaces/imainwindow.h>
 
 class MainTabWidget : 

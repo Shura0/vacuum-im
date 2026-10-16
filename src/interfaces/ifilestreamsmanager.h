@@ -2,6 +2,7 @@
 #define IFILESTREAMSMANAGER_H
 
 #include <QUuid>
+#include <QObject>
 #include <QWidget>
 #include <QDateTime>
 #include <utils/jid.h>
@@ -98,8 +99,8 @@ protected:
 	virtual void streamHandlerRemoved(int AOrder, IFileStreamHandler *AHandler) =0;
 };
 
-Q_DECLARE_INTERFACE(IFileStream,"Vacuum.Plugin.IFileStream/1.2")
-Q_DECLARE_INTERFACE(IFileStreamHandler,"Vacuum.Plugin.IFileStreamHandler/1.1")
-Q_DECLARE_INTERFACE(IFileStreamsManager,"Vacuum.Plugin.IFileStreamsManager/1.3")
+Q_DECLARE_INTERFACE(IFileStream,"Vacuum.Plugin.IFileStream/1.2");
+Q_DECLARE_INTERFACE(IFileStreamHandler,"Vacuum.Plugin.IFileStreamHandler/1.1");
+Q_DECLARE_INTERFACE(IFileStreamsManager,"Vacuum.Plugin.IFileStreamsManager/1.3");
 
 #endif // IFILESTREAMSMANAGER_H

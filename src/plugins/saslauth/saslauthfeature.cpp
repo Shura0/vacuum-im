@@ -164,7 +164,7 @@ bool SASLAuthFeature::xmppStanzaIn(IXmppStream *AXmppStream, Stanza &AStanza, in
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
 					randBytes[i] = static_cast<char>(QRandomGenerator::global()->bounded(0, 256));
 #else
-					randBytes[i] = static_cast<char>(static_cast<int>(256.0 * qrand() / (RAND_MAX + 1.0)));
+					randBytes[i] = static_cast<char>(static_cast<int>(256.0 * QRandomGenerator::global()->generate() / (RAND_MAX + 1.0)));
 #endif
 				}
 
@@ -356,7 +356,7 @@ void SASLAuthFeature::authRequestSCRAM(Stanza &AAuth, const QString AMethod)
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
 		randBytes[i] = static_cast<char>(QRandomGenerator::global()->bounded(0, 256));
 #else
-		randBytes[i] = static_cast<char>(static_cast<int>(256.0 * qrand() / (RAND_MAX + 1.0)));
+		randBytes[i] = static_cast<char>(static_cast<int>(256.0 * QRandomGenerator::global()->generate() / (RAND_MAX + 1.0)));
 #endif
 	}
 	SCRAMSHA_clientNonce = randBytes.toHex();

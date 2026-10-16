@@ -2,6 +2,7 @@
 #define CONNECTIONMANAGER_H
 
 #include <QComboBox>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iconnectionmanager.h>
 #include <interfaces/idefaultconnection.h>
@@ -27,7 +28,7 @@ public:
 	~ConnectionManager();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return CONNECTIONMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CONNECTIONMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

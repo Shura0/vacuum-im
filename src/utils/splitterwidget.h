@@ -2,6 +2,7 @@
 #define SPLITTERWIDGET_H
 
 #include <QFrame>
+#include <QObject>
 #include <QSplitter>
 #include "utilsexport.h"
 #include "boxwidget.h"

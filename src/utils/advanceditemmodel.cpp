@@ -1,6 +1,7 @@
 #include "advanceditemmodel.h"
 
 #include <QTimer>
+#include <QRegularExpression>
 
 #define FIRST_VALID_ROLE 0
 
@@ -118,11 +119,11 @@ QList<QStandardItem *> AdvancedItemModel::findItems(const QMultiMap<int, QVarian
 					case Qt::MatchExactly:
 						accepted = (findValue==itemValue);
 						break;
-					case Qt::MatchRegExp:
-						accepted = QRegExp(findValue.toString(),cs).exactMatch(itemValue.toString());
+					case Qt::MatchRegularExpression:
+						accepted = QRegularExpression(QRegularExpression::anchoredPattern(findValue.toString()),cs==Qt::CaseSensitive ? QRegularExpression::NoPatternOption : QRegularExpression::CaseInsensitiveOption).match(itemValue.toString()).hasMatch();
 						break;
 					case Qt::MatchWildcard:
-						accepted = QRegExp(findValue.toString(), cs, QRegExp::Wildcard).exactMatch(itemValue.toString());
+						accepted = QRegularExpression(QRegularExpression::wildcardToRegularExpression(findValue.toString()), cs==Qt::CaseSensitive ? QRegularExpression::NoPatternOption : QRegularExpression::CaseInsensitiveOption).match(itemValue.toString()).hasMatch();
 						break;
 					case Qt::MatchStartsWith:
 						accepted = itemValue.toString().startsWith(findValue.toString(), cs);
@@ -162,7 +163,7 @@ QMultiMap<int, AdvancedItemSortHandler *> AdvancedItemModel::itemSortHandlers() 
 void AdvancedItemModel::insertItemSortHandler(int AOrder, AdvancedItemSortHandler *AHandler)
 {
 	if (AHandler)
-		FItemSortHandlers.insertMulti(AOrder,AHandler);
+		FItemSortHandlers.insert(AOrder,AHandler);
 }
 
 void AdvancedItemModel::removeItemSortHandler(int AOrder, AdvancedItemSortHandler *AHandler)
@@ -184,8 +185,8 @@ void AdvancedItemModel::insertItemDataHolder(int AOrder, AdvancedItemDataHolder 
 	{
 		foreach(int role, AHolder->advancedItemDataRoles(AOrder))
 			if (role != AnyRole)
-				FItemDataHolders[role].insertMulti(AOrder,AHolder);
-		FItemDataHolders[AnyRole].insertMulti(AOrder,AHolder);
+				FItemDataHolders[role].insert(AOrder,AHolder);
+		FItemDataHolders[AnyRole].insert(AOrder,AHolder);
 	}
 }
 
@@ -202,7 +203,7 @@ void AdvancedItemModel::removeItemDataHolder(int AOrder, AdvancedItemDataHolder 
 
 void AdvancedItemModel::insertChangedItem(QStandardItem *AItem, int ARole)
 {
-	QPair<QStandardItem *, int> item = qMakePair<QStandardItem *, int>(AItem,ARole);
+	QPair<QStandardItem *, int> item = QPair<QStandardItem *, int>(AItem,ARole);
 	if (FChangedItems.isEmpty())
 	{
 		FChangedItems.append(item);

@@ -1,3 +1,5 @@
+#include <QRegularExpression>
+#include <utils/qtcompat.h>
 #include "multiuserchatwindow.h"
 
 #include <QPair>
@@ -535,7 +537,7 @@ bool MultiUserChatWindow::messageDisplay(const Message &AMessage, int ADirection
 			displayed = true;
 			if (!AMessage.isDelayed())
 				updateRecentItemActiveTime(NULL);
-			if (FHistoryRequests.values().contains(NULL))
+			if (FHistoryRequests.values().contains(nullptr))
 				FPendingMessages[NULL].append(AMessage);
 
 			if (AMessage.isDelayed() && AMessage.delayedFromJid()!=FMultiChat->roomJid() && AMessage.delayedFromJid().isValid())
@@ -668,7 +670,7 @@ INotification MultiUserChatWindow::messageNotify(INotifications *ANotifications,
 				{
 					if (FDestroyTimers.contains(window))
 						delete FDestroyTimers.take(window);
-					FActiveChatMessages.insertMulti(window,messageId);
+					FActiveChatMessages.insert(window,messageId);
 
 					QStandardItem *userItem = FUsersView->findUserItem(FMultiChat->findUser(userJid.resource()));
 					if (userItem != NULL)
@@ -1281,7 +1283,7 @@ void MultiUserChatWindow::refreshCompleteNicks()
 	{
 		if (user != FMultiChat->mainUser())
 			if (FCompleteNickStarts.isEmpty() || user->nick().toLower().startsWith(FCompleteNickStarts))
-				sortedNicks.insertMulti(user->nick().toLower(), user->nick());
+				sortedNicks.insert(user->nick().toLower(), user->nick());
 	}
 	FCompleteNicks = sortedNicks.values();
 
@@ -1585,7 +1587,7 @@ bool MultiUserChatWindow::isMentionMessage(const Message &AMessage) const
 		nick += 'z';
 	}
 
-	QRegExp mention(QString("\\b%1\\b").arg(QRegExp::escape(nick)));
+	QRegularExpression mention(QString("\\b%1\\b").arg(QRegularExpression::escape(nick)));
 	return message.indexOf(mention)>=0;
 }
 
@@ -1655,63 +1657,63 @@ bool MultiUserChatWindow::showMultiChatStatusCodes(const QList<int> &ACodes, con
 		QList< QPair<QString,int> > statuses;
 
 		if (ACodes.contains(MUC_SC_NON_ANONYMOUS))
-			statuses.append(qMakePair<QString,int>(tr("This conference is non-anonymous"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("This conference is non-anonymous"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_AFFIL_CHANGED))
-			statuses.append(qMakePair<QString,int>(tr("User %1 affiliation changed while not in the conference").arg(ANick),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("User %1 affiliation changed while not in the conference").arg(ANick),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_MEMBERS_SHOW))
-			statuses.append(qMakePair<QString,int>(tr("Conference now shows unavailable members"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("Conference now shows unavailable members"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_MEMBERS_HIDE))
-			statuses.append(qMakePair<QString,int>(tr("Conference now does not show unavailable members"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("Conference now does not show unavailable members"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_CONFIG_CHANGED))
-			statuses.append(qMakePair<QString,int>(tr("Conference configuration change has occurred"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("Conference configuration change has occurred"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_NOW_LOGGING_ENABLED))
-			statuses.append(qMakePair<QString,int>(tr("Conference logging is now enabled"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("Conference logging is now enabled"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_NOW_LOGGING_DISABLED))
-			statuses.append(qMakePair<QString,int>(tr("Conference logging is now disabled"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("Conference logging is now disabled"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_NOW_NON_ANONYMOUS))
-			statuses.append(qMakePair<QString,int>(tr("The conference is now non-anonymous"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("The conference is now non-anonymous"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_NOW_SEMI_ANONYMOUS))
-			statuses.append(qMakePair<QString,int>(tr("The conference is now semi-anonymous"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("The conference is now semi-anonymous"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_ROOM_CREATED))
-			statuses.append(qMakePair<QString,int>(tr("A new conference has been created"),IMessageStyleContentOptions::TypeNotification));
+			statuses.append(QPair<QString,int>(tr("A new conference has been created"),IMessageStyleContentOptions::TypeNotification));
 
 		if (ACodes.contains(MUC_SC_AFFIL_CHANGE))
-			statuses.append(qMakePair<QString,int>(tr("User %1 has been removed from the conference because of an affiliation change").arg(ANick),IMessageStyleContentOptions::TypeEvent));
+			statuses.append(QPair<QString,int>(tr("User %1 has been removed from the conference because of an affiliation change").arg(ANick),IMessageStyleContentOptions::TypeEvent));
 
 		if (ACodes.contains(MUC_SC_MEMBERS_ONLY))
-			statuses.append(qMakePair<QString,int>(tr("User %1 has been removed from the conference because the conference has been changed to members-only").arg(ANick),IMessageStyleContentOptions::TypeEvent));
+			statuses.append(QPair<QString,int>(tr("User %1 has been removed from the conference because the conference has been changed to members-only").arg(ANick),IMessageStyleContentOptions::TypeEvent));
 
 		if (ACodes.contains(MUC_SC_SYSTEM_SHUTDOWN))
-			statuses.append(qMakePair<QString,int>(tr("User %1 is being removed from the conference because of a system shutdown").arg(ANick),IMessageStyleContentOptions::TypeEvent));
+			statuses.append(QPair<QString,int>(tr("User %1 is being removed from the conference because of a system shutdown").arg(ANick),IMessageStyleContentOptions::TypeEvent));
 
 		// Do not notify
 		if (ACodes.contains(MUC_SC_SELF_PRESENCE))
-			statuses.append(qMakePair<QString,int>(QString(),0));
+			statuses.append(QPair<QString,int>(QString(),0));
 
 		// Do not notify
 		if (ACodes.contains(MUC_SC_NICK_ASSIGNED))
-			statuses.append(qMakePair<QString,int>(QString(),0));
+			statuses.append(QPair<QString,int>(QString(),0));
 
 		// Notified by IMultiUserChat::userChanged()
 		if (ACodes.contains(MUC_SC_NICK_CHANGED))
-			statuses.append(qMakePair<QString,int>(QString(),0));
+			statuses.append(QPair<QString,int>(QString(),0));
 
 		// Notified by IMultiUserChat::userKicked()
 		if (ACodes.contains(MUC_SC_USER_KICKED))
-			statuses.append(qMakePair<QString,int>(QString(),0));
+			statuses.append(QPair<QString,int>(QString(),0));
 
 		// Notified by IMultiUserChat::userBanned()
 		if (ACodes.contains(MUC_SC_USER_BANNED))
-			statuses.append(qMakePair<QString,int>(QString(),0));
+			statuses.append(QPair<QString,int>(QString(),0));
 
 		for (QList< QPair<QString,int> >::const_iterator it=statuses.constBegin(); it!=statuses.constEnd(); ++it)
 		{
@@ -1777,7 +1779,7 @@ void MultiUserChatWindow::showMultiChatUserMessage(const Message &AMessage, cons
 
 void MultiUserChatWindow::requestMultiChatHistory()
 {
-	if (FMessageArchiver && !FHistoryRequests.values().contains(NULL))
+	if (FMessageArchiver && !FHistoryRequests.values().contains(nullptr))
 	{
 		IArchiveRequest request;
 		request.with = FMultiChat->roomJid();
@@ -2113,7 +2115,7 @@ bool MultiUserChatWindow::eventFilter(QObject *AObject, QEvent *AEvent)
 		if (AEvent->type()==QEvent::MouseButtonPress || AEvent->type()==QEvent::MouseButtonRelease)
 		{
 			QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(AEvent);
-			if (mouseEvent!=NULL && mouseEvent->button()==Qt::MidButton)
+			if (mouseEvent!=NULL && mouseEvent->button()==Qt::MiddleButton)
 			{
 				if (AEvent->type() == QEvent::MouseButtonPress)
 				{
@@ -2133,7 +2135,7 @@ bool MultiUserChatWindow::eventFilter(QObject *AObject, QEvent *AEvent)
 		if (AEvent->type()==QEvent::MouseButtonPress || AEvent->type()==QEvent::MouseButtonRelease)
 		{
 			QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(AEvent);
-			if (mouseEvent!=NULL && mouseEvent->button()==Qt::MidButton)
+			if (mouseEvent!=NULL && mouseEvent->button()==Qt::MiddleButton)
 			{
 				if (AEvent->type() == QEvent::MouseButtonPress)
 				{
@@ -2615,7 +2617,7 @@ void MultiUserChatWindow::onMultiChatNotifierActiveNotifyChanged(int ANotifyId)
 
 void MultiUserChatWindow::onMultiChatEditWidgetKeyEvent(QKeyEvent *AKeyEvent, bool &AHooked)
 {
-	if (FMultiChat->isOpen() && AKeyEvent->modifiers()+AKeyEvent->key() == NICK_MENU_KEY)
+	if (FMultiChat->isOpen() && AKeyEvent->modifiers().toInt()+AKeyEvent->key() == NICK_MENU_KEY)
 	{
 		QTextEdit *textEdit = FEditWidget->textEdit();
 		QTextCursor cursor = textEdit->textCursor();
@@ -2737,7 +2739,7 @@ void MultiUserChatWindow::onMultiChatUserItemToolTips(QStandardItem *AItem, QMap
 void MultiUserChatWindow::onMultiChatContentAppended(const QString &AHtml, const IMessageStyleContentOptions &AOptions)
 {
 	IMessageViewWidget *widget = qobject_cast<IMessageViewWidget *>(sender());
-	if (widget==FViewWidget && FHistoryRequests.values().contains(NULL))
+	if (widget==FViewWidget && FHistoryRequests.values().contains(nullptr))
 	{
 		WindowContent content;
 		content.html = AHtml;
@@ -3040,7 +3042,7 @@ void MultiUserChatWindow::onChangeUserAffiliationActionTriggered(bool)
 
 void MultiUserChatWindow::onInviteUserMenuAccepted(const QMultiMap<Jid, Jid> &AAddresses)
 {
-	QList<Jid> contacts = AAddresses.values().toSet().toList();
+	QList<Jid> contacts = qToSet(AAddresses.values()).values();
 	if (!contacts.isEmpty())
 		FMultiChat->sendInvitation(contacts);
 }

@@ -2,6 +2,7 @@
 #define CHATSTATES_H
 
 #include <QMap>
+#include <QObject>
 #include <QTimer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ichatstates.h>
@@ -76,7 +77,7 @@ public:
 	~ChatStates();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return CHATSTATES_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CHATSTATES_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

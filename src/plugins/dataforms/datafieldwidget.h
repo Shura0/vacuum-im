@@ -2,6 +2,7 @@
 #define DATAFIELDWIDGET_H
 
 #include <QLabel>
+#include <QObject>
 #include <QLineEdit>
 #include <QComboBox>
 #include <QCheckBox>

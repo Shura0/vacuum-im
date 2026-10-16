@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "editproxydialog.h"
 
 #include <utils/logger.h>
@@ -121,11 +122,11 @@ void EditProxyDialog::onDialogButtonBoxAccepted()
 {
 	updateProxyItem(ui.ltwProxyList->currentItem());
 
-	QSet<QUuid> oldProxy = FManager->proxyList().toSet();
+	QSet<QUuid> oldProxy = qToSet(FManager->proxyList());
 	for (int row = 0; row < ui.ltwProxyList->count(); row++)
 	{
 		QListWidgetItem *proxyItem = ui.ltwProxyList->item(row);
-		QUuid id = proxyItem->data(PDR_UUID).toString();
+		QUuid id(proxyItem->data(PDR_UUID).toString());
 		if (!id.isNull())
 		{
 			IConnectionProxy proxy;

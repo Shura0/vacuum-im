@@ -2,6 +2,7 @@
 #define EDITITEMDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QCheckBox>
 #include "ui_edititemdialog.h"
 

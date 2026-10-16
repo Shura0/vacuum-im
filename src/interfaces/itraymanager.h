@@ -2,6 +2,7 @@
 #define ITRAYMANAGER_H
 
 #include <QSystemTrayIcon>
+#include <QObject>
 #include <utils/menu.h>
 
 #define TRAYMANAGER_UUID "{DF738BB8-B22B-4307-9EF8-F5833D7D2204}"
@@ -43,6 +44,6 @@ protected:
 	virtual void messageShown(const QString &ATitle, const QString &AMessage,QSystemTrayIcon::MessageIcon AIcon, int ATimeout) =0;
 };
 
-Q_DECLARE_INTERFACE(ITrayManager,"Vacuum.Plugin.ITrayManager/1.1")
+Q_DECLARE_INTERFACE(ITrayManager,"Vacuum.Plugin.ITrayManager/1.1");
 
 #endif

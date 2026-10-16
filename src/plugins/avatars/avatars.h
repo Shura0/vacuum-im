@@ -2,6 +2,7 @@
 #define AVATARS_H
 
 #include <QDir>
+#include <QObject>
 #include <QSet>
 #include <QRunnable>
 #include <QThreadPool>
@@ -51,7 +52,7 @@ public:
 	~Avatars();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return AVATARTS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(AVATARTS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

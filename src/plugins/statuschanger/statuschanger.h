@@ -2,6 +2,7 @@
 #define STATUSCHANGER_H
 
 #include <QSet>
+#include <QObject>
 #include <QPair>
 #include <QPointer>
 #include <QDateTime>
@@ -46,7 +47,7 @@ public:
 	~StatusChanger();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return STATUSCHANGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(STATUSCHANGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

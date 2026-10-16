@@ -2,6 +2,7 @@
 #define ADIUMMESSAGESTYLEPLUGIN_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/imessagestylemanager.h>
 #include <interfaces/iurlprocessor.h>
 #include "adiummessagestyle.h"
@@ -22,7 +23,7 @@ public:
 	~AdiumMessageStyleEngine();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return ADIUMMESSAGESTYLE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ADIUMMESSAGESTYLE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

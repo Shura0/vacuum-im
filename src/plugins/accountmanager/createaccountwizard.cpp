@@ -5,7 +5,6 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QMessageBox>
-#include <QSignalMapper>
 #include <QTextDocument>
 #include <definitions/namespaces.h>
 #include <definitions/optionnodes.h>
@@ -56,7 +55,7 @@ ConnectionOptionsWidget::ConnectionOptionsWidget(QWidget *AParent) : QWidget(APa
 			if (odwConnectionSettings)
 			{
 				QVBoxLayout *layout = new QVBoxLayout(this);
-				layout->setMargin(0);
+				layout->setContentsMargins(0,0,0,0);
 
 				lblConnectionSettings = new QLabel(this);
 				onConnectionSettingsLinkActivated("hide");
@@ -820,7 +819,7 @@ RegisterRequestPage::RegisterRequestPage(QWidget *AParent) : QWizardPage(AParent
 	lblDescription->setAlignment(Qt::AlignCenter);
 
 	vltRegisterForm = new QVBoxLayout;
-	vltRegisterForm->setMargin(0);
+	vltRegisterForm->setContentsMargins(0,0,0,0);
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	layout->addStretch();

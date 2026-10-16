@@ -2,6 +2,7 @@
 #define ISERVERMESSAGEARCHIVE_H
 
 #include <interfaces/imessagearchiver.h>
+#include <QObject>
 
 #define SERVERMESSAGEARCHIVE_UUID "{5309B204-651E-4cc8-9993-6A50D66301AA}"
 
@@ -21,6 +22,6 @@ protected:
 	virtual void serverModificationsLoaded(const QString &AId, const IArchiveModifications &AModifs, const QString &ANextRef) =0;
 };
 
-Q_DECLARE_INTERFACE(IServerMesssageArchive,"Vacuum.Plugin.IServerMesssageArchive/1.2")
+Q_DECLARE_INTERFACE(IServerMesssageArchive,"Vacuum.Plugin.IServerMesssageArchive/1.2");
 
 #endif //ISERVERMESSAGEARCHIVE_H

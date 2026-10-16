@@ -48,7 +48,7 @@ void Annotations::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(PRIVATESTORAGE_UUID);
+	APluginInfo->dependences.append(QUuid(PRIVATESTORAGE_UUID));
 }
 
 bool Annotations::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -289,8 +289,8 @@ void Annotations::updateDataHolder(const Jid &AStreamJid, const QList<Jid> &ACon
 	{
 		QMultiMap<int,QVariant> findData;
 		foreach(const Jid &contactJid, AContactJids)
-			findData.insertMulti(RDR_PREP_BARE_JID,contactJid.pBare());
-		findData.insertMulti(RDR_STREAM_JID,AStreamJid.pFull());
+			findData.insert(RDR_PREP_BARE_JID,contactJid.pBare());
+		findData.insert(RDR_STREAM_JID,AStreamJid.pFull());
 
 		foreach (IRosterIndex *index, sroot->findChilds(findData,true))
 			emit rosterDataChanged(index,RDR_ANNOTATIONS);

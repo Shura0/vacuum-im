@@ -2,6 +2,7 @@
 #define ACTION_H
 
 #include <QHash>
+#include <QObject>
 #include <QAction>
 #include <QVariant>
 #include "utilsexport.h"

@@ -2,6 +2,7 @@
 #define CLIENTINFODIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iclientinfo.h>
 #include "ui_clientinfodialog.h"
 

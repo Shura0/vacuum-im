@@ -2,6 +2,7 @@
 #define MESSAGEWINDOW_H
 
 #include <interfaces/irostersview.h>
+#include <QObject>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/ixmppstreammanager.h>

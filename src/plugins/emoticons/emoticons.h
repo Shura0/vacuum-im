@@ -2,6 +2,7 @@
 #define EMOTICONS_H
 
 #include <QHash>
+#include <QObject>
 #include <QStringList>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iemoticons.h>
@@ -31,7 +32,7 @@ public:
 	~Emoticons();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return EMOTICONS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(EMOTICONS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

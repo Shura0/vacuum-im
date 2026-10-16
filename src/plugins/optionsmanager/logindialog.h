@@ -2,6 +2,7 @@
 #define LOGINDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_logindialog.h"
 

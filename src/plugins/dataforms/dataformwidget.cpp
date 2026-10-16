@@ -1,3 +1,4 @@
+#include <QScreen>
 #include "dataformwidget.h"
 
 #include <QLabel>
@@ -9,7 +10,6 @@
 #include <QMessageBox>
 #include <QTextDocument>
 #include <QApplication>
-#include <QDesktopWidget>
 
 class ScrollArea : 
 	public QScrollArea
@@ -30,12 +30,12 @@ public:
 		if (widget())
 			sh += widgetResizable() ? widget()->sizeHint() : widget()->size();
 
-		QSize desktopSize = QApplication::desktop()->availableGeometry(this).size();
+		QSize desktopSize = screen()->availableGeometry().size();
 		return sh.boundedTo(desktopSize/2);
 	}
 	virtual QSize minimumSizeHint() const
 	{
-		QSize desktopSize = QApplication::desktop()->availableGeometry(this).size();
+		QSize desktopSize = screen()->availableGeometry().size();
 		return sizeHint().boundedTo(desktopSize/4);
 	}
 	virtual bool event(QEvent *AEvent)
@@ -53,7 +53,7 @@ DataFormWidget::DataFormWidget(IDataForms *ADataForms, const IDataForm &AForm, Q
 	FDataForms = ADataForms;
 
 	QVBoxLayout *formLayout = new QVBoxLayout(this);
-	formLayout->setMargin(0);
+	formLayout->setContentsMargins(0,0,0,0);
 
 	foreach(const QString &text, FForm.instructions)
 	{
@@ -98,7 +98,7 @@ DataFormWidget::DataFormWidget(IDataForms *ADataForms, const IDataForm &AForm, Q
 
 			QWidget *scrollWidget = new QWidget(scroll);
 			QVBoxLayout *scrollLayout = new QVBoxLayout(scrollWidget);
-			scrollLayout->setMargin(0);
+			scrollLayout->setContentsMargins(0,0,0,0);
 
 			bool stretch = true;
 			if (FForm.pages.count() == 0)
@@ -139,7 +139,7 @@ DataFormWidget::DataFormWidget(IDataForms *ADataForms, const IDataForm &AForm, Q
 
 				QWidget *scrollWidget = new QWidget(scroll);
 				QVBoxLayout *scrollLayout = new QVBoxLayout(scrollWidget);
-				scrollLayout->setMargin(0);
+				scrollLayout->setContentsMargins(0,0,0,0);
 
 				if (insertLayout(page,scrollWidget))
 					scrollLayout->addStretch();

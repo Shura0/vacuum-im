@@ -2,6 +2,7 @@
 #define IURLPROCESSOR_H
 
 #include <QNetworkReply>
+#include <QObject>
 #include <QNetworkAccessManager>
 
 #define URLPROCESSOR_UUID "{c2d1eba4-a18d-bf31-da24-bc61d33f3205}"
@@ -20,7 +21,7 @@ public:
 	virtual bool registerUrlHandler(const QString &AScheme, IUrlHandler *AUrlHandler) = 0;
 };
 
-Q_DECLARE_INTERFACE(IUrlHandler, "Vacuum.Plugin.IUrlHandler/1.1")
-Q_DECLARE_INTERFACE(IUrlProcessor, "Vacuum.Plugin.IUrlProcessor/1.1")
+Q_DECLARE_INTERFACE(IUrlHandler, "Vacuum.Plugin.IUrlHandler/1.1");
+Q_DECLARE_INTERFACE(IUrlProcessor, "Vacuum.Plugin.IUrlProcessor/1.1");
 
 #endif	//IURLPROCESSOR_H

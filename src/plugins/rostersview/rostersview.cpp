@@ -1,5 +1,7 @@
+#include <utils/qtcompat.h>
 #include "rostersview.h"
 
+#include <QRandomGenerator>
 #include <QDrag>
 #include <QCursor>
 #include <QToolTip>
@@ -99,7 +101,7 @@ QList<int> RostersView::rosterDataRoles(int AOrder) const
 	if (AOrder == RDHO_ROSTERSVIEW)
 		return QList<int>() << RDR_LABEL_ITEMS;
 	else if (AOrder == RDHO_ROSTERSVIEW_NOTIFY)
-		return QList<int>() << RDR_FORCE_VISIBLE << Qt::DecorationRole << Qt::BackgroundColorRole;
+		return QList<int>() << RDR_FORCE_VISIBLE << Qt::DecorationRole << Qt::BackgroundRole;
 	return QList<int>();
 }
 
@@ -146,7 +148,7 @@ QVariant RostersView::rosterData(int AOrder, const IRosterIndex *AIndex, int ARo
 			{
 				data = !notify.icon.isNull() ? notify.icon : data;
 			}
-			else if (ARole == Qt::BackgroundColorRole)
+			else if (ARole == Qt::BackgroundRole)
 			{
 				data = notify.background;
 			}
@@ -402,7 +404,7 @@ void RostersView::toolTipsForIndex(IRosterIndex *AIndex, const QHelpEvent *AEven
 		for (QMap<int, QString>::iterator it=AToolTips.begin(); it!=AToolTips.end(); toolTipsLast--)
 		{
 			QString &tooltip = it.value();
-			QStringList parts = tooltip.split(separator,QString::KeepEmptyParts,Qt::CaseInsensitive);
+			QStringList parts = tooltip.split(separator,Qt::KeepEmptyParts,Qt::CaseInsensitive);
 			if (parts.count() > 1)
 			{
 				if (it==AToolTips.begin() && parts.first().isEmpty())
@@ -513,9 +515,9 @@ bool RostersView::setSelectedRosterIndexes(const QList<IRosterIndex *> &AIndexes
 		bool accepted = APartial || isSelectionAcceptable(AIndexes);
 		if (accepted)
 		{
-			QSet<IRosterIndex *> curSelected = selectedRosterIndexes().toSet();
-			QSet<IRosterIndex *> newSelected = AIndexes.toSet() - curSelected;
-			QSet<IRosterIndex *> oldSelected = curSelected - AIndexes.toSet();
+			QSet<IRosterIndex *> curSelected = qToSet(selectedRosterIndexes());
+			QSet<IRosterIndex *> newSelected = qToSet(AIndexes) - curSelected;
+			QSet<IRosterIndex *> oldSelected = curSelected - qToSet(AIndexes);
 
 			foreach(IRosterIndex *index, oldSelected)
 			{
@@ -687,7 +689,7 @@ QModelIndex RostersView::mapToModel(const QModelIndex &AProxyIndex) const
 	QModelIndex index = AProxyIndex;
 	if (!FProxyModels.isEmpty())
 	{
-		QMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constEnd();
+		QMultiMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constEnd();
 		do
 		{
 			--it;
@@ -702,7 +704,7 @@ QModelIndex RostersView::mapFromModel(const QModelIndex &AModelIndex) const
 	QModelIndex index = AModelIndex;
 	if (!FProxyModels.isEmpty())
 	{
-		QMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constBegin();
+		QMultiMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constBegin();
 		while (it != FProxyModels.constEnd())
 		{
 			index = it.value()->mapFromSource(index);
@@ -717,7 +719,7 @@ QModelIndex RostersView::mapToProxy(QAbstractProxyModel *AProxyModel, const QMod
 	QModelIndex index = AModelIndex;
 	if (!FProxyModels.isEmpty())
 	{
-		QMap<int,QAbstractProxyModel *>::const_iterator it = FProxyModels.constBegin();
+		QMultiMap<int,QAbstractProxyModel *>::const_iterator it = FProxyModels.constBegin();
 		while (it!=FProxyModels.constEnd())
 		{
 			index = it.value()->mapFromSource(index);
@@ -735,7 +737,7 @@ QModelIndex RostersView::mapFromProxy(QAbstractProxyModel *AProxyModel, const QM
 	if (!FProxyModels.isEmpty())
 	{
 		bool doMap = false;
-		QMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constEnd();
+		QMultiMap<int, QAbstractProxyModel *>::const_iterator it = FProxyModels.constEnd();
 		do
 		{
 			--it;
@@ -773,7 +775,7 @@ void RostersView::insertLabel(quint32 ALabelId, IRosterIndex *AIndex)
 {
 	if (FLabelItems.contains(ALabelId) && !FIndexLabels.contains(AIndex,ALabelId))
 	{
-		FIndexLabels.insertMulti(AIndex,ALabelId);
+		FIndexLabels.insert(AIndex,ALabelId);
 		emit rosterDataChanged(AIndex,RDR_LABEL_ITEMS);
 		updateBlinkTimer();
 	}
@@ -814,7 +816,7 @@ QList<int> RostersView::notifyQueue(IRosterIndex *AIndex) const
 {
 	QMultiMap<int, int> queue;
 	foreach(int notifyId, FIndexNotifies.values(AIndex))
-		queue.insertMulti(FNotifyItems.value(notifyId).order, notifyId);
+		queue.insert(FNotifyItems.value(notifyId).order, notifyId);
 	return queue.values();
 }
 
@@ -830,14 +832,14 @@ QList<IRosterIndex *> RostersView::notifyIndexes(int ANotifyId) const
 
 int RostersView::insertNotify(const IRostersNotify &ANotify, const QList<IRosterIndex *> &AIndexes)
 {
-	int notifyId = qrand();
+	int notifyId = QRandomGenerator::global()->generate();
 	while(notifyId<=0 || FNotifyItems.contains(notifyId))
-		notifyId = qrand();
+		notifyId = QRandomGenerator::global()->generate();
 
 	foreach(IRosterIndex *index, AIndexes)
 	{
 		FNotifyUpdates += index;
-		FIndexNotifies.insertMulti(index, notifyId);
+		FIndexNotifies.insert(index, notifyId);
 	}
 
 	if (ANotify.flags & IRostersNotify::Blink)
@@ -929,7 +931,7 @@ void RostersView::insertLabelHolder(int AOrder, IRostersLabelHolder *AHolder)
 	{
 		if (!FLabelHolders.values().contains(AHolder))
 			connect(AHolder->instance(),SIGNAL(rosterLabelChanged(quint32, IRosterIndex *)),SLOT(onRosterLabelChanged(quint32, IRosterIndex *)));
-		FLabelHolders.insertMulti(AOrder,AHolder);
+		FLabelHolders.insert(AOrder,AHolder);
 		LOG_DEBUG(QString("Roster label holder inserted, order=%1, class=%2").arg(AOrder).arg(AHolder->instance()->metaObject()->className()));
 	}
 }
@@ -954,7 +956,7 @@ void RostersView::insertClickHooker(int AOrder, IRostersClickHooker *AHooker)
 {
 	if (AHooker)
 	{
-		FClickHookers.insertMulti(AOrder,AHooker);
+		FClickHookers.insert(AOrder,AHooker);
 		LOG_DEBUG(QString("Roster click hooker inserted, order=%1, address=%2").arg(AOrder).arg((quint64)AHooker));
 	}
 }
@@ -977,7 +979,7 @@ void RostersView::insertKeyHooker(int AOrder, IRostersKeyHooker *AHooker)
 {
 	if (AHooker)
 	{
-		FKeyHookers.insertMulti(AOrder,AHooker);
+		FKeyHookers.insert(AOrder,AHooker);
 		LOG_DEBUG(QString("Roster key hooker inserted, order=%1, address=%2").arg(AOrder).arg((quint64)AHooker));
 	}
 }
@@ -1000,7 +1002,7 @@ void RostersView::insertEditHandler(int AOrder, IRostersEditHandler *AHandler)
 {
 	if (AHandler)
 	{
-		FEditHandlers.insertMulti(AOrder,AHandler);
+		FEditHandlers.insert(AOrder,AHandler);
 		LOG_DEBUG(QString("Roster edit handler inserted, address=%1").arg((quint64)AHandler));
 	}
 }
@@ -1063,6 +1065,13 @@ void RostersView::setDropIndicatorRect(const QRect &ARect)
 		FDropIndicatorRect = ARect;
 		viewport()->update();
 	}
+}
+
+QStyleOptionViewItem RostersView::viewOptions() const
+{
+	QStyleOptionViewItem option;
+	initViewItemOption(&option);
+	return option;
 }
 
 QStyleOptionViewItem RostersView::indexOption(const QStyleOptionViewItem &AOption, const QModelIndex &AIndex) const
@@ -1146,7 +1155,7 @@ void RostersView::paintEvent(QPaintEvent *AEvent)
 	if (!FDropIndicatorRect.isNull())
 	{
 		QStyleOption option;
-		option.init(this);
+		option.initFrom(this);
 		option.rect = FDropIndicatorRect.adjusted(0,0,-1,-1);
 		QPainter painter(viewport());
 		style()->drawPrimitive(QStyle::PE_IndicatorItemViewItemDrop, &option, &painter, this);

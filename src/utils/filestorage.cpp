@@ -239,8 +239,14 @@ void FileStorage::setResourcesDirs(const QList<QString> &ADirs)
 	if (FResourceDirs != cleanDirs)
 	{
 		QList<FileStorage *> updateStorages;
-		QSet<QString> oldDirs = FResourceDirs.toSet() - cleanDirs.toSet();
-		QSet<QString> newDirs = cleanDirs.toSet() - FResourceDirs.toSet();
+		QSet<QString> oldDirs;
+		foreach(const QString &dir, FResourceDirs)
+			if (!cleanDirs.contains(dir))
+				oldDirs.insert(dir);
+		QSet<QString> newDirs;
+		foreach(const QString &dir, cleanDirs)
+			if (!FResourceDirs.contains(dir))
+				newDirs.insert(dir);
 
 		foreach(FileStorage *fileStorage, FInstances)
 		{

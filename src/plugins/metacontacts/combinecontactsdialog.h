@@ -2,6 +2,7 @@
 #define COMBINECONTACTSDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/irostermanager.h>
 #include <interfaces/iavatars.h>
 #include <interfaces/imetacontacts.h>

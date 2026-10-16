@@ -2,6 +2,7 @@
 #define ICHATSTATES_H
 
 #include <utils/jid.h>
+#include <QObject>
 
 #define CHATSTATES_UUID "{3f924c9c-3539-43f9-8c85-e410b792a946}"
 
@@ -41,6 +42,6 @@ protected:
 	virtual void selfRoomStateChanged(const Jid &AStreamJid, const Jid &ARoomJid, int AState) const =0;
 };
 
-Q_DECLARE_INTERFACE(IChatStates,"Vacuum.Plugin.IChatStates/1.2")
+Q_DECLARE_INTERFACE(IChatStates,"Vacuum.Plugin.IChatStates/1.2");
 
 #endif //ICHATSTATES_H

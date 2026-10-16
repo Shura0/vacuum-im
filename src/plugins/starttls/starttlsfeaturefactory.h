@@ -2,6 +2,7 @@
 #define STARTTLSFEATUREFACTORY_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ixmppstreammanager.h>
 #include "starttlsfeature.h"
 
@@ -20,7 +21,7 @@ public:
 	~StartTLSFeatureFactory();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return STARTTLS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(STARTTLS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

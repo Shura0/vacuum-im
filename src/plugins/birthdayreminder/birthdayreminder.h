@@ -2,6 +2,7 @@
 #define BIRTHDAYREMINDER_H
 
 #include <QTimer>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ibirthdayreminder.h>
 #include <interfaces/ivcardmanager.h>
@@ -26,7 +27,7 @@ public:
 	~BirthdayReminder();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return BIRTHDAYREMINDER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(BIRTHDAYREMINDER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

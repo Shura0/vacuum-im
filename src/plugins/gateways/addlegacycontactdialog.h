@@ -2,6 +2,7 @@
 #define ADDLEGACYCONTACTDIALOG_H
 
 #include <interfaces/igateways.h>
+#include <QObject>
 #include <interfaces/irosterchanger.h>
 #include "ui_addlegacycontactdialog.h"
 

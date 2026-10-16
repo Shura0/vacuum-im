@@ -2,6 +2,7 @@
 #define ICLIENTINFO_H
 
 #include <QDateTime>
+#include <QObject>
 #include <utils/jid.h>
 
 #define CLIENTINFO_UUID "{3E2A0C1D-B347-43f5-B90B-5E7F87D7D8B0}"
@@ -48,6 +49,6 @@ protected:
 	virtual void entityTimeChanged(const Jid &AContactJid) =0;
 };
 
-Q_DECLARE_INTERFACE(IClientInfo,"Vacuum.Plugin.IClientInfo/1.0")
+Q_DECLARE_INTERFACE(IClientInfo,"Vacuum.Plugin.IClientInfo/1.0");
 
 #endif

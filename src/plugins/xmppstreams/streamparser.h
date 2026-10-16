@@ -2,6 +2,7 @@
 #define STREAMPARSER_H
 
 #include <QDomDocument>
+#include <QObject>
 #include <QXmlStreamReader>
 #include <utils/xmpperror.h>
 

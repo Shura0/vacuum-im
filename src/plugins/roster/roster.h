@@ -2,6 +2,7 @@
 #define ROSTER_H
 
 #include <interfaces/irostermanager.h>
+#include <QObject>
 #include <interfaces/istanzaprocessor.h>
 #include <interfaces/ixmppstreammanager.h>
 

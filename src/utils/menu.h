@@ -2,6 +2,7 @@
 #define MENU_H
 
 #include <QMenu>
+#include <QObject>
 #include <QMultiMap>
 #include "utilsexport.h"
 #include "action.h"

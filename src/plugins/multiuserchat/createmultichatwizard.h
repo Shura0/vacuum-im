@@ -2,6 +2,7 @@
 #define CREATEMULTICHATWIZARD_H
 
 #include <QTimer>
+#include <QObject>
 #include <QLabel>
 #include <QWizard>
 #include <QVariant>

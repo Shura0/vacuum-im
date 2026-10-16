@@ -2,6 +2,7 @@
 #define METACONTACTS_H
 
 #include <QMap>
+#include <QObject>
 #include <QHash>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imetacontacts.h>
@@ -47,7 +48,7 @@ public:
 	~MetaContacts();
 	virtual QObject *instance() { return this; }
 	// IPlugin
-	virtual QUuid pluginUuid() const { return METACONTACTS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(METACONTACTS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

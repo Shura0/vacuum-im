@@ -2,6 +2,7 @@
 #define FILESTREAM_H
 
 #include <QFile>
+#include <QObject>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>
 #include "transferthread.h"

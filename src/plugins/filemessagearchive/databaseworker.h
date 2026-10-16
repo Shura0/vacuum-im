@@ -2,6 +2,7 @@
 #define DATABASEWORKER_H
 
 #include <QQueue>
+#include <QObject>
 #include <QMutex>
 #include <QThread>
 #include <QSqlError>

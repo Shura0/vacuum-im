@@ -2,6 +2,7 @@
 #define PRIVACYLISTS_H
 
 #include <QTimer>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iprivacylists.h>
 #include <interfaces/istanzaprocessor.h>
@@ -26,7 +27,7 @@ public:
 	~PrivacyLists();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return PRIVACYLISTS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(PRIVACYLISTS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

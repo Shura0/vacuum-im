@@ -2,6 +2,7 @@
 #define IVCARDMANAGER_H
 
 #include <QHash>
+#include <QObject>
 #include <QImage>
 #include <QDialog>
 #include <QDateTime>
@@ -54,7 +55,7 @@ protected:
 	virtual void vcardError(const Jid &AContactJid, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IVCard,"Vacuum.Plugin.IVCard/1.4")
-Q_DECLARE_INTERFACE(IVCardManager,"Vacuum.Plugin.IVCardManager/1.5")
+Q_DECLARE_INTERFACE(IVCard,"Vacuum.Plugin.IVCard/1.4");
+Q_DECLARE_INTERFACE(IVCardManager,"Vacuum.Plugin.IVCardManager/1.5");
 
 #endif //IVCARDMANAGER_H

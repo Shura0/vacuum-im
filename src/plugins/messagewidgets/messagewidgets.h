@@ -2,6 +2,7 @@
 #define MESSAGEWIDGETS_H
 
 #include <QDesktopServices>
+#include <QObject>
 #include <QObjectCleanupHandler>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessagewidgets.h>
@@ -36,7 +37,7 @@ public:
 	~MessageWidgets();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return MESSAGEWIDGETS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MESSAGEWIDGETS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -4,6 +4,7 @@
 #define DEFAULTCONNECTION_UUID "{68F9B5F2-5898-43f8-9DD1-19F37E9779AC}"
 
 #include <QSslKey>
+#include <QObject>
 #include <QSslSocket>
 #include <interfaces/iconnectionmanager.h>
 
@@ -53,7 +54,7 @@ public:
 	virtual QObject *instance() =0;
 };
 
-Q_DECLARE_INTERFACE(IDefaultConnection,"Vacuum.Plugin.IDefaultConnection/1.2")
-Q_DECLARE_INTERFACE(IDefaultConnectionEngine,"Vacuum.Plugin.IDefaultConnectionEngine/1.3")
+Q_DECLARE_INTERFACE(IDefaultConnection,"Vacuum.Plugin.IDefaultConnection/1.2");
+Q_DECLARE_INTERFACE(IDefaultConnectionEngine,"Vacuum.Plugin.IDefaultConnectionEngine/1.3");
 
 #endif // IDEFAULTCONNECTION_H

@@ -2,6 +2,7 @@
 #define MESSAGEEDITOR_H
 
 #include <QTextEdit>
+#include <QObject>
 
 class MessageEditor :
 	public QTextEdit

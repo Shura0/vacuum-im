@@ -26,6 +26,6 @@ protected:
 	virtual void wordAddedToPersonalDict(const QString &AWord) =0;
 };
 
-Q_DECLARE_INTERFACE(ISpellChecker,"Vacuum.Plugin.ISpellChecker/1.0")
+Q_DECLARE_INTERFACE(ISpellChecker,"Vacuum.Plugin.ISpellChecker/1.0");
 
 #endif // ISPELLCHECKER_H

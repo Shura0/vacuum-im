@@ -2,6 +2,7 @@
 #define MODIFYSTATUSDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/istatuschanger.h>
 #include <interfaces/ipresencemanager.h>
 #include "ui_modifystatusdialog.h"

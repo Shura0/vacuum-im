@@ -110,7 +110,7 @@ QString PluginManager::revision() const
 QDateTime PluginManager::revisionDate() const
 {
 #if defined GIT_DATE
-	static const QDateTime date = QDateTime::fromTime_t(QString(GIT_DATE).toInt());
+	static const QDateTime date = QDateTime::fromSecsSinceEpoch(QString(GIT_DATE).toInt());
 #else
 	static const QDateTime date = QDateTime();
 #endif
@@ -154,7 +154,7 @@ QList<IPlugin *> PluginManager::pluginInterface(const QString &AInterface) const
 	{
 		foreach(const PluginItem &pluginItem, FPluginItems)
 			if (AInterface.isEmpty() || pluginItem.plugin->instance()->inherits(AInterface.toLatin1().data()))
-				FPlugins.insertMulti(AInterface,pluginItem.plugin);
+				FPlugins.insert(AInterface,pluginItem.plugin);
 	}
 	return FPlugins.values(AInterface);
 }
@@ -491,7 +491,7 @@ bool PluginManager::initPlugins()
 		IPlugin *plugin = it.value().plugin;
 		if (plugin->initConnections(this,initOrder))
 		{
-			pluginOrder.insertMulti(initOrder,plugin);
+			pluginOrder.insert(initOrder,plugin);
 			++it;
 		}
 		else
@@ -740,7 +740,7 @@ QList<QUuid> PluginManager::getConflicts(const QUuid &AUuid) const
 			}
 		}
 	}
-	return plugins.toList();
+	return plugins.values();
 }
 
 void PluginManager::loadCoreTranslations(const QDir &ADir, const QString &ALocaleName)

@@ -2,6 +2,7 @@
 #define OPTIONSMANAGER_H
 
 #include <QDir>
+#include <QObject>
 #include <QFile>
 #include <QTimer>
 #include <QPointer>
@@ -36,7 +37,7 @@ public:
 	~OptionsManager();
 	// IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return OPTIONSMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(OPTIONSMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

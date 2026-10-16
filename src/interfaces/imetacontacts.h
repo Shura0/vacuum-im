@@ -2,6 +2,7 @@
 #define IMETACONTACTS_H
 
 #include <QSet>
+#include <QObject>
 #include <QUuid>
 #include <interfaces/irostersmodel.h>
 #include <interfaces/ipresencemanager.h>
@@ -49,6 +50,6 @@ protected:
 	virtual void metaContactChanged(const Jid &AStreamJid, const IMetaContact &AMetaContact, const IMetaContact &ABefore) =0;
 };
 
-Q_DECLARE_INTERFACE(IMetaContacts,"Vacuum.Plugin.IMetaContacts/1.0")
+Q_DECLARE_INTERFACE(IMetaContacts,"Vacuum.Plugin.IMetaContacts/1.0");
 
 #endif // IMETACONTACTS_H

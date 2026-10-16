@@ -2,6 +2,7 @@
 #define PEPMANAGER_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ipepmanager.h>
 #include <interfaces/istanzaprocessor.h>
 #include <interfaces/iservicediscovery.h>
@@ -21,7 +22,7 @@ public:
 	~PEPManager();
 	// IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return PEPMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(PEPMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects() { return true; }

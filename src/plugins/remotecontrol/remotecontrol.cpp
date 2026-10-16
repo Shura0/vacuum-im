@@ -69,8 +69,8 @@ void RemoteControl::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Maxim Ignatenko";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(COMMANDS_UUID);
-	APluginInfo->dependences.append(DATAFORMS_UUID);
+	APluginInfo->dependences.append(QUuid(COMMANDS_UUID));
+	APluginInfo->dependences.append(QUuid(DATAFORMS_UUID));
 }
 
 bool RemoteControl::initConnections(IPluginManager *APluginManager, int &AInitOrder)

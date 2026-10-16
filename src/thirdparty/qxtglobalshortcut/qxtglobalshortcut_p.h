@@ -69,7 +69,7 @@ public:
     static QAbstractEventDispatcher::EventFilter prevEventFilter;
     static bool eventFilter(void* message);
 #else
-    virtual bool nativeEventFilter(const QByteArray & eventType, void * message, long * result);
+    virtual bool nativeEventFilter(const QByteArray & eventType, void * message, qintptr * result);
 #endif // QT_VERSION < QT_VERSION_CHECK(5,0,0)
 #endif // Q_OS_MAC
 

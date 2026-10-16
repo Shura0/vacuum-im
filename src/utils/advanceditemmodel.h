@@ -2,6 +2,7 @@
 #define ADVANCEDITEMMODEL_H
 
 #include <QPair>
+#include <QObject>
 #include <QStandardItemModel>
 #include "advanceditem.h"
 #include "utilsexport.h"

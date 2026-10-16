@@ -1,22 +1,25 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.16)
 
-project(vacuum-im)
+project(vacuum-im LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(APPLE)
-	 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13")
+	 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
 	 set_property(GLOBAL PROPERTY ALL_PLUGINS_FULLPATHS "")
 endif()
 
-find_package (Qt5PrintSupport)
-find_package (Qt5Multimedia)
-find_package (Qt5Sql)
-find_package (Qt5Svg)
-find_package (Qt5Widgets REQUIRED)
-find_package (Qt5Network REQUIRED)
-find_package (Qt5Xml REQUIRED)
-find_package (Qt5LinguistTools REQUIRED)
+find_package (Qt6PrintSupport)
+find_package (Qt6Multimedia)
+find_package (Qt6Sql)
+find_package (Qt6Svg)
+find_package (Qt6Widgets REQUIRED)
+find_package (Qt6Network REQUIRED)
+find_package (Qt6Xml REQUIRED)
+find_package (Qt6LinguistTools REQUIRED)
 
 add_custom_target(updatets)
 

@@ -2,6 +2,7 @@
 #define DATAFORMWIDGET_H
 
 #include <interfaces/idataforms.h>
+#include <QObject>
 
 class DataFormWidget :
 	public QWidget,

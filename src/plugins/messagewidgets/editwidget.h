@@ -2,6 +2,7 @@
 #define EDITWIDGET_H
 
 #include <interfaces/imessagewidgets.h>
+#include <QObject>
 #include "ui_editwidget.h"
 
 class EditWidget :

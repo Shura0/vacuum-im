@@ -2,6 +2,7 @@
 #define IROSTERMANAGER_H
 
 #include <QSet>
+#include <QObject>
 #include <QList>
 #include <interfaces/ixmppstreammanager.h>
 #include <utils/jid.h>
@@ -119,7 +120,7 @@ protected:
 	virtual void rosterDestroyed(IRoster *ARoster) =0;
 };
 
-Q_DECLARE_INTERFACE(IRoster,"Vacuum.Plugin.IRoster/1.4")
-Q_DECLARE_INTERFACE(IRosterManager,"Vacuum.Plugin.IRosterManager/1.4")
+Q_DECLARE_INTERFACE(IRoster,"Vacuum.Plugin.IRoster/1.4");
+Q_DECLARE_INTERFACE(IRosterManager,"Vacuum.Plugin.IRosterManager/1.4");
 
 #endif //IROSTERMANAGER_H

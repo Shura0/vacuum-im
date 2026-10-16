@@ -2,6 +2,7 @@
 #define STYLEEDITOPTIONSDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>
 #include <interfaces/imessagestylemanager.h>

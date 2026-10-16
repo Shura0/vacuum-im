@@ -2,6 +2,7 @@
 #define IAVATARS_H
 
 #include <QImage>
+#include <QObject>
 #include <utils/jid.h>
 
 #define AVATARTS_UUID "{22F84EAF-683E-4a20-B5E5-1FE363FD206C}"
@@ -32,6 +33,6 @@ protected:
 	virtual void avatarChanged(const Jid &AContactJid) =0;
 };
 
-Q_DECLARE_INTERFACE(IAvatars,"Vacuum.Plugin.IAvatars/1.3")
+Q_DECLARE_INTERFACE(IAvatars,"Vacuum.Plugin.IAvatars/1.3");
 
 #endif // IAVATARS_H

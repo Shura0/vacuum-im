@@ -2,6 +2,7 @@
 #define WEBPAGE_H
 
 #include <QWebPage>
+#include <QObject>
 
 class WebPage :
 	public QWebPage

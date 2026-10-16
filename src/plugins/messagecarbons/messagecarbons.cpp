@@ -31,9 +31,9 @@ void MessageCarbons::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
-	APluginInfo->dependences.append(SERVICEDISCOVERY_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
+	APluginInfo->dependences.append(QUuid(SERVICEDISCOVERY_UUID));
 }
 
 bool MessageCarbons::initConnections(IPluginManager *APluginManager, int &AInitOrder)

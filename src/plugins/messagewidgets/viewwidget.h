@@ -2,6 +2,7 @@
 #define VIEWWIDGET_H
 
 #include <QDropEvent>
+#include <QObject>
 #include <QDragMoveEvent>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>

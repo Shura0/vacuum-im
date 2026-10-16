@@ -2,6 +2,7 @@
 #define TABPAGENOTIFIER_H
 
 #include <QMultiMap>
+#include <QObject>
 #include <interfaces/imessagewidgets.h>
 
 class TabPageNotifier : 

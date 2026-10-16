@@ -2,6 +2,7 @@
 #define ADDCONTACTDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/irosterchanger.h>

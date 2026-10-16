@@ -2,6 +2,7 @@
 #define EDITUSERSLISTDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <interfaces/imultiuserchat.h>

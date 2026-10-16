@@ -2,6 +2,7 @@
 #define MAINCENTRALWIDGET_H
 
 #include <QStackedWidget>
+#include <QObject>
 #include <interfaces/imainwindow.h>
 
 class MainCentralWidget : 

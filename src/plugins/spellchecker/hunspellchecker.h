@@ -3,7 +3,7 @@
 
 #include <QList>
 #include <QString>
-#include <QTextCodec>
+#include <QStringConverter>
 #include "spellbackend.h"
 
 class Hunspell;
@@ -32,7 +32,7 @@ private:
 private:
 	Hunspell *FHunSpell;
 	QString FActualLang;
-	QTextCodec *FDictCodec;
+	QStringConverter::Encoding FDictEncoding;
 	QString FPersonalDictPath;
 	QList<QString> FDictsPaths;
 };

@@ -2,6 +2,7 @@
 #define BOXWIDGET_H
 
 #include <QMap>
+#include <QObject>
 #include <QFrame>
 #include <QBoxLayout>
 #include "utilsexport.h"

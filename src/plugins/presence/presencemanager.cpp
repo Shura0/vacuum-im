@@ -38,8 +38,8 @@ void PresenceManager::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool PresenceManager::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -118,7 +118,7 @@ bool PresenceManager::isOnlineContact(const Jid &AContactJid) const
 
 QList<IPresence *> PresenceManager::contactPresences(const Jid &AContactJid) const
 {
-	return FContactPresences.value(AContactJid).toList();
+	return FContactPresences.value(AContactJid).values();
 }
 
 QList<IPresenceItem> PresenceManager::sortPresenceItems(const QList<IPresenceItem> &AItems) const

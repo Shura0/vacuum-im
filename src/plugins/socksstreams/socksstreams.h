@@ -2,6 +2,7 @@
 #define SOCKSSTREAMS_H
 
 #include <QTcpServer>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/isocksstreams.h>
 #include <interfaces/idatastreamsmanager.h>
@@ -27,7 +28,7 @@ public:
 	~SocksStreams();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return SOCKSSTREAMS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(SOCKSSTREAMS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

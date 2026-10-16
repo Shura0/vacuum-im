@@ -2,6 +2,7 @@
 #define PLUGINMANAGER_H
 
 #include <QDir>
+#include <QObject>
 #include <QHash>
 #include <QPointer>
 #include <QTranslator>

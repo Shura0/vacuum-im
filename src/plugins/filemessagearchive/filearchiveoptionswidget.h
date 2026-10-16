@@ -2,6 +2,7 @@
 #define FILEARCHIVEOPTIONS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_filearchiveoptionswidget.h"
 

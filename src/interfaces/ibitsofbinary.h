@@ -2,6 +2,7 @@
 #define IBITSOFBINARY_H
 
 #include <QString>
+#include <QObject>
 #include <QByteArray>
 #include <utils/jid.h>
 #include <utils/stanza.h>
@@ -27,6 +28,6 @@ protected:
 	virtual void binaryRemoved(const QString &AContentId) =0;
 };
 
-Q_DECLARE_INTERFACE(IBitsOfBinary,"Vacuum.Plugin.IBitsOfBinary/1.1")
+Q_DECLARE_INTERFACE(IBitsOfBinary,"Vacuum.Plugin.IBitsOfBinary/1.1");
 
 #endif

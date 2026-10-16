@@ -2,6 +2,7 @@
 #define SASLAUTHFEATURE_H
 
 #include <interfaces/ixmppstreammanager.h>
+#include <QObject>
 #include <interfaces/iconnectionmanager.h>
 
 class SASLAuthFeature :

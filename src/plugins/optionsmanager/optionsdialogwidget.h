@@ -2,6 +2,7 @@
 #define OPTIONSWIDGET_H
 
 #include <QLabel>
+#include <QObject>
 #include <QSpinBox>
 #include <QDateEdit>
 #include <QTimeEdit>

@@ -2,6 +2,7 @@
 #define DATADIALOGWIDGET_H
 
 #include <interfaces/idataforms.h>
+#include <QObject>
 
 class DataDialogWidget :
 	public QDialog,

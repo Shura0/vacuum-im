@@ -2,6 +2,7 @@
 #define XMPPSTREAM_H
 
 #include <QTimer>
+#include <QObject>
 #include <QMultiMap>
 #include <QDomDocument>
 #include <interfaces/ixmppstreammanager.h>

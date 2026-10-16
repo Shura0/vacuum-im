@@ -2,6 +2,7 @@
 #define MESSAGECARBONS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/imessagecarbons.h>
 #include <interfaces/istanzaprocessor.h>
@@ -23,7 +24,7 @@ public:
 	~MessageCarbons();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return MESSAGECARBONS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MESSAGECARBONS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

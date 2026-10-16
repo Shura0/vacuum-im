@@ -2,10 +2,6 @@ include("${CMAKE_SOURCE_DIR}/src/make/config.cmake")
 
 project(qxtglobalshortcut CXX)
 
-if (UNIX AND NOT APPLE)
-	find_package (Qt5X11Extras REQUIRED)
-endif (UNIX AND NOT APPLE)
-
 set(SOURCES "qxtglobal.cpp" "qxtglobalshortcut.cpp")
 set(HEADERS "qxtglobalshortcut.h")
 
@@ -23,14 +19,14 @@ endif (APPLE)
 
 add_definitions(-DUNICODE -DQXT_STATIC)
 
-qt5_wrap_cpp(MOC_SOURCES ${HEADERS})
+qt_wrap_cpp(MOC_SOURCES ${HEADERS})
 
 add_library(qxtglobalshortcut STATIC ${SOURCES} ${MOC_SOURCES})
 
 if (UNIX AND NOT APPLE)
-    target_link_libraries(qxtglobalshortcut Qt5::Widgets Qt5::X11Extras)
+    target_link_libraries(qxtglobalshortcut Qt6::Widgets Qt6::Gui ${X11_LIBRARIES})
 else(UNIX AND NOT APPLE)
-    target_link_libraries(qxtglobalshortcut Qt5::Widgets)
+    target_link_libraries(qxtglobalshortcut Qt6::Widgets)
 endif (UNIX AND NOT APPLE)
 
 set_target_properties(qxtglobalshortcut PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src/libs"

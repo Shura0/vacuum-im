@@ -2,6 +2,7 @@
 #define DATAFORMS_H
 
 #include <QNetworkReply>
+#include <QObject>
 #include <QNetworkRequest>
 #include <QNetworkAccessManager>
 #include <QObjectCleanupHandler>
@@ -32,7 +33,7 @@ public:
 	~DataForms();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return DATAFORMS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(DATAFORMS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

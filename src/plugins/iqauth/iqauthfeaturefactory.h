@@ -2,6 +2,7 @@
 #define IQAUTHFEATUREFACTORY_H
 
 #include <QDomDocument>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ixmppstreammanager.h>
 #include "iqauthfeature.h"
@@ -21,7 +22,7 @@ public:
 	~IqAuthFeatureFactory();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return IQAUTH_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(IQAUTH_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

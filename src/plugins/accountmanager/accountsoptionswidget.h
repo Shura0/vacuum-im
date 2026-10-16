@@ -2,6 +2,7 @@
 #define ACCOUNTSOPTIONS_H
 
 #include <QMap>
+#include <QObject>
 #include <QWidget>
 #include <QVBoxLayout>
 #include <interfaces/irostermanager.h>

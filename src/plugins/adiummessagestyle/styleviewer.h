@@ -2,6 +2,7 @@
 #define STYLEVIEWER_H
 
 #include <QWebView>
+#include <QObject>
 #include "webpage.h"
 
 class StyleViewer :

@@ -2,6 +2,7 @@
 #define SERVERMESSAGEARCHIVE_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/iservermessagearchive.h>
 #include <interfaces/imessagearchiver.h>
 #include <interfaces/istanzaprocessor.h>
@@ -67,7 +68,7 @@ public:
 	~ServerMessageArchive();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return SERVERMESSAGEARCHIVE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(SERVERMESSAGEARCHIVE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

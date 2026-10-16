@@ -2,6 +2,7 @@
 #define ISTANZAPROCESSOR_H
 
 #include <QList>
+#include <QObject>
 #include <utils/jid.h>
 #include <utils/stanza.h>
 #include <utils/xmpperror.h>

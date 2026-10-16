@@ -2,6 +2,7 @@
 #define EDITNOTEDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iannotations.h>
 #include "ui_editnotedialog.h"
 

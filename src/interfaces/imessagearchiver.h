@@ -1,8 +1,8 @@
 #ifndef IMESSAGEARCHIVER_H
 #define IMESSAGEARCHIVER_H
 
-#include <QRegExp>
 #include <QMainWindow>
+#include <QObject>
 #include <QStandardItemModel>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/idataforms.h>
@@ -279,8 +279,8 @@ protected:
 	virtual void archiveEngineEnableChanged(const QUuid &AId, bool AEnabled) =0;
 };
 
-Q_DECLARE_INTERFACE(IArchiveHandler,"Vacuum.Plugin.IArchiveHandler/1.1")
-Q_DECLARE_INTERFACE(IArchiveEngine,"Vacuum.Plugin.IArchiveEngine/1.3")
-Q_DECLARE_INTERFACE(IMessageArchiver,"Vacuum.Plugin.IMessageArchiver/1.4")
+Q_DECLARE_INTERFACE(IArchiveHandler,"Vacuum.Plugin.IArchiveHandler/1.1");
+Q_DECLARE_INTERFACE(IArchiveEngine,"Vacuum.Plugin.IArchiveEngine/1.3");
+Q_DECLARE_INTERFACE(IMessageArchiver,"Vacuum.Plugin.IMessageArchiver/1.4");
 
 #endif // IMESSAGEARCHIVER_H

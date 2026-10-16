@@ -2,6 +2,7 @@
 #define SUBSCRIPTIONDIALOG_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/inotifications.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/irosterchanger.h>

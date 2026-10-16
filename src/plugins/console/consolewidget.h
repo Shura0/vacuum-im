@@ -2,6 +2,7 @@
 #define CONSOLEWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/istanzaprocessor.h>

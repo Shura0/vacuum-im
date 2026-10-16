@@ -1,3 +1,4 @@
+#include <QActionGroup>
 #include "chatwindowmenu.h"
 
 #include <definitions/namespaces.h>

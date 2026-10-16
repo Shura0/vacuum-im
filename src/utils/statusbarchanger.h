@@ -2,6 +2,7 @@
 #define STATUSBARCHANGER_H
 
 #include <QEvent>
+#include <QObject>
 #include <QMultiMap>
 #include <QStatusBar>
 #include "utilsexport.h"

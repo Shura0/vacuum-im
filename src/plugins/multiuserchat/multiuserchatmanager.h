@@ -2,6 +2,7 @@
 #define MULTIUSERCHATMANAGER_H
 
 #include <QMessageBox>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imultiuserchat.h>
 #include <interfaces/imessagewidgets.h>
@@ -69,7 +70,7 @@ public:
 	~MultiUserChatManager();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return MULTIUSERCHAT_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MULTIUSERCHAT_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

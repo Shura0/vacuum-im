@@ -2,6 +2,7 @@
 #define BITSOFBINARY_H
 
 #include <QDir>
+#include <QObject>
 #include <QMap>
 #include <QTimer>
 #include <interfaces/ipluginmanager.h>
@@ -26,7 +27,7 @@ public:
 	~BitsOfBinary();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return BITSOFBINARY_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(BITSOFBINARY_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

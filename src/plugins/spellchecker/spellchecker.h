@@ -2,6 +2,7 @@
 #define SPELLCHECKER_H
 
 #include <interfaces/ispellchecker.h>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imultiuserchat.h>
@@ -19,7 +20,7 @@ public:
 	SpellChecker();
 	~SpellChecker();
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return SPELLCHECKER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(SPELLCHECKER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -566,7 +566,7 @@ void RostersModel::insertRosterDataHolder(int AOrder, IRosterDataHolder *AHolder
 {
 	if (AHolder && !FRosterDataHolders.contains(AOrder,AHolder))
 	{
-		FRosterDataHolders.insertMulti(AOrder,AHolder);
+		FRosterDataHolders.insert(AOrder,AHolder);
 		DataHolder *proxyHolder = FAdvancedDataHolders.value(AHolder);
 		if (proxyHolder == NULL)
 		{
@@ -646,14 +646,14 @@ void RostersModel::onAdvancedItemInserted(QStandardItem *AItem)
 		{
 			IRosterIndex *pindex = rindex->parentIndex();
 			if (pindex)
-				FGroupsCache[pindex].insertMulti(rindex->data(RDR_NAME).toString(),rindex);
+				FGroupsCache[pindex].insert(rindex->data(RDR_NAME).toString(),rindex);
 		}
 		else if (!streamJid.isEmpty() && ContactsCacheRosterKinds.contains(rindex->kind()))
 		{
 			QString bareJid = rindex->data(RDR_PREP_BARE_JID).toString();
 			IRosterIndex *sindex = !bareJid.isEmpty() ? streamIndex(streamJid) : NULL;
 			if (sindex && sindex!=rindex && isChildIndex(rindex,streamRoot(streamJid)))
-				FContactsCache[sindex].insertMulti(bareJid,rindex);
+				FContactsCache[sindex].insert(bareJid,rindex);
 		}
 		emit indexInserted(rindex);
 	}

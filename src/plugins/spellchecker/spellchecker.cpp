@@ -37,7 +37,7 @@ void SpellChecker::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Minnahmetov V.K.";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
 }
 
 bool SpellChecker::initConnections(IPluginManager *APluginManager, int &AInitOrder)

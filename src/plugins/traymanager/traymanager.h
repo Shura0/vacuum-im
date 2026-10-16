@@ -2,6 +2,7 @@
 #define TRAYMANAGER_H
 
 #include <QMap>
+#include <QObject>
 #include <QTimer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/itraymanager.h>
@@ -19,7 +20,7 @@ public:
 	~TrayManager();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return TRAYMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(TRAYMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

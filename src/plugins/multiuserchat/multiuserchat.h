@@ -2,6 +2,7 @@
 #define MULTIUSERCHAT_H
 
 #include <interfaces/imultiuserchat.h>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/istanzaprocessor.h>

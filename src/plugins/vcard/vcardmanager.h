@@ -2,6 +2,7 @@
 #define VCARDMANAGER_H
 
 #include <QDir>
+#include <QObject>
 #include <QTimer>
 #include <QObjectCleanupHandler>
 #include <interfaces/ipluginmanager.h>
@@ -48,7 +49,7 @@ public:
 	~VCardManager();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return VCARD_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(VCARD_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

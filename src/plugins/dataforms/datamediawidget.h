@@ -2,6 +2,7 @@
 #define DATAMEDIAWIDGET_H
 
 #include <QLabel>
+#include <QObject>
 #include <QVBoxLayout>
 #include <interfaces/idataforms.h>
 

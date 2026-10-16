@@ -2,6 +2,7 @@
 #define EXCHANGEAPPROVEDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/irostermanager.h>
 #include <interfaces/irosteritemexchange.h>
 #include "ui_exchangeapprovedialog.h"

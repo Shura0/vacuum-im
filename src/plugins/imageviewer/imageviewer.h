@@ -2,6 +2,7 @@
 #define IMAGEVIEWER_H
 
 #include <QUuid>
+#include <QObject>
 #include <QString>
 #include <QImage>
 #include <QNetworkAccessManager>

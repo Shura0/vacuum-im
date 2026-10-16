@@ -6,6 +6,7 @@
 #define APPLICATION_PROXY_REF_UUID  "{b919d5c9-6def-43ba-87aa-892d49b9ac67}"
 
 #include <QUuid>
+#include <QObject>
 #include <QDialog>
 #include <QNetworkProxy>
 #include <QSslCertificate>
@@ -89,8 +90,8 @@ protected:
 	virtual void connectionEngineRegistered(IConnectionEngine *AEngine) = 0;
 };
 
-Q_DECLARE_INTERFACE(IConnection,"Vacuum.Plugin.IConnection/1.4")
-Q_DECLARE_INTERFACE(IConnectionEngine,"Vacuum.Plugin.IConnectionEngine/1.4")
-Q_DECLARE_INTERFACE(IConnectionManager,"Vacuum.Plugin.IConnectionManager/1.4")
+Q_DECLARE_INTERFACE(IConnection,"Vacuum.Plugin.IConnection/1.4");
+Q_DECLARE_INTERFACE(IConnectionEngine,"Vacuum.Plugin.IConnectionEngine/1.4");
+Q_DECLARE_INTERFACE(IConnectionManager,"Vacuum.Plugin.IConnectionManager/1.4");
 
 #endif // ICONNECTIONMANAGER_H

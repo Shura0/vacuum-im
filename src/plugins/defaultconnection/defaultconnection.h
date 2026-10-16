@@ -2,6 +2,7 @@
 #define DEFAULTCONNECTION_H
 
 #include <QDnsLookup>
+#include <QObject>
 #include <definitions/internalerrors.h>
 #include <interfaces/idefaultconnection.h>
 #include <utils/xmpperror.h>

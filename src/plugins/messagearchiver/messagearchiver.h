@@ -2,6 +2,7 @@
 #define MESSAGEARCHIVER_H
 
 #include <QPair>
+#include <QObject>
 #include <QList>
 #include <QUuid>
 #include <QMultiMap>
@@ -77,7 +78,7 @@ public:
 	~MessageArchiver();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return MESSAGEARCHIVER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MESSAGEARCHIVER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -2,6 +2,7 @@
 #define PRIXMAPFRAME_H
 
 #include <QTimer>
+#include <QObject>
 #include <QFrame>
 #include <QBuffer>
 #include <QImageReader>

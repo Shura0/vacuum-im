@@ -37,7 +37,7 @@ void ShortcutManager::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(OPTIONSMANAGER_UUID);
+	APluginInfo->dependences.append(QUuid(OPTIONSMANAGER_UUID));
 }
 
 bool ShortcutManager::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -97,8 +97,8 @@ QMultiMap<int, IOptionsDialogWidget *> ShortcutManager::optionsDialogWidgets(con
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (ANodeId == OPN_SHORTCUTS)
 	{
-		widgets.insertMulti(OHO_SHORTCUTS, FOptionsManager->newOptionsDialogHeader(tr("Shortcuts"),AParent));
-		widgets.insertMulti(OWO_SHORTCUTS, new ShortcutOptionsWidget(AParent));
+		widgets.insert(OHO_SHORTCUTS, FOptionsManager->newOptionsDialogHeader(tr("Shortcuts"),AParent));
+		widgets.insert(OWO_SHORTCUTS, new ShortcutOptionsWidget(AParent));
 	}
 	return widgets;
 }

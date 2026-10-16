@@ -2,6 +2,7 @@
 #define AUTOSTATUSOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/ipresencemanager.h>
 #include <interfaces/iautostatus.h>
 #include <interfaces/istatuschanger.h>

@@ -2,6 +2,7 @@
 #define INBANDSTREAM_H
 
 #include <QReadWriteLock>
+#include <QObject>
 #include <QWaitCondition>
 #include <interfaces/iinbandstreams.h>
 #include <interfaces/idatastreamsmanager.h>

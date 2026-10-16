@@ -2,7 +2,8 @@
 #define NOTIFYWIDGET_H
 
 #include <QMouseEvent>
-#include <QDesktopWidget>
+#include <QObject>
+#include <QScreen>
 #include <QNetworkAccessManager>
 #include <interfaces/inotifications.h>
 #include <interfaces/imainwindow.h>
@@ -24,7 +25,7 @@ signals:
 	void windowDestroyed();
 protected:
 	void animateTo(int AYPos);
-	void enterEvent(QEvent *AEvent);
+	void enterEvent(QEnterEvent *AEvent);
 	void leaveEvent(QEvent *AEvent);
 	void resizeEvent(QResizeEvent *AEvent);
 	void mouseReleaseEvent(QMouseEvent *AEvent);
@@ -46,7 +47,7 @@ private:
 	QTimer FCloseTimer;
 private:
 	static QRect FDisplay;
-	static QDesktopWidget *FDesktop;
+	static QScreen *FDesktop;
 	static QList<NotifyWidget *> FWidgets;
 	static void layoutWidgets();
 private:

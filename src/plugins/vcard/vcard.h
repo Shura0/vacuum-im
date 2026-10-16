@@ -2,6 +2,7 @@
 #define VCARD_H
 
 #include <interfaces/ivcardmanager.h>
+#include <QObject>
 
 #define VCARD_TAGNAME                   "vCard"
 

@@ -2,6 +2,7 @@
 #define IACCOUNTMANAGER_H
 
 #include <QUuid>
+#include <QObject>
 #include <QString>
 #include <QVariant>
 #include <interfaces/ixmppstreammanager.h>
@@ -50,7 +51,7 @@ protected:
 	virtual void accountOptionsChanged(IAccount *AAcount, const OptionsNode &ANode) =0;
 };
 
-Q_DECLARE_INTERFACE(IAccount,"Vacuum.Plugin.IAccount/1.2")
-Q_DECLARE_INTERFACE(IAccountManager,"Vacuum.Plugin.IAccountManager/1.2")
+Q_DECLARE_INTERFACE(IAccount,"Vacuum.Plugin.IAccount/1.2");
+Q_DECLARE_INTERFACE(IAccountManager,"Vacuum.Plugin.IAccountManager/1.2");
 
 #endif // IACCOUNTMANAGER_H

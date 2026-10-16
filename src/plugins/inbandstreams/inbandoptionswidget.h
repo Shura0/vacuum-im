@@ -2,6 +2,7 @@
 #define INBANDOPTIONS_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/iinbandstreams.h>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_inbandoptionswidget.h"

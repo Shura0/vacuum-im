@@ -24,7 +24,7 @@ public:
 	~DataStreamsPublisher();
 	// IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return DATASTREAMSPUBLISHER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(DATASTREAMSPUBLISHER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

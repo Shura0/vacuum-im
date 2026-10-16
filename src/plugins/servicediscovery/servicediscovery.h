@@ -2,6 +2,7 @@
 #define SERVICEDISCOVERY_H
 
 #include <QSet>
+#include <QObject>
 #include <QDir>
 #include <QHash>
 #include <QPair>
@@ -59,7 +60,7 @@ public:
 	~ServiceDiscovery();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return SERVICEDISCOVERY_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(SERVICEDISCOVERY_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

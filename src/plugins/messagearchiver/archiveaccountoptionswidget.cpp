@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "archiveaccountoptionswidget.h"
 
 #include <QKeyEvent>
@@ -565,7 +566,7 @@ void ArchiveAccountOptionsWidget::onArchivePrefsChanged(const Jid &AStreamJid)
 		}
 		ui.cmbExpireTime->setCurrentIndex(expireIndex);
 
-		QSet<Jid> oldItems = FTableItems.keys().toSet();
+		QSet<Jid> oldItems = qToSet(FTableItems.keys());
 		foreach(const Jid &itemJid, prefs.itemPrefs.keys())
 		{
 			oldItems -= itemJid;

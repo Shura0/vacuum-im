@@ -2,6 +2,7 @@
 #define ROSTERSVIEW_H
 
 #include <QTimer>
+#include <QObject>
 #include <interfaces/irostersview.h>
 #include <interfaces/irostersmodel.h>
 #include <interfaces/imainwindow.h>
@@ -124,6 +125,7 @@ protected:
 	void removeBlinkItem(quint32 ALabelId, int ANotifyId);
 	void setDropIndicatorRect(const QRect &ARect);
 	QStyleOptionViewItem indexOption(const QStyleOptionViewItem &AOption, const QModelIndex &AIndex) const;
+	QStyleOptionViewItem viewOptions() const;
 protected:
 	//QTreeView
 	void drawBranches(QPainter *APainter, const QRect &ARect, const QModelIndex &AIndex) const;

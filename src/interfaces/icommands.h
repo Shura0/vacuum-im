@@ -2,6 +2,7 @@
 #define ICOMMANDS_H
 
 #include <QDomElement>
+#include <QObject>
 #include <interfaces/idataforms.h>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
@@ -108,8 +109,8 @@ protected:
 	virtual void commandsUpdated(const Jid &AstreamJid, const Jid &AContactJid, const QList<ICommand> &ACommands) =0;
 };
 
-Q_DECLARE_INTERFACE(ICommandServer,"Vacuum.Plugin.ICommandServer/1.0")
-Q_DECLARE_INTERFACE(ICommandClient,"Vacuum.Plugin.ICommandClient/1.0")
-Q_DECLARE_INTERFACE(ICommands,"Vacuum.Plugin.ICommands/1.2")
+Q_DECLARE_INTERFACE(ICommandServer,"Vacuum.Plugin.ICommandServer/1.0");
+Q_DECLARE_INTERFACE(ICommandClient,"Vacuum.Plugin.ICommandClient/1.0");
+Q_DECLARE_INTERFACE(ICommands,"Vacuum.Plugin.ICommands/1.2");
 
 #endif

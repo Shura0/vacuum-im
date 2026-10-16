@@ -44,7 +44,7 @@ void Emoticons::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
 }
 
 bool Emoticons::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -142,8 +142,8 @@ QMultiMap<int, IOptionsDialogWidget *> Emoticons::optionsDialogWidgets(const QSt
 			delete storage;
 		}
 
-		widgets.insertMulti(OHO_APPEARANCE_MESSAGES,FOptionsManager->newOptionsDialogHeader(tr("Message windows"),AParent));
-		widgets.insertMulti(OWO_APPEARANCE_EMOTICONS,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_EMOTICONS_ICONSET),tr("Smileys:"),cmbEmoticons,AParent));
+		widgets.insert(OHO_APPEARANCE_MESSAGES,FOptionsManager->newOptionsDialogHeader(tr("Message windows"),AParent));
+		widgets.insert(OWO_APPEARANCE_EMOTICONS,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_EMOTICONS_ICONSET),tr("Smileys:"),cmbEmoticons,AParent));
 	}
 	return widgets;
 }

@@ -7,9 +7,8 @@ include("adiummessagestyle.cmake")
 include("${CMAKE_SOURCE_DIR}/src/plugins/plugins.cmake")
 
 if (IS_ENABLED)
-	find_package(Qt5WebKit REQUIRED)
-	find_package(Qt5WebKitWidgets REQUIRED)
-	target_link_libraries(${PLUGIN_NAME} Qt5::WebKitWidgets)
+	find_package(Qt6WebEngineWidgets REQUIRED)
+	target_link_libraries(${PLUGIN_NAME} Qt6::WebEngineWidgets)
 	if (APPLE)
 		file(COPY "${CMAKE_SOURCE_DIR}/resources/adiummessagestyles"
 			DESTINATION "${CMAKE_BINARY_DIR}/${INSTALL_RESOURCES}")

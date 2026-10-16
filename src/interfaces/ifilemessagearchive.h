@@ -2,6 +2,7 @@
 #define IFILEMESSAGEARCHIVE_H
 
 #include <interfaces/imessagearchiver.h>
+#include <QObject>
 
 #define FILEMESSAGEARCHIVE_UUID "{2F1E540F-60D3-490f-8BE9-0EEA693B8B83}"
 
@@ -39,6 +40,6 @@ protected:
 	virtual void fileCollectionRemoved(const Jid &AStreamJid, const IArchiveHeader &AHeader) =0;
 };
 
-Q_DECLARE_INTERFACE(IFileMessageArchive,"Vacuum.Plugin.IFileMessageArchive/1.2")
+Q_DECLARE_INTERFACE(IFileMessageArchive,"Vacuum.Plugin.IFileMessageArchive/1.2");
 
 #endif // IFILEMESSAGEARCHIVE_H

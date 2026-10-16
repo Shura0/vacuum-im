@@ -1,6 +1,7 @@
 #include "autostatus.h"
 
 #include <QCursor>
+#include <QRegularExpression>
 #include <definitions/optionnodes.h>
 #include <definitions/optionvalues.h>
 #include <definitions/optionwidgetorders.h>
@@ -32,8 +33,8 @@ void AutoStatus::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(STATUSCHANGER_UUID);
-	APluginInfo->dependences.append(ACCOUNTMANAGER_UUID);
+	APluginInfo->dependences.append(QUuid(STATUSCHANGER_UUID));
+	APluginInfo->dependences.append(QUuid(ACCOUNTMANAGER_UUID));
 }
 
 bool AutoStatus::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -100,8 +101,8 @@ QMultiMap<int, IOptionsDialogWidget *> AutoStatus::optionsDialogWidgets(const QS
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (ANodeId == OPN_STATUSITEMS)
 	{
-		widgets.insertMulti(OHO_AUTOSTATUS, FOptionsManager->newOptionsDialogHeader(tr("Automatic change of status"),AParent));
-		widgets.insertMulti(OWO_AUTOSTATUS, new AutoStatusOptionsWidget(this,FStatusChanger,AParent));
+		widgets.insert(OHO_AUTOSTATUS, FOptionsManager->newOptionsDialogHeader(tr("Automatic change of status"),AParent));
+		widgets.insert(OWO_AUTOSTATUS, new AutoStatusOptionsWidget(this,FStatusChanger,AParent));
 	}
 	return widgets;
 }
@@ -115,7 +116,7 @@ QList<QUuid> AutoStatus::rules() const
 {
 	QList<QUuid> rulesIdList;
 	foreach(const QString &ruleId, Options::node(OPV_AUTOSTARTUS_ROOT).childNSpaces("rule"))
-		rulesIdList.append(ruleId);
+		rulesIdList.append(QUuid(ruleId));
 	return rulesIdList;
 }
 
@@ -198,12 +199,13 @@ void AutoStatus::removeRule(const QUuid &ARuleId)
 void AutoStatus::replaceDateTime(QString &AText, const QString &APattern, const QDateTime &ADateTime)
 {
 	int pos = 0;
-	QRegExp regExp(APattern);
-	regExp.setMinimal(true);
-	while ((pos = regExp.indexIn(AText, pos)) != -1)
+	QRegularExpression regExp(APattern, QRegularExpression::InvertedGreedinessOption);
+	QRegularExpressionMatch match;
+	while ((match = regExp.match(AText, pos)).hasMatch())
 	{
-		QString replText = !regExp.cap(1).isEmpty() ? ADateTime.toString(regExp.cap(1)) : ADateTime.toString();
-		AText.replace(pos,regExp.matchedLength(),replText);
+		pos = match.capturedStart();
+		QString replText = !match.captured(1).isEmpty() ? ADateTime.toString(match.captured(1)) : ADateTime.toString();
+		AText.replace(pos,match.capturedLength(),replText);
 		pos += replText.size();
 	}
 }
@@ -212,7 +214,7 @@ void AutoStatus::prepareRule(IAutoStatusRule &ARule)
 {
 	replaceDateTime(ARule.text,"\\%\\((.*)\\)",QDateTime::currentDateTime());
 	replaceDateTime(ARule.text,"\\$\\((.*)\\)",QDateTime::currentDateTime().addSecs(0-ARule.time));
-	replaceDateTime(ARule.text,"\\#\\((.*)\\)",QDateTime(QDate::currentDate()).addSecs(ARule.time));
+	replaceDateTime(ARule.text,"\\#\\((.*)\\)",QDate::currentDate().startOfDay().addSecs(ARule.time));
 }
 
 void AutoStatus::setActiveRule(const QUuid &ARuleId)

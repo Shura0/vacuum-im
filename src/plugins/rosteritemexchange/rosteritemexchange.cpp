@@ -68,8 +68,8 @@ void RosterItemExchange::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(ROSTER_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(ROSTER_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool RosterItemExchange::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -288,8 +288,8 @@ QMultiMap<int, IOptionsDialogWidget *> RosterItemExchange::optionsDialogWidgets(
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (ANodeId == OPN_ROSTERVIEW)
 	{
-		widgets.insertMulti(OHO_ROSTER_MANAGEMENT,FOptionsManager->newOptionsDialogHeader(tr("Contacts list management"),AParent));
-		widgets.insertMulti(OWO_ROSTER_EXCHANGEAUTO,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_EXCHANGE_AUTOAPPROVEENABLED),tr("Allow gateways and group services manage your contacts list"),AParent));
+		widgets.insert(OHO_ROSTER_MANAGEMENT,FOptionsManager->newOptionsDialogHeader(tr("Contacts list management"),AParent));
+		widgets.insert(OWO_ROSTER_EXCHANGEAUTO,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_EXCHANGE_AUTOAPPROVEENABLED),tr("Allow gateways and group services manage your contacts list"),AParent));
 	}
 	return widgets;
 }
@@ -520,7 +520,7 @@ bool RosterItemExchange::insertDropActions(const Jid &AStreamJid, const Jid &ACo
 	{
 		itemsJids.append(it->itemJid.pBare());
 		itemsNames.append(it->name);
-		itemsGroups.append(it->groups.toList().value(0));
+		itemsGroups.append(it->groups.values().value(0));
 	}
 
 	if (!itemsJids.isEmpty())

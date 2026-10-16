@@ -2,6 +2,7 @@
 #define ADIUMMESSAGESTYLE_H
 
 #include <QList>
+#include <QObject>
 #include <QTimer>
 #include <QWebView>
 #include <QNetworkAccessManager>

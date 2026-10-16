@@ -2,6 +2,7 @@
 #define REMOTECONTROL_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/iservicediscovery.h>
 #include <interfaces/icommands.h>
 #include <interfaces/istatuschanger.h>
@@ -30,7 +31,7 @@ public:
 	~RemoteControl();
 	// IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return REMOTECONTROL_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(REMOTECONTROL_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

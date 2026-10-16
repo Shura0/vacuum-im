@@ -1,3 +1,5 @@
+#include <QRegularExpression>
+#include <utils/qtcompat.h>
 #include "archiveviewwindow.h"
 
 #include <QLocale>
@@ -142,7 +144,7 @@ ArchiveViewWindow::ArchiveViewWindow(IMessageArchiver *AArchiver, const QMultiMa
 	FHeadersEmptyLabel->setMargin(3);
 
 	QVBoxLayout *headersLayout = new QVBoxLayout(ui.trvHeaders);
-	headersLayout->setMargin(0);
+	headersLayout->setContentsMargins(0,0,0,0);
 	headersLayout->addStretch();
 	headersLayout->addWidget(FHeadersEmptyLabel);
 	headersLayout->addStretch();
@@ -154,7 +156,7 @@ ArchiveViewWindow::ArchiveViewWindow(IMessageArchiver *AArchiver, const QMultiMa
 	FMessagesEmptyLabel->setMargin(3);
 
 	QVBoxLayout *messagesLayout = new QVBoxLayout(ui.tbrMessages);
-	messagesLayout->setMargin(0);
+	messagesLayout->setContentsMargins(0,0,0,0);
 	messagesLayout->addStretch();
 	messagesLayout->addWidget(FMessagesEmptyLabel);
 	messagesLayout->addStretch();
@@ -255,7 +257,7 @@ void ArchiveViewWindow::setAddresses(const QMultiMap<Jid,Jid> &AAddresses)
 			if (!it.value().isEmpty())
 				namesList.append(contactName(it.key(),it.value(),isConferenceDomain(it.value())));
 		}
-		namesList = namesList.toSet().toList(); std::sort(namesList.begin(), namesList.end());
+		namesList = qToSet(namesList).values(); std::sort(namesList.begin(), namesList.end());
 		setWindowTitle(tr("Conversation History") + (!namesList.isEmpty() ? " - " + namesList.join(", ") : QString()));
 
 		FArchiveSearchEnabled = false;
@@ -386,7 +388,7 @@ ArchiveHeader ArchiveViewWindow::itemHeader(const QStandardItem *AItem) const
 		header.subject = AItem->data(HDR_HEADER_SUBJECT).toString();
 		header.threadId = AItem->data(HDR_HEADER_THREAD).toString();
 		header.version = AItem->data(HDR_HEADER_VERSION).toInt();
-		header.engineId = AItem->data(HDR_HEADER_ENGINE).toString();
+		header.engineId = QUuid(AItem->data(HDR_HEADER_ENGINE).toString());
 	}
 	return header;
 }
@@ -412,7 +414,7 @@ QMultiMap<Jid,Jid> ArchiveViewWindow::itemAddresses(const QStandardItem *AItem) 
 			for (QMultiMap<Jid,Jid>::const_iterator it=itemAddress.constBegin(); it!=itemAddress.constEnd(); ++it)
 			{
 				if (!address.contains(it.key(),it.value()))
-					address.insertMulti(it.key(),it.value());
+					address.insert(it.key(),it.value());
 			}
 		}
 	}
@@ -420,7 +422,7 @@ QMultiMap<Jid,Jid> ArchiveViewWindow::itemAddresses(const QStandardItem *AItem) 
 	{
 		Jid streamJid = AItem->data(HDR_HEADER_STREAM).toString();
 		Jid contactJid = AItem->data(HDR_HEADER_WITH).toString();
-		address.insertMulti(streamJid,isConferenceDomain(contactJid) ? contactJid : contactJid.bare());
+		address.insert(streamJid,isConferenceDomain(contactJid) ? contactJid : contactJid.bare());
 	}
 	return address;
 }
@@ -1045,11 +1047,11 @@ QString ArchiveViewWindow::showMessage(const Message &AMessage, const IMessageSt
 		bool meMessage = false;
 		if (!AOptions.senderName.isEmpty())
 		{
-			static const QRegExp me("/me\\s");
+			static const QRegularExpression me(QRegularExpression::anchoredPattern("/me\\s"));
 
 			QTextCursor cursor(&doc);
 			cursor.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,4);
-			if (me.exactMatch(cursor.selectedText()))
+			if (me.match(cursor.selectedText()).hasMatch())
 			{
 				meMessage = true;
 				cursor.removeSelectedText();
@@ -1221,7 +1223,7 @@ void ArchiveViewWindow::onSetContactJidByAction()
 
 		QMultiMap<Jid,Jid> address;
 		for(int i=0; i<streams.count(); i++)
-			address.insertMulti(streams.at(i),contacts.at(i));
+			address.insert(streams.at(i),contacts.at(i));
 		setAddresses(address);
 	}
 }
@@ -1256,7 +1258,7 @@ void ArchiveViewWindow::onRemoveCollectionsByAction()
 			}
 		}
 
-		QStringList conversationList = conversationSet.toList();
+		QStringList conversationList = conversationSet.values();
 		if (conversationSet.count() > 15)
 		{
 			conversationList = conversationList.mid(0,10);
@@ -1313,14 +1315,14 @@ void ArchiveViewWindow::onHeaderContextMenuRequested(const QPoint &APos)
 				if (itemType == HIT_MONTHGROUP)
 				{
 					QDate date = item->data(HDR_MONTHGROUP_DATE).toDate();
-					headerStart.append(QDateTime(date));
-					headerEnd.append(QDateTime(date).addMonths(1));
+					headerStart.append(date.startOfDay());
+					headerEnd.append(date.startOfDay().addMonths(1));
 				}
 				else if (itemType == HIT_DATEGROUP)
 				{
 					QDate date = item->data(HDR_MONTHGROUP_DATE).toDate();
-					headerStart.append(QDateTime(date));
-					headerEnd.append(QDateTime(date).addDays(1));
+					headerStart.append(date.startOfDay());
+					headerEnd.append(date.startOfDay().addDays(1));
 				}
 				else if (itemType == HIT_HEADER)
 				{
@@ -1415,7 +1417,7 @@ void ArchiveViewWindow::onPrintConversationsByAction()
 	dialog->setWindowTitle(tr("Print Conversation History"));
 
 	if (ui.tbrMessages->textCursor().hasSelection())
-		dialog->addEnabledOption(QAbstractPrintDialog::PrintSelection);
+		dialog->setOption(QAbstractPrintDialog::PrintSelection);
 
 	if (dialog->exec() == QDialog::Accepted)
 		ui.tbrMessages->print(&printer);
@@ -1485,12 +1487,12 @@ void ArchiveViewWindow::onHeadersRequestTimerTimeout()
 		IArchiveRequest request;
 		if (FHistoryTime > 0)
 		{
-			request.end = QDateTime(QDate::currentDate().addMonths(HistoryTime[FHistoryTime-1]));
+			request.end = QDate::currentDate().addMonths(HistoryTime[FHistoryTime-1]).startOfDay();
 			request.end = request.end.addDays(1-request.end.date().day());
 		}
 		if (FHistoryTime < HistoryTimeCount)
 		{
-			request.start = QDateTime(QDate::currentDate().addMonths(HistoryTime[FHistoryTime]));
+			request.start = QDate::currentDate().addMonths(HistoryTime[FHistoryTime]).startOfDay();
 			request.start = request.start.addDays(1-request.start.date().day());
 		}
 		request.order = Qt::DescendingOrder;
@@ -1661,7 +1663,7 @@ void ArchiveViewWindow::onRosterStreamJidChanged(IRoster *ARoster, const Jid &AB
 	if (FAddresses.contains(ABefore))
 	{
 		foreach(const Jid &contactJid, FAddresses.values(ABefore))
-			FAddresses.insertMulti(ARoster->streamJid(),contactJid);
+			FAddresses.insert(ARoster->streamJid(),contactJid);
 		FAddresses.remove(ABefore);
 
 		foreach(QStandardItem *item, findStreamItems(ABefore))
@@ -1686,6 +1688,7 @@ void ArchiveViewWindow::onRosterStreamJidChanged(IRoster *ARoster, const Jid &AB
 				++it;
 			}
 		}
-		FCollections.unite(collections);
+		for (QMap<ArchiveHeader,ArchiveCollection>::const_iterator cit=collections.constBegin(); cit!=collections.constEnd(); ++cit)
+			FCollections.insert(cit.key(),cit.value());
 	}
 }

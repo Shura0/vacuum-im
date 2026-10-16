@@ -2,6 +2,7 @@
 #define BOOKMARKS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ibookmarks.h>
 #include <interfaces/iprivatestorage.h>
 #include <interfaces/imainwindow.h>
@@ -33,7 +34,7 @@ public:
 	~Bookmarks();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return BOOKMARKS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(BOOKMARKS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -1,3 +1,4 @@
+#include <QRegularExpression>
 #include "rostersearch.h"
 
 #include <QKeyEvent>
@@ -66,8 +67,8 @@ void RosterSearch::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(ROSTERSVIEW_UUID);
-	APluginInfo->dependences.append(MAINWINDOW_UUID);
+	APluginInfo->dependences.append(QUuid(ROSTERSVIEW_UUID));
+	APluginInfo->dependences.append(QUuid(MAINWINDOW_UUID));
 }
 
 bool RosterSearch::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -208,11 +209,11 @@ void RosterSearch::startSearch()
 		}
 	}
 
-	if (filterRegExp().pattern() != pattern)
+	if (filterRegularExpression().pattern() != pattern)
 	{
 		LOG_DEBUG(QString("Changing roster search pattern to='%1'").arg(pattern));
-		QRegExp regExp(pattern,Qt::CaseInsensitive,QRegExp::Wildcard);
-		setFilterRegExp(regExp);
+		QRegularExpression regExp(QRegularExpression::wildcardToRegularExpression(pattern),QRegularExpression::CaseInsensitiveOption);
+		setFilterRegularExpression(regExp);
 	}
 	invalidate();
 
@@ -366,7 +367,7 @@ bool RosterSearch::filterAcceptsRow(int ARow, const QModelIndex &AParent) const
 		if (!sourceModel()->hasChildren(index))
 		{
 			bool accept = true;
-			const QRegExp regExp = filterRegExp();
+			const QRegularExpression regExp = filterRegularExpression();
 			foreach(int dataField, FFieldActions.keys())
 			{
 				if (isSearchFieldEnabled(dataField))

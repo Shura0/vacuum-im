@@ -2,6 +2,7 @@
 #define FILETRANSFER_H
 
 #include <QDropEvent>
+#include <QObject>
 #include <QDragMoveEvent>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
@@ -43,7 +44,7 @@ public:
 	~FileTransfer();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return FILETRANSFER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(FILETRANSFER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

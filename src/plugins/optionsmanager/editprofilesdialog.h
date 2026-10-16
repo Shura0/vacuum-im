@@ -2,6 +2,7 @@
 #define EDITPROFILESDIALOG_H
 
 #include <QSet>
+#include <QObject>
 #include <QDialog>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_editprofilesdialog.h"

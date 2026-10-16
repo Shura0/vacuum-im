@@ -2,6 +2,7 @@
 #define URLPROCESSOR_H
 
 #include <QNetworkAccessManager>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iurlprocessor.h>
 #include <interfaces/iconnectionmanager.h>
@@ -19,7 +20,7 @@ public:
 	~UrlProcessor();
 	// IPlugin
 	QObject *instance() {return this;}
-	virtual QUuid pluginUuid() const { return URLPROCESSOR_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(URLPROCESSOR_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects() { return true; }

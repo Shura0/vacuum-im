@@ -2,6 +2,7 @@
 #define ISESSIONNEGOTIATION_H
 
 #include <QHash>
+#include <QObject>
 #include <interfaces/idataforms.h>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
@@ -77,7 +78,7 @@ protected:
 	virtual void sessionTerminated(const IStanzaSession &ASession) =0;
 };
 
-Q_DECLARE_INTERFACE(ISessionNegotiator,"Vacuum.Plugin.ISessionNegotiator/1.0")
-Q_DECLARE_INTERFACE(ISessionNegotiation,"Vacuum.Plugin.ISessionNegotiation/1.2")
+Q_DECLARE_INTERFACE(ISessionNegotiator,"Vacuum.Plugin.ISessionNegotiator/1.0");
+Q_DECLARE_INTERFACE(ISessionNegotiation,"Vacuum.Plugin.ISessionNegotiation/1.2");
 
 #endif // ISESSIONNEGOTIATION_H

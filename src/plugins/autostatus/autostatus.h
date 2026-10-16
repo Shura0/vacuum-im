@@ -2,6 +2,7 @@
 #define AUTOSTATUS_H
 
 #include <QTimer>
+#include <QObject>
 #include <QDateTime>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iautostatus.h>
@@ -25,7 +26,7 @@ public:
 	~AutoStatus();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return AUTOSTATUS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(AUTOSTATUS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

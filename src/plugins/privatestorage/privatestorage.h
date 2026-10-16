@@ -2,6 +2,7 @@
 #define PRIVATESTORAGE_H
 
 #include <QSet>
+#include <QObject>
 #include <QMap>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iprivatestorage.h>
@@ -24,7 +25,7 @@ public:
 	~PrivateStorage();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return PRIVATESTORAGE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(PRIVATESTORAGE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

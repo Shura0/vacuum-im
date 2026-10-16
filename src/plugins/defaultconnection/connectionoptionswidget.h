@@ -2,6 +2,7 @@
 #define CONNECTIONOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/idefaultconnection.h>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_connectionoptionswidget.h"

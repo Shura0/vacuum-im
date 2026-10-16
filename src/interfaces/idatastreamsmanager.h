@@ -2,6 +2,7 @@
 #define IDATASTREAMSMANAGER_H
 
 #include <QMap>
+#include <QObject>
 #include <QUuid>
 #include <QVariant>
 #include <QIODevice>
@@ -126,9 +127,9 @@ protected:
 	virtual void streamInitFinished(const IDataStream &AStream, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IDataStreamSocket,"Vacuum.Plugin.IDataStreamSocket/1.1")
-Q_DECLARE_INTERFACE(IDataStreamMethod,"Vacuum.Plugin.IDataStreamMethod/1.2")
-Q_DECLARE_INTERFACE(IDataStreamProfile,"Vacuum.Plugin.IDataStreamProfile/1.2")
-Q_DECLARE_INTERFACE(IDataStreamsManager,"Vacuum.Plugin.IDataStreamsManager/1.3")
+Q_DECLARE_INTERFACE(IDataStreamSocket,"Vacuum.Plugin.IDataStreamSocket/1.1");
+Q_DECLARE_INTERFACE(IDataStreamMethod,"Vacuum.Plugin.IDataStreamMethod/1.2");
+Q_DECLARE_INTERFACE(IDataStreamProfile,"Vacuum.Plugin.IDataStreamProfile/1.2");
+Q_DECLARE_INTERFACE(IDataStreamsManager,"Vacuum.Plugin.IDataStreamsManager/1.3");
 
 #endif  //IDATASTREAMSMANAGER_H

@@ -2,6 +2,7 @@
 #define FILEMESSAGEARCHIVE_H
 
 #include <QMutex>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ifilemessagearchive.h>
 #include <interfaces/imessagearchiver.h>
@@ -26,7 +27,7 @@ public:
 	~FileMessageArchive();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return FILEMESSAGEARCHIVE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(FILEMESSAGEARCHIVE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

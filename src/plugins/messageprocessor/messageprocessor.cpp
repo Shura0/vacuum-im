@@ -1,7 +1,9 @@
+#include <utils/qtcompat.h>
 #include "messageprocessor.h"
 
 #include <QVariant>
 #include <QTextCursor>
+#include <QRegularExpression>
 #include <definitions/namespaces.h>
 #include <definitions/messagedataroles.h>
 #include <definitions/messagewriterorders.h>
@@ -31,8 +33,8 @@ void MessageProcessor::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool MessageProcessor::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -153,8 +155,13 @@ bool MessageProcessor::writeMessageToText(int AOrder, Message &AMessage, QTextDo
 	}
 	else if (AOrder == MWO_MESSAGEPROCESSOR_ANCHORS)
 	{
-		QRegExp regexp("\\b((https?|ftp)://|www\\.|xmpp:|magnet:|mailto:)\\S+(/|#|~|@|&|=|-|\\+|\\*|\\$|\\b)");
-		regexp.setCaseSensitivity(Qt::CaseInsensitive);
+		// Match a whole URL, but never run across whitespace or another link's
+		// delimiters. UseUnicodePropertiesOption is required so that \s also
+		// matches the Unicode line/paragraph separators that a <br> becomes in
+		// the QTextDocument: QRegularExpression's \s is ASCII-only by default
+		// (unlike the QRegExp it replaced), which made consecutive URLs on
+		// separate lines merge into one long, unopenable anchor.
+		QRegularExpression regexp("((https?://|ftp://|www\\.|xmpp:|magnet:|mailto:)|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?\\x{00AB}\\x{00BB}\\x{201C}\\x{201D}\\x{2018}\\x{2019}\\\\])",QRegularExpression::CaseInsensitiveOption|QRegularExpression::UseUnicodePropertiesOption);
 		for (QTextCursor cursor = ADocument->find(regexp); !cursor.isNull(); cursor = ADocument->find(regexp,cursor))
 		{
 			QTextCharFormat linkFormat = cursor.charFormat();
@@ -262,7 +269,7 @@ bool MessageProcessor::processMessage(const Jid &AStreamJid, Message &AMessage, 
 	AMessage.setData(MDR_MESSAGE_DIRECTION,ADirection);
 
 	bool hooked = false;
-	QMapIterator<int,IMessageEditor *> it(FMessageEditors);
+	QMultiMapIterator<int,IMessageEditor *> it(FMessageEditors);
 	ADirection == DirectionIn ? it.toFront() : it.toBack();
 	while (!hooked && (ADirection==DirectionIn ? it.hasNext() : it.hasPrevious()))
 	{
@@ -329,7 +336,7 @@ void MessageProcessor::removeMessageNotify(int AMessageId)
 bool MessageProcessor::messageHasText(const Message &AMessage, const QString &ALang) const
 {
 	Message messageCopy = AMessage;
-	QMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toFront();
+	QMultiMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toFront();
 	while (it.hasNext())
 	{
 		if (it.next().value()->writeMessageHasText(it.key(),messageCopy,ALang))
@@ -343,7 +350,7 @@ bool MessageProcessor::messageToText(const Message &AMessage, QTextDocument *ADo
 	bool changed = false;
 
 	Message messageCopy = AMessage;
-	QMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toFront();
+	QMultiMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toFront();
 	while (it.hasNext())
 		changed = it.next().value()->writeMessageToText(it.key(),messageCopy,ADocument,ALang) || changed;
 
@@ -355,7 +362,7 @@ bool MessageProcessor::textToMessage(const QTextDocument *ADocument, Message &AM
 	bool changed = false;
 	
 	QTextDocument *documentCopy = ADocument->clone();
-	QMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toBack();
+	QMultiMapIterator<int,IMessageWriter *> it(FMessageWriters); it.toBack();
 	while (it.hasPrevious())
 		changed = it.previous().value()->writeTextToMessage(it.key(),documentCopy,AMessage,ALang) || changed;
 	delete documentCopy;
@@ -390,7 +397,7 @@ QMultiMap<int, IMessageHandler *> MessageProcessor::messageHandlers() const
 void MessageProcessor::insertMessageHandler(int AOrder, IMessageHandler *AHandler)
 {
 	if (AHandler && !FMessageHandlers.contains(AOrder,AHandler))
-		FMessageHandlers.insertMulti(AOrder,AHandler);
+		FMessageHandlers.insert(AOrder,AHandler);
 }
 
 void MessageProcessor::removeMessageHandler(int AOrder, IMessageHandler *AHandler)
@@ -407,7 +414,7 @@ QMultiMap<int, IMessageWriter *> MessageProcessor::messageWriters() const
 void MessageProcessor::insertMessageWriter(int AOrder, IMessageWriter *AWriter)
 {
 	if (AWriter && !FMessageWriters.contains(AOrder,AWriter))
-		FMessageWriters.insertMulti(AOrder,AWriter);
+		FMessageWriters.insert(AOrder,AWriter);
 }
 
 void MessageProcessor::removeMessageWriter(int AOrder, IMessageWriter *AWriter)
@@ -424,7 +431,7 @@ QMultiMap<int, IMessageEditor *> MessageProcessor::messageEditors() const
 void MessageProcessor::insertMessageEditor(int AOrder, IMessageEditor *AEditor)
 {
 	if (AEditor && !FMessageEditors.contains(AOrder,AEditor))
-		FMessageEditors.insertMulti(AOrder,AEditor);
+		FMessageEditors.insert(AOrder,AEditor);
 }
 
 void MessageProcessor::removeMessageEditor(int AOrder, IMessageEditor *AEditor)

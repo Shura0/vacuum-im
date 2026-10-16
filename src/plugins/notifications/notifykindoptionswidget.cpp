@@ -59,7 +59,7 @@ NotifyKindOptionsWidget::NotifyKindOptionsWidget(INotifications *ANotifications,
 
 	QVBoxLayout *vblLayout = new QVBoxLayout(this);
 	vblLayout->addWidget(tbwNotifies);
-	vblLayout->setMargin(0);
+	vblLayout->setContentsMargins(0,0,0,0);
 
 	QMultiMap<int, NotificationType> orderedTypes;
 	ushort visibleKinds = INotification::PopupWindow|INotification::TrayNotify|INotification::SoundPlay|INotification::ShowMinimized;
@@ -69,7 +69,7 @@ NotifyKindOptionsWidget::NotifyKindOptionsWidget(INotifications *ANotifications,
 		if (!notifyType.title.isEmpty() && (notifyType.kindMask & visibleKinds)>0)
 		{
 			notifyType.typeId = typeId;
-			orderedTypes.insertMulti(notifyType.order,notifyType);
+			orderedTypes.insert(notifyType.order,notifyType);
 		}
 	}
 

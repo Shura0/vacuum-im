@@ -1,3 +1,4 @@
+#include <QActionGroup>
 #include "statewidget.h"
 
 #include <QDateTime>

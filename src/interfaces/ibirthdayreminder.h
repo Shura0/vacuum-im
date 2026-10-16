@@ -2,6 +2,7 @@
 #define IBIRTHDAYREMINDER_H
 
 #include <QDate>
+#include <QObject>
 #include <QImage>
 #include <utils/jid.h>
 
@@ -15,6 +16,6 @@ public:
 	virtual int contactBithdayDaysLeft(const Jid &AContactJid) const =0;
 };
 
-Q_DECLARE_INTERFACE(IBirthdayReminder,"Vacuum.Plugin.IBirthdayReminer/1.0")
+Q_DECLARE_INTERFACE(IBirthdayReminder,"Vacuum.Plugin.IBirthdayReminer/1.0");
 
 #endif // IBIRTHDAYREMINDER_H

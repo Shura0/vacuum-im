@@ -2,6 +2,7 @@
 #define ANNOTATIONS_H
 
 #include <QTimer>
+#include <QObject>
 #include <QDomDocument>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iannotations.h>
@@ -33,7 +34,7 @@ public:
 	~Annotations();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return ANNOTATIONS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ANNOTATIONS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -2,6 +2,7 @@
 #define FILEWRITER_H
 
 #include <QFile>
+#include <QObject>
 #include <QTimer>
 #include <QXmlStreamWriter>
 #include <interfaces/imessagearchiver.h>

@@ -2,6 +2,7 @@
 #define DEFAULTCONNECTIONENGINE_H
 
 #include <QObjectCleanupHandler>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/idefaultconnection.h>
 #include <interfaces/ixmppstreammanager.h>
@@ -22,7 +23,7 @@ public:
 	~DefaultConnectionEngine();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return DEFAULTCONNECTION_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(DEFAULTCONNECTION_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

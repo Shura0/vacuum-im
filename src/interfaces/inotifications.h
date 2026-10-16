@@ -2,6 +2,7 @@
 #define INOTIFICATIONS_H
 
 #include <QMap>
+#include <QObject>
 #include <QIcon>
 #include <QImage>
 #include <utils/jid.h>
@@ -88,7 +89,7 @@ protected:
 	virtual void notificationHandlerRemoved(int AOrder, INotificationHandler *AHandler) =0;
 };
 
-Q_DECLARE_INTERFACE(INotificationHandler,"Vacuum.Plugin.INotificationHandler/1.1")
-Q_DECLARE_INTERFACE(INotifications,"Vacuum.Plugin.INotifications/1.4")
+Q_DECLARE_INTERFACE(INotificationHandler,"Vacuum.Plugin.INotificationHandler/1.1");
+Q_DECLARE_INTERFACE(INotifications,"Vacuum.Plugin.INotifications/1.4");
 
 #endif //INOTIFICATIONS_H

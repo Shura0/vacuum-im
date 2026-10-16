@@ -2,6 +2,7 @@
 #define IMESSAGEPROCESSOR_H
 
 #include <QTextDocument>
+#include <QObject>
 #include <interfaces/inotifications.h>
 #include <interfaces/imessagewidgets.h>
 #include <utils/jid.h>
@@ -89,9 +90,9 @@ protected:
 	virtual void activeStreamRemoved(const Jid &AStreamJid) =0;
 };
 
-Q_DECLARE_INTERFACE(IMessageHandler,"Vacuum.Plugin.IMessageHandler/1.3")
-Q_DECLARE_INTERFACE(IMessageWriter,"Vacuum.Plugin.IMessageWriter/1.2")
-Q_DECLARE_INTERFACE(IMessageEditor,"Vacuum.Plugin.IMessageEditor/1.0")
-Q_DECLARE_INTERFACE(IMessageProcessor,"Vacuum.Plugin.IMessageProcessor/1.4")
+Q_DECLARE_INTERFACE(IMessageHandler,"Vacuum.Plugin.IMessageHandler/1.3");
+Q_DECLARE_INTERFACE(IMessageWriter,"Vacuum.Plugin.IMessageWriter/1.2");
+Q_DECLARE_INTERFACE(IMessageEditor,"Vacuum.Plugin.IMessageEditor/1.0");
+Q_DECLARE_INTERFACE(IMessageProcessor,"Vacuum.Plugin.IMessageProcessor/1.4");
 
 #endif // IMESSAGEPROCESSOR_H

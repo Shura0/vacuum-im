@@ -3,7 +3,6 @@
 #include <QToolButton>
 #include <QMessageBox>
 #include <QInputDialog>
-#include <QSignalMapper>
 #include <definitions/optionvalues.h>
 #include <definitions/resources.h>
 #include <definitions/menuicons.h>
@@ -609,7 +608,7 @@ void TabWindow::onOptionsChanged(const OptionsNode &ANode)
 {
 	if (ANode.path() == OPV_MESSAGES_TABWINDOWS_DEFAULT)
 	{
-		FSetAsDefault->setChecked(FWindowId==ANode.value().toString());
+		FSetAsDefault->setChecked(FWindowId==QUuid(ANode.value().toString()));
 		FDeleteWindow->setVisible(!FSetAsDefault->isChecked());
 	}
 	else if (ANode.path() == OPV_MESSAGES_COMBINEWITHROSTER)
@@ -732,7 +731,7 @@ void TabWindow::onTabMenuActionTriggered(bool)
 		}
 		else if (tabAction == JoinTabAction)
 		{
-			IMessageTabWindow *window = FMessageWidgets->getTabWindow(action->data(ADR_TABWINDOWID).toString());
+			IMessageTabWindow *window = FMessageWidgets->getTabWindow(QUuid(action->data(ADR_TABWINDOWID).toString()));
 			removeTabPage(page);
 			window->addTabPage(page);
 			window->showWindow();

@@ -2,6 +2,7 @@
 #define INVITEUSERSMENU_H
 
 #include <interfaces/imultiuserchat.h>
+#include <QObject>
 #include <interfaces/iservicediscovery.h>
 #include <utils/pluginhelper.h>
 #include <utils/menu.h>

@@ -2,6 +2,7 @@
 #define MULTIUSERCHATWINDOW_H
 
 #include <interfaces/iavatars.h>
+#include <QObject>
 #include <interfaces/imultiuserchat.h>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imessageprocessor.h>

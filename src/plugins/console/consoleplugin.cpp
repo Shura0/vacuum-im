@@ -28,8 +28,8 @@ void ConsolePlugin::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(MAINWINDOW_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(MAINWINDOW_UUID));
 }
 
 bool ConsolePlugin::initConnections(IPluginManager *APluginManager, int &AInitOrder)

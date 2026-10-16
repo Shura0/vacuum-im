@@ -2,6 +2,7 @@
 #define IROSTERMODEL_H
 
 #include <QVariant>
+#include <QObject>
 #include <QAbstractItemModel>
 #include <utils/jid.h>
 #include <utils/advanceditem.h>

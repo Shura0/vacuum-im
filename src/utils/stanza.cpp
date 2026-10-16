@@ -1,6 +1,7 @@
 #include "stanza.h"
 
 #include <QTextStream>
+#include <QIODevice>
 #include "jid.h"
 
 static inline bool IsValidXmlChar(quint32 ACode)

@@ -5,6 +5,7 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QTextDocumentFragment>
+#include <QRegularExpression>
 #include <utils/textmanager.h>
 #include <utils/pluginhelper.h>
 
@@ -21,7 +22,7 @@ ViewWidget::ViewWidget(IMessageWidgets *AMessageWidgets, IMessageWindow *AWindow
 	FMessageProcessor = PluginHelper::pluginInstance<IMessageProcessor>();
 
 	QVBoxLayout *layout = new QVBoxLayout(ui.wdtViewer);
-	layout->setMargin(0);
+	layout->setContentsMargins(0,0,0,0);
 }
 
 ViewWidget::~ViewWidget()
@@ -136,11 +137,11 @@ bool ViewWidget::appendMessage(const Message &AMessage, const IMessageStyleConte
 		IMessageStyleContentOptions options = AOptions;
 		if (AOptions.kind==IMessageStyleContentOptions::KindMessage && !AOptions.senderName.isEmpty())
 		{
-			static const QRegExp me("/me\\s");
+			static const QRegularExpression me(QRegularExpression::anchoredPattern("/me\\s"));
 
 			QTextCursor cursor(&doc);
 			cursor.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,4);
-			if (me.exactMatch(cursor.selectedText()))
+			if (me.match(cursor.selectedText()).hasMatch())
 			{
 				options.kind = IMessageStyleContentOptions::KindMeCommand;
 				cursor.removeSelectedText();
@@ -238,8 +239,8 @@ void ViewWidget::onMessageStyleUrlClicked(QWidget *AWidget, const QUrl &AUrl)
 {
 	if (AWidget == FStyleWidget)
 	{
-		QMap<int,IMessageViewUrlHandler *> handlers = FMessageWidgets->viewUrlHandlers();
-		for (QMap<int,IMessageViewUrlHandler *>::const_iterator it = handlers.constBegin(); it!=handlers.constEnd(); ++it)
+		QMultiMap<int,IMessageViewUrlHandler *> handlers = FMessageWidgets->viewUrlHandlers();
+		for (QMultiMap<int,IMessageViewUrlHandler *>::const_iterator it = handlers.constBegin(); it!=handlers.constEnd(); ++it)
 			if (it.value()->messageViewUrlOpen(it.key(),this,AUrl))
 				break;
 		emit urlClicked(AUrl);

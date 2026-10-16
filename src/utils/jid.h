@@ -5,7 +5,6 @@
 #include <QList>
 #include <QString>
 #include <QMetaType>
-#include <QStringRef>
 #include <QSharedData>
 #include <QDataStream>
 #include "utilsexport.h"
@@ -18,10 +17,10 @@ public:
 	JidData(const JidData &AOther);
 public:
 	QString FFull, FPrepFull;
-	QStringRef FBare, FPrepBare;
-	QStringRef FNode, FPrepNode;
-	QStringRef FDomain, FPrepDomain;
-	QStringRef FResource, FPrepResource;
+	QString FBare, FPrepBare;
+	QString FNode, FPrepNode;
+	QString FDomain, FPrepDomain;
+	QString FResource, FPrepResource;
 	bool FNodeValid, FDomainValid, FResourceValid;
 };
 

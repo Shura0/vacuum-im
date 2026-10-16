@@ -2,6 +2,7 @@
 #define CHATWINDOWMENU_H
 
 #include <interfaces/imessagearchiver.h>
+#include <QObject>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/idataforms.h>
 #include <interfaces/isessionnegotiation.h>

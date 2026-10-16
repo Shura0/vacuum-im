@@ -2,6 +2,7 @@
 #define SIMPLEMESSAGESTYLEPLUGIN_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/imessagestylemanager.h>
 #include <interfaces/iurlprocessor.h>
 #include "simplemessagestyle.h"
@@ -22,7 +23,7 @@ public:
 	~SimpleMessageStyleEngine();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return SIMPLEMESSAGESTYLE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(SIMPLEMESSAGESTYLE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

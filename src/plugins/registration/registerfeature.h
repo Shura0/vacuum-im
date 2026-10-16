@@ -2,6 +2,7 @@
 #define REGISTERFEATURE_H
 
 #include <interfaces/idataforms.h>
+#include <QObject>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/iregistraton.h>
 #include <interfaces/iconnectionmanager.h>

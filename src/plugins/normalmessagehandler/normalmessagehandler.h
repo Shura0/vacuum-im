@@ -4,6 +4,7 @@
 #define NORMALMESSAGEHANDLER_UUID "{8592e3c3-ef5e-42a9-91c9-faf1ed9a91cc}"
 
 #include <QQueue>
+#include <QObject>
 #include <QMultiMap>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessageprocessor.h>
@@ -44,7 +45,7 @@ public:
 	~NormalMessageHandler();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return NORMALMESSAGEHANDLER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(NORMALMESSAGEHANDLER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

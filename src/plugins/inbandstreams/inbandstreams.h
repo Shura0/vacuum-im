@@ -2,6 +2,7 @@
 #define INBANDSTREAMS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/iinbandstreams.h>
 #include <interfaces/idatastreamsmanager.h>
 #include <interfaces/istanzaprocessor.h>
@@ -22,7 +23,7 @@ public:
 	~InBandStreams();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return INBANDSTREAMS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(INBANDSTREAMS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

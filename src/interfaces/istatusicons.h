@@ -2,6 +2,7 @@
 #define ISTATUSICONS_H
 
 #include <QIcon>
+#include <QObject>
 #include <QString>
 #include <utils/jid.h>
 
@@ -36,6 +37,6 @@ protected:
 	virtual void statusIconsChanged() =0;
 };
 
-Q_DECLARE_INTERFACE(IStatusIcons,"Vacuum.Plugin.IStatusIcons/1.1")
+Q_DECLARE_INTERFACE(IStatusIcons,"Vacuum.Plugin.IStatusIcons/1.1");
 
 #endif // ISTATUSICONS_H

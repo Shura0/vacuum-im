@@ -2,6 +2,7 @@
 #define SASLSESSIONFEATURE_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ixmppstreammanager.h>
 
 class SASLSessionFeature :

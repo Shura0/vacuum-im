@@ -30,9 +30,9 @@ void PEPManager::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "0.9";
 	APluginInfo->author = "Maxim Ignatenko";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(SERVICEDISCOVERY_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
+	APluginInfo->dependences.append(QUuid(SERVICEDISCOVERY_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
 }
 
 bool PEPManager::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -132,7 +132,7 @@ int PEPManager::insertNodeHandler(const QString &ANode, IPEPHandler *AHandle)
 		handleId = (handleId > 0) ? handleId+1 : 1;
 
 	FHandlersById.insert(handleId, AHandle);
-	FHandlersByNode.insertMulti(ANode, handleId);
+	FHandlersByNode.insert(ANode, handleId);
 	connect(AHandle->instance(),SIGNAL(destroyed(QObject *)),SLOT(onPEPHandlerDestroyed(QObject *)));
 
 	return handleId;

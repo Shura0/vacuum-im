@@ -2,6 +2,7 @@
 #define FILETSTREAMSMANAGER_H
 
 #include <QPointer>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>
@@ -27,7 +28,7 @@ public:
 	~FileStreamsManager();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return FILESTREAMSMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(FILESTREAMSMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

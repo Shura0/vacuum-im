@@ -2,6 +2,7 @@
 #define EDITPROXYDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iconnectionmanager.h>
 #include "ui_editproxydialog.h"
 

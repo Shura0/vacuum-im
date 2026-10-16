@@ -2,6 +2,7 @@
 #define ACCOUNTMANAGER_H
 
 #include <QComboBox>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iaccountmanager.h>
 #include <interfaces/ioptionsmanager.h>
@@ -24,7 +25,7 @@ public:
 	~AccountManager();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ACCOUNTMANAGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ACCOUNTMANAGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects() { return true; }

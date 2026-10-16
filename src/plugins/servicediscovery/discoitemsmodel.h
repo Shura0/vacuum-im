@@ -2,6 +2,7 @@
 #define DISCOITEMSMODEL_H
 
 #include <QIcon>
+#include <QObject>
 #include <QList>
 #include <QHash>
 #include <QAbstractItemModel>

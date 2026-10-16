@@ -2,6 +2,7 @@
 #define ROSTERITEMEXCHANGE_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/irosteritemexchange.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>
@@ -33,7 +34,7 @@ public:
 	~RosterItemExchange();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ROSTERITEMEXCHANGE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTERITEMEXCHANGE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

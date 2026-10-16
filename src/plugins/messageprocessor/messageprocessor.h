@@ -2,6 +2,7 @@
 #define MESSAGEPROCESSOR_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/istanzaprocessor.h>
@@ -23,7 +24,7 @@ public:
 	~MessageProcessor();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return MESSAGEPROCESSOR_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MESSAGEPROCESSOR_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

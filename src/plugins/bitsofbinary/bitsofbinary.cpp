@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "bitsofbinary.h"
 
 #include <QFile>
@@ -42,8 +43,8 @@ void BitsOfBinary::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool BitsOfBinary::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -407,7 +408,7 @@ void BitsOfBinary::onXmppStreamCreated(IXmppStream *AXmppStream)
 
 void BitsOfBinary::onOfflineTimerTimeout()
 {
-	foreach(const QString &contentId, FOfflineRequests.toSet())
+	foreach(const QString &contentId, qToSet(FOfflineRequests))
 	{
 		QString type; QByteArray data; quint64 maxAge;
 		if (loadBinary(contentId,type,data,maxAge))

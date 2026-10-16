@@ -112,7 +112,7 @@ void SetupPluginsDialog::updatePlugins()
 	QDomElement pluginElem = FPluginsSetup.documentElement().firstChildElement();
 	while (!pluginElem.isNull())
 	{
-		QUuid uuid = pluginElem.attribute("uuid");
+		QUuid uuid(pluginElem.attribute("uuid"));
 		QString file = pluginElem.tagName();
 		QString name = pluginElem.firstChildElement("name").text();
 		QString version = pluginElem.firstChildElement("version").text();
@@ -248,12 +248,12 @@ void SetupPluginsDialog::onCurrentPluginChanged(const QModelIndex &ACurrent, con
 		else
 		{
 			QStringList dependsFailed;
-			QStandardItem *pluginItem = FPluginItem.value(ACurrent.data(PDR_UUID).toString());
+			QStandardItem *pluginItem = FPluginItem.value(QUuid(ACurrent.data(PDR_UUID).toString()));
 			QDomElement pluginElem = FItemElement.value(pluginItem);
 			QDomElement dependElem = pluginElem.firstChildElement("depends").firstChildElement("uuid");
 			while (!dependElem.isNull())
 			{
-				QStandardItem *dependItem = FPluginItem.value(dependElem.text());
+				QStandardItem *dependItem = FPluginItem.value(QUuid(dependElem.text()));
 				if (dependItem==NULL || !dependItem->data(PDR_ISLOADED).toBool())
 					dependsFailed.append(dependItem!=NULL ? dependItem->data(PDR_UUID).toString() : dependElem.text());
 
@@ -309,7 +309,7 @@ void SetupPluginsDialog::onDependsLinkActivated(const QString &ALink)
 		QStringList tooltip;
 		foreach(const QString &dependUid, depends)
 		{
-			QStandardItem *pluginItem = FPluginItem.value(dependUid);
+			QStandardItem *pluginItem = FPluginItem.value(QUuid(dependUid));
 			if (pluginItem)
 				tooltip.append(pluginItem->data(PDR_NAME).toString());
 			else

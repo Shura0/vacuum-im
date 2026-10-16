@@ -2,6 +2,7 @@
 #define ARCHIVEVIEWWINDOW_H
 
 #include <QDate>
+#include <QObject>
 #include <QTimer>
 #include <QMainWindow>
 #include <QStandardItemModel>

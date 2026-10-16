@@ -75,9 +75,9 @@ void ChatStates::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(PRESENCE_UUID);
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(PRESENCE_UUID));
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool ChatStates::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -234,7 +234,7 @@ QMultiMap<int, IOptionsDialogWidget *> ChatStates::optionsDialogWidgets(const QS
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId==OPN_MESSAGES)
 	{
-		widgets.insertMulti(OWO_MESSAGES_CHATSTATESENABLED, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_CHATSTATESENABLED),tr("Send notifications of your chat activity"),AParent));
+		widgets.insert(OWO_MESSAGES_CHATSTATESENABLED, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_CHATSTATESENABLED),tr("Send notifications of your chat activity"),AParent));
 	}
 	return widgets;
 }
@@ -645,7 +645,7 @@ void ChatStates::setChatSelfState(const Jid &AStreamJid, const Jid &AContactJid,
 		ChatParams &chatParams = FChatParams[AStreamJid][AContactJid];
 
 		if (AState==IChatStates::StateActive || AState==IChatStates::StateComposing)
-			chatParams.self.lastActive = QDateTime::currentDateTime().toTime_t();
+			chatParams.self.lastActive = QDateTime::currentDateTime().toSecsSinceEpoch();
 
 		if (chatParams.self.state != AState)
 		{
@@ -739,7 +739,7 @@ void ChatStates::setRoomSelfState(const Jid &AStreamJid, const Jid &ARoomJid, in
 		RoomParams &roomParams = FRoomParams[AStreamJid][ARoomJid];
 
 		if (AState==IChatStates::StateActive || AState==IChatStates::StateComposing)
-			roomParams.self.lastActive = QDateTime::currentDateTime().toTime_t();
+			roomParams.self.lastActive = QDateTime::currentDateTime().toSecsSinceEpoch();
 
 		if (roomParams.self.state != AState)
 		{
@@ -1042,7 +1042,7 @@ void ChatStates::onUpdateSelfStates()
 		if (FChatParams.value(window->streamJid()).contains(window->contactJid()))
 		{
 			ChatParams &chatParams = FChatParams[window->streamJid()][window->contactJid()];
-			uint timePassed = QDateTime::currentDateTime().toTime_t() - chatParams.self.lastActive;
+			uint timePassed = QDateTime::currentDateTime().toSecsSinceEpoch() - chatParams.self.lastActive;
 			if (chatParams.self.state==IChatStates::StateActive && window->isActiveTabPage())
 			{
 				setChatSelfState(window->streamJid(),window->contactJid(),IChatStates::StateActive);
@@ -1072,7 +1072,7 @@ void ChatStates::onUpdateSelfStates()
 		if (FRoomParams.value(window->streamJid()).contains(window->contactJid()))
 		{
 			RoomParams &roomParams = FRoomParams[window->streamJid()][window->contactJid()];
-			uint timePassed = QDateTime::currentDateTime().toTime_t() - roomParams.self.lastActive;
+			uint timePassed = QDateTime::currentDateTime().toSecsSinceEpoch() - roomParams.self.lastActive;
 			if (roomParams.self.state==IChatStates::StateActive && window->isActiveTabPage())
 			{
 				setRoomSelfState(window->streamJid(),window->contactJid(),IChatStates::StateActive);

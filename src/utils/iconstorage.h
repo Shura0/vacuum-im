@@ -2,6 +2,7 @@
 #define ICONSTORAGE_H
 
 #include <QPair>
+#include <QObject>
 #include <QIcon>
 #include <QTimer>
 #include <QImageReader>

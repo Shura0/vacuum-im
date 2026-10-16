@@ -81,7 +81,7 @@ bool XmppUriQueries::parseXmppUri(const QUrl &AUrl, Jid &AContactJid, QString &A
 			if (AContactJid.isValid() && !AAction.isEmpty())
 			{
 				for (int i=0; i<keyValues.count(); i++)
-					AParams.insertMulti(keyValues.at(i).first, keyValues.at(i).second);
+					AParams.insert(keyValues.at(i).first, keyValues.at(i).second);
 				return true;
 			}
 		}
@@ -101,9 +101,9 @@ QString XmppUriQueries::makeXmppUri(const Jid &AContactJid, const QString &AActi
 		url.setPath(AContactJid.full());
 
 		QList< QPair<QString, QString> > queryItems;
-		queryItems.append(qMakePair<QString,QString>(AAction,QString()));
+		queryItems.append(QPair<QString,QString>(AAction,QString()));
 		for(QMultiMap<QString, QString>::const_iterator it=AParams.constBegin(); it!=AParams.end(); ++it)
-			queryItems.append(qMakePair<QString,QString>(it.key(),it.value()));
+			queryItems.append(QPair<QString,QString>(it.key(),it.value()));
 		query.setQueryItems(queryItems);
 		url.setQuery(query);
 
@@ -117,7 +117,7 @@ void XmppUriQueries::insertUriHandler(int AOrder, IXmppUriHandler *AHandler)
 	if (!FHandlers.contains(AOrder, AHandler))
 	{
 		LOG_DEBUG(QString("URI handler inserted, order=%1, address=%2").arg(AOrder).arg((quint64)AHandler));
-		FHandlers.insertMulti(AOrder, AHandler);
+		FHandlers.insert(AOrder, AHandler);
 		emit uriHandlerInserted(AOrder, AHandler);
 	}
 }

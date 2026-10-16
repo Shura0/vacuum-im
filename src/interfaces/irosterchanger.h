@@ -2,6 +2,7 @@
 #define IROSTERCHANGER_H
 
 #include <QDialog>
+#include <QObject>
 #include <QVBoxLayout>
 #include <utils/jid.h>
 #include <utils/toolbarchanger.h>
@@ -57,8 +58,8 @@ protected:
 	virtual void subscriptionDialogCreated(ISubscriptionDialog *ADialog) =0;
 };
 
-Q_DECLARE_INTERFACE(IAddContactDialog,"Vacuum.Plugin.IAddContactDialog/1.0")
-Q_DECLARE_INTERFACE(ISubscriptionDialog,"Vacuum.Plugin.ISubscriptionDialog/1.1")
-Q_DECLARE_INTERFACE(IRosterChanger,"Vacuum.Plugin.IRosterChanger/1.0")
+Q_DECLARE_INTERFACE(IAddContactDialog,"Vacuum.Plugin.IAddContactDialog/1.0");
+Q_DECLARE_INTERFACE(ISubscriptionDialog,"Vacuum.Plugin.ISubscriptionDialog/1.1");
+Q_DECLARE_INTERFACE(IRosterChanger,"Vacuum.Plugin.IRosterChanger/1.0");
 
 #endif

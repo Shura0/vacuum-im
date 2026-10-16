@@ -2,6 +2,7 @@
 #define MAINWINDOWPLUGIN_H
 
 #include <QTime>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ioptionsmanager.h>
 #include <interfaces/imainwindow.h>
@@ -22,7 +23,7 @@ public:
 	~MainWindowPlugin();
 	virtual QObject* instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return MAINWINDOW_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(MAINWINDOW_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

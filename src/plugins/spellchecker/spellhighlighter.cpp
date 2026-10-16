@@ -2,6 +2,7 @@
 
 #include "spellchecker.h"
 #include "spellbackend.h"
+#include <QRegularExpression>
 
 SpellHighlighter::SpellHighlighter(QTextDocument *ADocument, IMultiUserChat *AMultiUserChat) : QSyntaxHighlighter(ADocument)
 {
@@ -25,18 +26,20 @@ void SpellHighlighter::highlightBlock(const QString &AText)
 	if (FEnabled)
 	{
 		// Match words (minimally) excluding digits within a word
-		static const QRegExp expression("\\b[^\\s\\d]+\\b");
+		static const QRegularExpression expression("\\b[^\\s\\d]+\\b");
 
-		int index = 0;
-		while ((index = expression.indexIn(AText, index)) != -1)
+		int offset = 0;
+		QRegularExpressionMatch match;
+		while ((match = expression.match(AText, offset)).hasMatch())
 		{
-			int length = expression.matchedLength();
-			if (!isUserNickName(expression.cap()))
+			int index = match.capturedStart();
+			int length = match.capturedLength();
+			if (!isUserNickName(match.captured()))
 			{
-				if (!SpellBackend::instance()->isCorrect(expression.cap()))
+				if (!SpellBackend::instance()->isCorrect(match.captured()))
 					setFormat(index, length, FCharFormat);
 			}
-			index += length;
+			offset = index + length;
 		}
 	}
 }

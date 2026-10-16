@@ -39,7 +39,7 @@ void ImageViewer::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Vacuum-im Team";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
 }
 
 bool ImageViewer::initConnections(IPluginManager *APluginManager, int &AInitOrder)

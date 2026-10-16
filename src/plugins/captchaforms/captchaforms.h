@@ -2,6 +2,7 @@
 #define CAPTCHAFORMS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/icaptchaforms.h>
 #include <interfaces/idataforms.h>
 #include <interfaces/ixmppstreammanager.h>
@@ -36,7 +37,7 @@ public:
 	~CaptchaForms();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return CAPTCHAFORMS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CAPTCHAFORMS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

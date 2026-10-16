@@ -2,6 +2,7 @@
 #define ARCHIVEVIEWTREEVIEW_H
 
 #include <QTreeView>
+#include <QObject>
 
 class ArchiveViewTreeView : 
 	public QTreeView

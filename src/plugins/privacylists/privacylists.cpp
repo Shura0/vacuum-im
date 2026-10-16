@@ -1,3 +1,5 @@
+#include <QActionGroup>
+#include <utils/qtcompat.h>
 #include "privacylists.h"
 
 #include <definitions/namespaces.h>
@@ -57,8 +59,8 @@ void PrivacyLists::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool PrivacyLists::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -473,7 +475,7 @@ void PrivacyLists::setGroupAutoListed(const Jid &AStreamJid, const QString &AGro
 			}
 
 			IRoster *roster = FRosterManager!=NULL ? FRosterManager->findRoster(AStreamJid) : NULL;
-			QStringList groups = roster!=NULL ? (roster->groups()<<AGroup).toList() : QStringList(AGroup);
+			QStringList groups = roster!=NULL ? (roster->groups()<<AGroup).values() : QStringList(AGroup);
 			std::sort(groups.begin(), groups.end());
 
 			foreach(const QString &group, groups)
@@ -1203,7 +1205,7 @@ void PrivacyLists::sendOnlinePresences(const Jid &AStreamJid, const IPrivacyList
 	IPresence *presence = FPresenceManager!=NULL ? FPresenceManager->findPresence(AStreamJid) : NULL;
 	if (presence)
 	{
-		QSet<Jid> denied = denyedContacts(AStreamJid,AAutoList,IPrivacyRule::PresencesOut).keys().toSet();
+		QSet<Jid> denied = qToSet(denyedContacts(AStreamJid,AAutoList,IPrivacyRule::PresencesOut).keys());
 		QSet<Jid> online = FOfflinePresences.value(AStreamJid) - denied;
 		if (presence->isOpen())
 		{
@@ -1225,7 +1227,7 @@ void PrivacyLists::sendOfflinePresences(const Jid &AStreamJid, const IPrivacyLis
 	IPresence *presence = FPresenceManager!=NULL ? FPresenceManager->findPresence(AStreamJid) : NULL;
 	if (presence)
 	{
-		QSet<Jid> denied = denyedContacts(AStreamJid,AAutoList,IPrivacyRule::PresencesOut).keys().toSet();
+		QSet<Jid> denied = qToSet(denyedContacts(AStreamJid,AAutoList,IPrivacyRule::PresencesOut).keys());
 		QSet<Jid> offline = denied - FOfflinePresences.value(AStreamJid);
 		if (presence->isOpen())
 		{
@@ -1262,7 +1264,7 @@ void PrivacyLists::updatePrivacyLabels(const Jid &AStreamJid)
 {
 	if (FRostersModel)
 	{
-		QSet<Jid> denied = denyedContacts(AStreamJid,privacyList(AStreamJid,activeList(AStreamJid))).keys().toSet();
+		QSet<Jid> denied = qToSet(denyedContacts(AStreamJid,privacyList(AStreamJid,activeList(AStreamJid))).keys());
 		QSet<Jid> deny = denied - FLabeledContacts.value(AStreamJid);
 		QSet<Jid> allow = FLabeledContacts.value(AStreamJid) - denied;
 

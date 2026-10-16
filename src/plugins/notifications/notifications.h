@@ -2,7 +2,8 @@
 #define NOTIFICATIONS_H
 
 #include <QTimer>
-#include <QSound>
+#include <QObject>
+#include <QSoundEffect>
 #include <QPointer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/inotifications.h>
@@ -53,7 +54,7 @@ public:
 	~Notifications();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return NOTIFICATIONS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(NOTIFICATIONS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();
@@ -133,7 +134,7 @@ private:
 	QList<int> FTrayNotifies;
 private:
 	int FNotifyId;
-	QSound *FSound;
+	QSoundEffect *FSound;
 	QList<int> FDelayedRemovals;
 	QList<int> FDelayedActivations;
 	QList<QWidget *> FDelayedShowMinimized;

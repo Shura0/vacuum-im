@@ -2,6 +2,7 @@
 #define IROSTERSVIEW_H
 
 #include <QMap>
+#include <QObject>
 #include <QVariant>
 #include <QTreeView>
 #include <QStringList>
@@ -187,7 +188,7 @@ Q_DECLARE_INTERFACE(IRostersLabelHolder,"Vacuum.Plugin.IRostersLabelHolder/1.0")
 Q_DECLARE_INTERFACE(IRostersClickHooker,"Vacuum.Plugin.IRostersClickHooker/1.3");
 Q_DECLARE_INTERFACE(IRostersKeyHooker,"Vacuum.Plugin.IRostersKeyHooker/1.2");
 Q_DECLARE_INTERFACE(IRostersDragDropHandler,"Vacuum.Plugin.IRostersDragDropHandler/1.1");
-Q_DECLARE_INTERFACE(IRostersEditHandler,"Virtus.Plugin.IRostersEditHandler/1.1")
+Q_DECLARE_INTERFACE(IRostersEditHandler,"Virtus.Plugin.IRostersEditHandler/1.1");
 Q_DECLARE_INTERFACE(IRostersView,"Vacuum.Plugin.IRostersView/1.7");
 Q_DECLARE_INTERFACE(IRostersViewPlugin,"Vacuum.Plugin.IRostersViewPlugin/1.8");
 

@@ -2,6 +2,7 @@
 #define ROSTERSVIEWPLUGIN_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/irostersview.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>
@@ -29,7 +30,7 @@ public:
 	~RostersViewPlugin();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ROSTERSVIEW_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTERSVIEW_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

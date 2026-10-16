@@ -98,7 +98,7 @@ bool ReceiversProxyModel::filterAcceptsRow(int AModelRow, const QModelIndex &AMo
 				return true;
 		return false;
 	}
-	else if (!FOfflineVisible && filterRegExp().isEmpty() && index.data(RDR_SHOW).isValid())
+	else if (!FOfflineVisible && filterRegularExpression().pattern().isEmpty() && index.data(RDR_SHOW).isValid())
 	{
 		int show = index.data(RDR_SHOW).toInt();
 		if (show==IPresence::Offline || show==IPresence::Error)
@@ -424,7 +424,7 @@ QMultiMap<Jid, Jid> ReceiversWidget::selectedAddresses() const
 			if (contactIt.value()->checkState() == Qt::Checked)
 			{
 				if (!addresses.contains(streamIt.key(),contactIt.key()))
-					addresses.insertMulti(streamIt.key(),contactIt.key());
+					addresses.insert(streamIt.key(),contactIt.key());
 			}
 		}
 	}
@@ -894,7 +894,7 @@ void ReceiversWidget::onModelItemInserted(QStandardItem *AItem)
 		else if (itemKind == RIK_GROUP)
 			FGroupItems[streamJid].insert(AItem->data(RDR_GROUP).toString(),AItem);
 		else if (itemKind == RIK_CONTACT)
-			FContactItems[streamJid].insertMulti(AItem->data(RDR_PREP_BARE_JID).toString(),AItem);
+			FContactItems[streamJid].insert(AItem->data(RDR_PREP_BARE_JID).toString(),AItem);
 	}
 	updateCheckState(AItem->parent());
 }
@@ -970,14 +970,14 @@ void ReceiversWidget::onModelItemDataChanged(QStandardItem *AItem, int ARole)
 void ReceiversWidget::onViewIndexExpanded(const QModelIndex &AIndex)
 {
 	QStandardItem *item = mapViewToModel(AIndex);
-	if (item!=NULL && FProxyModel->filterRegExp().isEmpty())
+	if (item!=NULL && FProxyModel->filterRegularExpression().pattern().isEmpty())
 		item->setData(false,RIDR_ITEM_COLLAPSED);
 }
 
 void ReceiversWidget::onViewIndexCollapsed(const QModelIndex &AIndex)
 {
 	QStandardItem *item = mapViewToModel(AIndex);
-	if (item!=NULL && FProxyModel->filterRegExp().isEmpty())
+	if (item!=NULL && FProxyModel->filterRegularExpression().pattern().isEmpty())
 		item->setData(true,RIDR_ITEM_COLLAPSED);
 }
 
@@ -1205,7 +1205,7 @@ void ReceiversWidget::onDeleteDelayedItems()
 void ReceiversWidget::onStartSearchContacts()
 {
 	FProxyModel->setFilterWildcard(ui.sleSearch->text());
-	if (!FProxyModel->filterRegExp().isEmpty())
+	if (!FProxyModel->filterRegularExpression().pattern().isEmpty())
 		ui.trvReceivers->expandAll();
 	else
 		restoreExpandState(FModel->invisibleRootItem());

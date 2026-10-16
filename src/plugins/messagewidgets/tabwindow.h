@@ -2,6 +2,7 @@
 #define TABWINDOW_H
 
 #include <QTimer>
+#include <QObject>
 #include <QMainWindow>
 #include <interfaces/imessagewidgets.h>
 #include "ui_tabwindow.h"

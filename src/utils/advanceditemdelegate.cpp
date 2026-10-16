@@ -31,8 +31,8 @@ void registerAdvancedDelegateItemStreamOperators()
 	if (!typeStreamOperatorsRegistered)
 	{
 		typeStreamOperatorsRegistered = true;
-		qRegisterMetaTypeStreamOperators<AdvancedDelegateItem>("AdvancedDelegateItem");
-		qRegisterMetaTypeStreamOperators<AdvancedDelegateItems>("AdvancedDelegateItems");
+		qRegisterMetaType<AdvancedDelegateItem>("AdvancedDelegateItem");
+		qRegisterMetaType<AdvancedDelegateItems>("AdvancedDelegateItems");
 	}
 }
 
@@ -122,8 +122,8 @@ AdvancedDelegateItem::AdvancedDelegateItem(quint32 AId)
 	d->id = AId;
 	d->kind = Null;
 	d->flags = 0;
-	d->showStates = 0;
-	d->hideStates = 0;
+	d->showStates = QStyle::State();
+	d->hideStates = QStyle::State();
 	d->widget = NULL;
 
 	c = new ContextData;
@@ -347,7 +347,7 @@ public:
 			case AdvancedDelegateItem::CheckBox:
 				{
 					QStyle *style = FOption.widget ? FOption.widget->style() : QApplication::style();
-					style->proxy()->drawPrimitive(QStyle::PE_IndicatorViewItemCheck, &FOption, APainter, FOption.widget);
+					style->proxy()->drawPrimitive(QStyle::PE_IndicatorItemViewItemCheck, &FOption, APainter, FOption.widget);
 					break;
 				}
 			case AdvancedDelegateItem::CustomWidget:
@@ -715,7 +715,7 @@ AdvancedDelegateItems AdvancedItemDelegate::getIndexItems(const QModelIndex &AIn
 				AdvancedDelegateItem stretchItem(stretchId);
 				stretchItem.d->kind = AdvancedDelegateItem::Stretch;
 				stretchItem.d->sizePolicy = QSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
-				stretches.insertMulti(stretchId,stretchItem);
+				stretches.insert(stretchId,stretchItem);
 			}
 		}
 
@@ -726,7 +726,8 @@ AdvancedDelegateItems AdvancedItemDelegate::getIndexItems(const QModelIndex &AIn
 		
 		it->c->blinkOpacity = (itd->flags & AdvancedDelegateItem::Blink)>0 ? FBlinkOpacity : 1.0;
 	}
-	items.unite(stretches);
+	for (AdvancedDelegateItems::const_iterator it=stretches.constBegin(); it!=stretches.constEnd(); ++it)
+		items.insert(it.key(),it.value());
 	
 	return items;
 }
@@ -821,7 +822,7 @@ QStyleOptionViewItem AdvancedItemDelegate::itemStyleOption(const AdvancedDelegat
 
 		hint = AItem.d->hints.value(AdvancedDelegateItem::FontWeight);
 		if (!hint.isNull())
-			itemOption.font.setWeight(hint.toInt());
+			itemOption.font.setWeight(static_cast<QFont::Weight>(hint.toInt()));
 
 		hint = AItem.d->hints.value(AdvancedDelegateItem::FontItalic);
 		if (!hint.isNull())
@@ -917,7 +918,7 @@ AdvancedItemDelegate::ItemsLayout *AdvancedItemDelegate::createItemsLayout(const
 
 			AdvancedDelegateLayoutItem *item = new AdvancedDelegateLayoutItem(it.value(),itemOption);
 			layout->items.insert(it.key(),item);
-			orderedItems[position][floor].insertMulti(order,item);
+			orderedItems[position][floor].insert(order,item);
 		}
 	}
 
@@ -1166,7 +1167,7 @@ bool AdvancedItemDelegate::editorEvent(QEvent *AEvent, QAbstractItemModel *AMode
 	}
 
 	Qt::CheckState state;
-	if ((flags & Qt::ItemIsTristate) > 0)
+	if ((flags & Qt::ItemIsUserTristate) > 0)
 		state = static_cast<Qt::CheckState>((value.toInt()+1) % 3);
 	else if (value.toInt() == Qt::Unchecked)
 		state = Qt::Checked;

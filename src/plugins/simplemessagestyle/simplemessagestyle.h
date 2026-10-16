@@ -2,6 +2,7 @@
 #define SIMPLEMESSAGESTYLE_H
 
 #include <QList>
+#include <QObject>
 #include <QTimer>
 #include <QNetworkAccessManager>
 #include <interfaces/imessagestylemanager.h>

@@ -4,7 +4,7 @@
 #include <QAction>
 #include <QVariant>
 #include <QApplication>
-#include <QDesktopWidget>
+#include <QWidget>
 
 #ifdef USE_SYSTEM_QXTGLOBALSHORTCUT
 #       include <qxtglobalshortcut/qxtglobalshortcut.h>
@@ -66,7 +66,7 @@ void Shortcuts::declareGroup(const QString &AId, const QString &ADescription, in
 {
 	if (!AId.isEmpty() && !ADescription.isEmpty())
 	{
-		instance()->d->groups.insert(AId,qMakePair<QString,int>(ADescription,AOrder));
+		instance()->d->groups.insert(AId,QPair<QString,int>(ADescription,AOrder));
 		emit instance()->groupDeclared(AId);
 	}
 }
@@ -220,7 +220,7 @@ void Shortcuts::activateShortcut(const QString &AId, QWidget *AWidget)
 
 void Shortcuts::updateObject(QObject *AObject)
 {
-	static QDesktopWidget *deskWidget = QApplication::desktop();
+	static QWidget *deskWidget = new QWidget();
 
 	QString id = instance()->d->objectShortcutsId.value(AObject);
 	if (!id.isEmpty())

@@ -2,6 +2,7 @@
 #define DATABASESYNCHRONIZER_H
 
 #include <QQueue>
+#include <QObject>
 #include <QMutex>
 #include <QThread>
 #include <interfaces/ifilemessagearchive.h>

@@ -2,6 +2,7 @@
 #define IPEPMANAGER_H
 
 #include <QDomElement>
+#include <QObject>
 #include <utils/jid.h>
 #include <utils/stanza.h>
 
@@ -24,7 +25,7 @@ public:
 	virtual bool removeNodeHandler(int AHandleId) =0;
 };
 
-Q_DECLARE_INTERFACE(IPEPHandler,"Vacuum.Plugin.IPEPHandler/1.0")
-Q_DECLARE_INTERFACE(IPEPManager,"Vacuum.Plugin.IPEPManager/1.1")
+Q_DECLARE_INTERFACE(IPEPHandler,"Vacuum.Plugin.IPEPHandler/1.0");
+Q_DECLARE_INTERFACE(IPEPManager,"Vacuum.Plugin.IPEPManager/1.1");
 
 #endif // IPEPMANAGER_H

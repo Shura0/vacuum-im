@@ -2,6 +2,7 @@
 #define SHORTCUTOPTIONSWIDGET_H
 
 #include <QTimer>
+#include <QObject>
 #include <QWidget>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>

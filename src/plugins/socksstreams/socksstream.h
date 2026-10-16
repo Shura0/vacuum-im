@@ -2,6 +2,7 @@
 #define SOCKSSTREAM_H
 
 #include <QTimer>
+#include <QObject>
 #include <QWaitCondition>
 #include <QReadWriteLock>
 #include <interfaces/isocksstreams.h>

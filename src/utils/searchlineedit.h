@@ -2,6 +2,7 @@
 #define SEARCHLINEEDIT_H
 
 #include <QTimer>
+#include <QObject>
 #include <QLineEdit>
 #include <QToolButton>
 #include "utilsexport.h"

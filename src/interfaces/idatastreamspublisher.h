@@ -2,6 +2,7 @@
 #define IDATASTREAMSPUBLISHER_H
 
 #include <QMap>
+#include <QObject>
 #include <QVariant>
 #include <QDateTime>
 #include <QDomElement>
@@ -61,7 +62,7 @@ protected:
 	virtual void streamHandlerRemoved(int AOrder, IPublicDataStreamHandler *AHandler) =0;
 };
 
-Q_DECLARE_INTERFACE(IPublicDataStreamHandler,"Vacuum.Plugin.IPublicDataStreamHandler/1.0")
-Q_DECLARE_INTERFACE(IDataStreamsPublisher,"Vacuum.Plugin.IDataStreamsPublisher/1.0")
+Q_DECLARE_INTERFACE(IPublicDataStreamHandler,"Vacuum.Plugin.IPublicDataStreamHandler/1.0");
+Q_DECLARE_INTERFACE(IDataStreamsPublisher,"Vacuum.Plugin.IDataStreamsPublisher/1.0");
 
 #endif // IDATASTREAMSPUBLISHER_H

@@ -28,7 +28,7 @@
 #include <QWidget>
 #include <QCoreApplication>
 
-bool QxtGlobalShortcutPrivate::nativeEventFilter(const QByteArray & eventType, void *message, long *result){return false;}
+bool QxtGlobalShortcutPrivate::nativeEventFilter(const QByteArray & eventType, void *message, qintptr *result){return false;}
 quint32 QxtGlobalShortcutPrivate::nativeModifiers(Qt::KeyboardModifiers modifiers){return false;}
 quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key){return 0;}
 bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods){return false;}

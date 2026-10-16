@@ -2,6 +2,7 @@
 #define ROSTERSEARCH_H
 
 #include <QLineEdit>
+#include <QObject>
 #include <QSortFilterProxyModel>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/irostersearch.h>
@@ -25,7 +26,7 @@ public:
 	~RosterSearch();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return ROSTERSEARCH_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTERSEARCH_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

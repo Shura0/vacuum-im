@@ -2,6 +2,7 @@
 #define ROSTERCHANGER_H
 
 #include <QDateTime>
+#include <QObject>
 #include <interfaces/irosterchanger.h>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/irostersmodel.h>
@@ -43,7 +44,7 @@ public:
 	~RosterChanger();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ROSTERCHANGER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTERCHANGER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -1,3 +1,5 @@
+#include <utils/qtcompat.h>
+#include <QStringConverter>
 #include "servermessagearchive.h"
 
 #include <QTextStream>
@@ -33,8 +35,8 @@ void ServerMessageArchive::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEARCHIVER_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEARCHIVER_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool ServerMessageArchive::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -245,7 +247,7 @@ void ServerMessageArchive::stanzaRequestResult(const Jid &AStreamJid, const Stan
 
 QUuid ServerMessageArchive::engineId() const
 {
-	return SERVERMESSAGEARCHIVE_UUID;
+	return QUuid(SERVERMESSAGEARCHIVE_UUID);
 }
 
 QString ServerMessageArchive::engineName() const
@@ -470,7 +472,7 @@ QString ServerMessageArchive::saveServerCollection(const Jid &AStreamJid, const 
 
 		QByteArray uploadData;
 		QTextStream ts(&uploadData, QIODevice::WriteOnly);
-		ts.setCodec("UTF-8");
+		ts.setEncoding(QStringConverter::Utf8);
 		int maxUploadSize = Options::node(OPV_SERVERARCHIVE_MAXUPLOADSIZE).value().toInt();
 
 		QString nextRef;

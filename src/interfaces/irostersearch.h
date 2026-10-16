@@ -2,6 +2,7 @@
 #define IROSTERSEARCH_H
 
 #include <utils/menu.h>
+#include <QObject>
 
 #define ROSTERSEARCH_UUID "{69632D37-C382-8b0d-C5DA-627A65D9DC8A}"
 
@@ -29,6 +30,6 @@ protected:
 	virtual void searchFieldRemoved(int ADataRole) =0;
 };
 
-Q_DECLARE_INTERFACE(IRosterSearch,"Vacuum.Plugin.IRosterSearch/1.0")
+Q_DECLARE_INTERFACE(IRosterSearch,"Vacuum.Plugin.IRosterSearch/1.0");
 
 #endif

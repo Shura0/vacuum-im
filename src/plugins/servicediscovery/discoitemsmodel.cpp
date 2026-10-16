@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "discoitemsmodel.h"
 
 #include <definitions/discoitemdataroles.h>
@@ -407,7 +408,7 @@ void DiscoItemsModel::onDiscoItemsReceived(const IDiscoItems &ADiscoItems)
 				}
 			}
 
-			QList<DiscoItemIndex *> removeList = (parentIndex->childs.toSet()-appendList.toSet()-updateList.toSet()).toList();
+			QList<DiscoItemIndex *> removeList = (qToSet(parentIndex->childs)-qToSet(appendList)-qToSet(updateList)).values();
 			removeChildren(parentIndex,removeList);
 
 			QList<DiscoItemIndex *> loadList;

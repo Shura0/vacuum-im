@@ -2,6 +2,7 @@
 #define IROSTERITEMEXCHANGE_H
 
 #include <QSet>
+#include <QObject>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
 
@@ -40,6 +41,6 @@ protected:
 	virtual void exchangeRequestFailed(const IRosterExchangeRequest &ARequest, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IRosterItemExchange,"Vacuum.Plugin.IRosterItemExchange/1.1")
+Q_DECLARE_INTERFACE(IRosterItemExchange,"Vacuum.Plugin.IRosterItemExchange/1.1");
 
 #endif //IROSTERITEMEXCHANGE_H

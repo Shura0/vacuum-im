@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "stanzaprocessor.h"
 
 #include <QSet>
@@ -24,7 +25,7 @@ void StanzaProcessor::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
 }
 
 bool StanzaProcessor::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -162,7 +163,7 @@ int StanzaProcessor::insertStanzaHandle(const IStanzaHandle &AHandle)
 			handleId = (handleId > 0) ? handleId+1 : 1;
 
 		FHandles.insert(handleId,AHandle);
-		FHandleIdByOrder.insertMulti(AHandle.order,handleId);
+		FHandleIdByOrder.insert(AHandle.order,handleId);
 		connect(AHandle.handler->instance(),SIGNAL(destroyed(QObject *)),SLOT(onStanzaHandlerDestroyed(QObject *)));
 
 		LOG_DEBUG(QString("Stanza handle inserted, id=%1, handler=%2, order=%3, direction=%4, stream=%5, conditions=%6").arg(handleId).arg(AHandle.handler->instance()->metaObject()->className()).arg(AHandle.order).arg(AHandle.direction).arg(AHandle.streamJid.full()).arg(QStringList(AHandle.conditions).join("; ")));
@@ -237,7 +238,7 @@ bool StanzaProcessor::checkCondition(const QDomElement &AElem, const QString &AC
 				}
 			}
 			if (!attrName.isEmpty())
-				attributes.insertMulti(attrName,attrValue);
+				attributes.insert(attrName,attrValue);
 			pos++;
 		}
 		else 
@@ -308,7 +309,7 @@ bool StanzaProcessor::processStanza(const Jid &AStreamJid, Stanza &AStanza, int 
 	bool hooked = false;
 	bool accepted = false;
 
-	QMapIterator<int, int> it(FHandleIdByOrder);
+	QMultiMapIterator<int, int> it(FHandleIdByOrder);
 	while (!hooked && it.hasNext())
 	{
 		it.next();

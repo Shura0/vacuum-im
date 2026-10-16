@@ -2,6 +2,7 @@
 #define CLIENTINFO_H
 
 #include <QSet>
+#include <QObject>
 #include <QPointer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/iclientinfo.h>
@@ -60,7 +61,7 @@ public:
 	~ClientInfo();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return CLIENTINFO_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CLIENTINFO_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

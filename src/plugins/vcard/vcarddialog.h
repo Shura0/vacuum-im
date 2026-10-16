@@ -2,6 +2,7 @@
 #define VCARDDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/ivcardmanager.h>
 #include "edititemdialog.h"
 #include "ui_vcarddialog.h"

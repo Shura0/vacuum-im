@@ -2,6 +2,7 @@
 #define ADVANCEDITEMDELEGATE_H
 
 #include <QMap>
+#include <QObject>
 #include <QTimer>
 #include <QWidget>
 #include <QMargins>

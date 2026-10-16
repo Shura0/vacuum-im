@@ -2,6 +2,7 @@
 #define PASSWORDDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QCheckBox>

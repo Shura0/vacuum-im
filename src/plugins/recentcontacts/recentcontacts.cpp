@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "recentcontacts.h"
 
 #include <QDir>
@@ -98,7 +99,7 @@ void RecentContacts::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(PRIVATESTORAGE_UUID);
+	APluginInfo->dependences.append(QUuid(PRIVATESTORAGE_UUID));
 }
 
 bool RecentContacts::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -271,7 +272,7 @@ QVariant RecentContacts::rosterData(int AOrder, const IRosterIndex *AIndex, int 
 				{
 				case Qt::ForegroundRole:
 					return palette.color(QPalette::Active, QPalette::BrightText);
-				case Qt::BackgroundColorRole:
+				case Qt::BackgroundRole:
 					return palette.color(QPalette::Active, QPalette::Dark);
 				case RDR_FORCE_VISIBLE:
 					return 1;
@@ -329,12 +330,12 @@ QMultiMap<int, IOptionsDialogWidget *> RecentContacts::optionsDialogWidgets(cons
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId==OPN_ROSTERVIEW)
 	{
-		widgets.insertMulti(OHO_ROSTER_RECENT,FOptionsManager->newOptionsDialogHeader(tr("Recent contacts"),AParent));
-		widgets.insertMulti(OWO_ROSTER_RECENT_HIDEINACTIVEITEMS,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_HIDEINACTIVEITEMS),tr("Hide inactive contacts"),AParent));
-		widgets.insertMulti(OWO_ROSTER_RECENT_SORTBYACTIVETIME,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SORTBYACTIVETIME),tr("Sort contacts by last activity"),AParent));
-		widgets.insertMulti(OWO_ROSTER_RECENT_ALWAYSSHOWOFFLINE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_ALWAYSSHOWOFFLINE),tr("Always show offline contacts"),AParent));
-		widgets.insertMulti(OWO_ROSTER_RECENT_SHOWONLYFAVORITE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SHOWONLYFAVORITE),tr("Show only favorite contacts"),AParent));
-		widgets.insertMulti(OWO_ROSTER_RECENT_SIMPLEITEMSVIEW,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SIMPLEITEMSVIEW),tr("Simplify recent contacts view"),AParent));
+		widgets.insert(OHO_ROSTER_RECENT,FOptionsManager->newOptionsDialogHeader(tr("Recent contacts"),AParent));
+		widgets.insert(OWO_ROSTER_RECENT_HIDEINACTIVEITEMS,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_HIDEINACTIVEITEMS),tr("Hide inactive contacts"),AParent));
+		widgets.insert(OWO_ROSTER_RECENT_SORTBYACTIVETIME,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SORTBYACTIVETIME),tr("Sort contacts by last activity"),AParent));
+		widgets.insert(OWO_ROSTER_RECENT_ALWAYSSHOWOFFLINE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_ALWAYSSHOWOFFLINE),tr("Always show offline contacts"),AParent));
+		widgets.insert(OWO_ROSTER_RECENT_SHOWONLYFAVORITE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SHOWONLYFAVORITE),tr("Show only favorite contacts"),AParent));
+		widgets.insert(OWO_ROSTER_RECENT_SIMPLEITEMSVIEW,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ROSTER_RECENT_SIMPLEITEMSVIEW),tr("Simplify recent contacts view"),AParent));
 	}
 	return widgets;
 }
@@ -747,8 +748,8 @@ void RecentContacts::updateVisibleItems()
 			}
 		}
 
-		QSet<IRecentItem> curVisible = FVisibleItems.keys().toSet();
-		QSet<IRecentItem> newVisible = common.mid(0,FMaxVisibleItems+favoriteCount).toSet();
+		QSet<IRecentItem> curVisible = qToSet(FVisibleItems.keys());
+		QSet<IRecentItem> newVisible = qToSet(common.mid(0,FMaxVisibleItems+favoriteCount));
 
 		QSet<IRecentItem> addItems = newVisible - curVisible;
 		QSet<IRecentItem> removeItems = curVisible - newVisible;
@@ -790,7 +791,7 @@ void RecentContacts::createItemIndex(const IRecentItem &AItem)
 
 void RecentContacts::updateItemIndex(const IRecentItem &AItem)
 {
-	static const QDateTime zero = QDateTime::fromTime_t(0);
+	static const QDateTime zero = QDateTime::fromSecsSinceEpoch(0);
 
 	IRosterIndex *index = FVisibleItems.value(AItem);
 	if (index)
@@ -932,7 +933,7 @@ void RecentContacts::mergeRecentItems(const Jid &AStreamJid, const QList<IRecent
 
 	if (AReplace)
 	{
-		removedItems += curItems.toSet()-newItems;
+		removedItems += qToSet(curItems)-newItems;
 		foreach(const IRecentItem &item, removedItems)
 		{
 			curItems.removeAll(item);
@@ -1168,7 +1169,7 @@ QList<IRosterIndex *> RecentContacts::indexesProxies(const QList<IRosterIndex *>
 		else if (ASelfProxy)
 			proxies.append(index);
 	}
-	proxies.removeAll(NULL);
+	proxies.removeAll(nullptr);
 	return proxies;
 }
 

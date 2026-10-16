@@ -2,6 +2,7 @@
 #define MULTIUSERVIEW_H
 
 #include <interfaces/imultiuserchat.h>
+#include <QObject>
 #include <interfaces/istatusicons.h>
 #include <interfaces/iavatars.h>
 #include <utils/pluginhelper.h>
@@ -66,6 +67,7 @@ protected:
 	void updateItemNotify(QStandardItem *AItem);
 	void repaintUserItem(const QStandardItem *AItem);
 	QStyleOptionViewItem indexOption(const QModelIndex &AIndex) const;
+	QStyleOptionViewItem viewOptions() const;
 protected:
 	bool event(QEvent *AEvent);
 protected slots:

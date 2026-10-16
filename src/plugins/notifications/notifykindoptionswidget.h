@@ -2,6 +2,7 @@
 #define NOTIFYKINDOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <QTableWidget>
 #include <interfaces/inotifications.h>
 #include <interfaces/ioptionsmanager.h>

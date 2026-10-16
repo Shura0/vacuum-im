@@ -2,6 +2,7 @@
 #define COMMANDS_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/icommands.h>
 #include <interfaces/idataforms.h>
 #include <interfaces/ixmppstreammanager.h>
@@ -29,7 +30,7 @@ public:
 	~Commands();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return COMMANDS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(COMMANDS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

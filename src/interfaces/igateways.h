@@ -2,6 +2,7 @@
 #define IGATEWAYS_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iservicediscovery.h>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
@@ -29,6 +30,6 @@ protected:
 	virtual void errorReceived(const QString &AId, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IGateways,"Vacuum.Plugin.IGateways/1.2")
+Q_DECLARE_INTERFACE(IGateways,"Vacuum.Plugin.IGateways/1.2");
 
 #endif

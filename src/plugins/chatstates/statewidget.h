@@ -2,6 +2,7 @@
 #define SATEWIDGET_H
 
 #include <QLabel>
+#include <QObject>
 #include <QToolButton>
 #include <interfaces/ichatstates.h>
 #include <interfaces/imessagewidgets.h>

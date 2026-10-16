@@ -2,6 +2,7 @@
 #define OPTIONSHEADER_H
 
 #include <QLabel>
+#include <QObject>
 #include <definitions/resources.h>
 #include <interfaces/ioptionsmanager.h>
 #include <utils/iconstorage.h>

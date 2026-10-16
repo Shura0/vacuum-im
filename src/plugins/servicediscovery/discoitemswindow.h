@@ -2,6 +2,7 @@
 #define DISCOITEMSWINDOW_H
 
 #include <QTimer>
+#include <QObject>
 #include <QHeaderView>
 #include <QMainWindow>
 #include <QSortFilterProxyModel>

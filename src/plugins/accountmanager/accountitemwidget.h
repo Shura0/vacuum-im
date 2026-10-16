@@ -2,6 +2,7 @@
 #define ACCOUNTITEMWIDGET_H
 
 #include <QUuid>
+#include <QObject>
 #include <QWidget>
 #include <utils/jid.h>
 #include "ui_accountitemwidget.h"

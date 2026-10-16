@@ -2,6 +2,7 @@
 #define INVITEUSERSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <QSortFilterProxyModel>
 #include <interfaces/imultiuserchat.h>
 #include <interfaces/imessagewidgets.h>

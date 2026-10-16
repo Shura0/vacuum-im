@@ -123,15 +123,15 @@ bool ConnectionManager::initSettings()
 QMultiMap<int, IOptionsDialogWidget *> ConnectionManager::optionsDialogWidgets(const QString &ANodeId, QWidget *AParent)
 {
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
-	QStringList nodeTree = ANodeId.split(".",QString::SkipEmptyParts);
+	QStringList nodeTree = ANodeId.split(".",Qt::SkipEmptyParts);
 	if (nodeTree.count()==3 && nodeTree.at(0)==OPN_ACCOUNTS && nodeTree.at(2)=="Parameters")
 	{
-		widgets.insertMulti(OHO_ACCOUNTS_PARAMS_CONNECTION,FOptionsManager->newOptionsDialogHeader(tr("Connection"),AParent));
-		widgets.insertMulti(OWO_ACCOUNTS_PARAMS_CONNECTION, new ConnectionOptionsWidget(this,Options::node(OPV_ACCOUNT_ITEM,nodeTree.at(1)),AParent));
+		widgets.insert(OHO_ACCOUNTS_PARAMS_CONNECTION,FOptionsManager->newOptionsDialogHeader(tr("Connection"),AParent));
+		widgets.insert(OWO_ACCOUNTS_PARAMS_CONNECTION, new ConnectionOptionsWidget(this,Options::node(OPV_ACCOUNT_ITEM,nodeTree.at(1)),AParent));
 	}
 	else if (ANodeId == OPN_ACCOUNTS)
 	{
-		widgets.insertMulti(OWO_ACCOUNTS_DEFAULTPROXY, proxySettingsWidget(Options::node(OPV_PROXY_DEFAULT),AParent));
+		widgets.insert(OWO_ACCOUNTS_DEFAULTPROXY, proxySettingsWidget(Options::node(OPV_PROXY_DEFAULT),AParent));
 	}
 	return widgets;
 }
@@ -140,7 +140,7 @@ QList<QUuid> ConnectionManager::proxyList() const
 {
 	QList<QUuid> plist;
 	foreach(const QString &proxyId, Options::node(OPV_PROXY_ROOT).childNSpaces("proxy"))
-		plist.append(proxyId);
+		plist.append(QUuid(proxyId));
 	return plist;
 }
 
@@ -175,7 +175,7 @@ IConnectionProxy ConnectionManager::proxyById(const QUuid &AProxyId) const
 
 void ConnectionManager::setProxy(const QUuid &AProxyId, const IConnectionProxy &AProxy)
 {
-	if (!AProxyId.isNull() && AProxyId!=APPLICATION_PROXY_REF_UUID)
+	if (!AProxyId.isNull() && AProxyId!=QUuid(APPLICATION_PROXY_REF_UUID))
 	{
 		LOG_INFO(QString("Proxy added or updated, id=%1").arg(AProxyId.toString()));
 		OptionsNode pnode = Options::node(OPV_PROXY_ITEM,AProxyId.toString());
@@ -207,7 +207,7 @@ void ConnectionManager::removeProxy(const QUuid &AProxyId)
 
 QUuid ConnectionManager::defaultProxy() const
 {
-	return Options::node(OPV_PROXY_DEFAULT).value().toString();
+	return QUuid(Options::node(OPV_PROXY_DEFAULT).value().toString());
 }
 
 void ConnectionManager::setDefaultProxy(const QUuid &AProxyId)
@@ -241,7 +241,7 @@ void ConnectionManager::saveProxySettings(IOptionsDialogWidget *AWidget, Options
 
 QUuid ConnectionManager::loadProxySettings(const OptionsNode &ANode) const
 {
-	return ANode.value().toString();
+	return QUuid(ANode.value().toString());
 }
 
 QList<QSslCertificate> ConnectionManager::trustedCaCertificates(bool AWithUsers) const
@@ -431,7 +431,7 @@ void ConnectionManager::onOptionsChanged(const OptionsNode &ANode)
 {
 	if (ANode.path() == OPV_PROXY_DEFAULT)
 	{
-		QUuid proxyId = ANode.value().toString();
+		QUuid proxyId(ANode.value().toString());
 		QNetworkProxy::setApplicationProxy(proxyById(proxyId).proxy);
 		updateConnectionSettings();
 		emit defaultProxyChanged(proxyId);

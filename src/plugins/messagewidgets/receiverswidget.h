@@ -2,6 +2,7 @@
 #define RECEIVERSWIDGET_H
 
 #include <QHash>
+#include <QObject>
 #include <QTimer>
 #include <QSortFilterProxyModel>
 #include <interfaces/imessagewidgets.h>

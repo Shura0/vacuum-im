@@ -2,6 +2,7 @@
 #define ACCOUNT_H
 
 #include <QInputDialog>
+#include <QObject>
 #include <interfaces/iaccountmanager.h>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/ioptionsmanager.h>

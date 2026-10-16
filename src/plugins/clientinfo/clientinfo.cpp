@@ -76,7 +76,7 @@ void ClientInfo::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool ClientInfo::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -216,7 +216,7 @@ QMultiMap<int, IOptionsDialogWidget *> ClientInfo::optionsDialogWidgets(const QS
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId == OPN_COMMON)
 	{
-		widgets.insertMulti(OWO_COMMON_SENDCLIENTINFO, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_COMMON_SHAREOSVERSION),tr("Share information about your OS version"),AParent));
+		widgets.insert(OWO_COMMON_SENDCLIENTINFO, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_COMMON_SHAREOSVERSION),tr("Share information about your OS version"),AParent));
 	}
 	return widgets;
 }

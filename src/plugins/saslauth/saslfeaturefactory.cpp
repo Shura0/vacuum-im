@@ -25,7 +25,7 @@ void SASLFeatureFactory::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
 }
 
 bool SASLFeatureFactory::initConnections(IPluginManager *APluginManager, int &AInitOrder)

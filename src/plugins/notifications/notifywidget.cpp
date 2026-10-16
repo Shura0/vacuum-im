@@ -1,7 +1,9 @@
+#include <QEnterEvent>
 #include "notifywidget.h"
 
 #include <QTimer>
 #include <QScrollBar>
+#include <QGuiApplication>
 #include <QTextFrame>
 #include <QSizePolicy>
 #include <QToolButton>
@@ -32,7 +34,7 @@
 
 QRect NotifyWidget::FDisplay = QRect();
 QList<NotifyWidget *> NotifyWidget::FWidgets;
-QDesktopWidget *NotifyWidget::FDesktop = new QDesktopWidget;
+QScreen *NotifyWidget::FDesktop = QGuiApplication::primaryScreen();
 
 IMainWindow *NotifyWidget::FMainWindow = NULL;
 QNetworkAccessManager *NotifyWidget::FNetworkManager = NULL;
@@ -121,7 +123,7 @@ NotifyWidget::NotifyWidget(const INotification &ANotification)
 	{
 		QHBoxLayout *buttonsLayout = new QHBoxLayout;
 		ui.wdtButtons->setLayout(buttonsLayout);
-		buttonsLayout->setMargin(0);
+		buttonsLayout->setContentsMargins(0,0,0,0);
 		for (int i=0; i<ANotification.actions.count(); i++)
 		{
 			QToolButton *button = new QToolButton(ui.wdtButtons);
@@ -167,7 +169,7 @@ void NotifyWidget::appear()
 		setWindowOpacity(ANIMATE_OPACITY_START);
 
 		if (FMainWindow!=NULL && FWidgets.isEmpty())
-			FDisplay = FDesktop->availableGeometry(FMainWindow->instance());
+			FDisplay = FDesktop->availableGeometry();
 		FWidgets.prepend(this);
 		layoutWidgets();
 	}
@@ -192,7 +194,7 @@ void NotifyWidget::animateTo(int AYPos)
 	}
 }
 
-void NotifyWidget::enterEvent(QEvent *AEvent)
+void NotifyWidget::enterEvent(QEnterEvent *AEvent)
 {
 	FTimeOut += UNDER_MOUSE_ADD_TIMEOUT;
 	QFrame::enterEvent(AEvent);

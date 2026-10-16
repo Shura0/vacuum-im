@@ -2,6 +2,7 @@
 #define MAINTABWIDGET_H
 
 #include <QTabWidget>
+#include <QObject>
 
 class TabWidget :
 	public QTabWidget

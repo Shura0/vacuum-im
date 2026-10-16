@@ -29,11 +29,19 @@ int IdlePlatform::secondsIdle() { return 0; }
 
 #else
 
-#include <QtX11Extras/QX11Info>
+#include <QGuiApplication>
+#include <QtGui/qguiapplication_platform.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/scrnsaver.h>
+
+static Display *idleX11Display()
+{
+	if (auto *x11 = qGuiApp->nativeInterface<QNativeInterface::QX11Application>())
+		return x11->display();
+	return nullptr;
+}
 
 static XErrorHandler old_handler = 0;
 extern "C" int xerrhandler(Display* dpy, XErrorEvent* err)
@@ -77,7 +85,7 @@ bool IdlePlatform::init()
 	old_handler = XSetErrorHandler(xerrhandler);
 
 	int event_base, error_base;
-	if(XScreenSaverQueryExtension(QX11Info::display(), &event_base, &error_base)) {
+	if(XScreenSaverQueryExtension(idleX11Display(), &event_base, &error_base)) {
 		d->ss_info = XScreenSaverAllocInfo();
 		return true;
 	}
@@ -88,7 +96,7 @@ int IdlePlatform::secondsIdle()
 {
 	if(!d->ss_info)
 		return 0;
-	if(!XScreenSaverQueryInfo(QX11Info::display(), QX11Info::appRootWindow(), d->ss_info))
+	if(!XScreenSaverQueryInfo(idleX11Display(), DefaultRootWindow(idleX11Display()), d->ss_info))
 		return 0;
 	return d->ss_info->idle / 1000;
 }

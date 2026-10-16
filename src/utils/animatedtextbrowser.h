@@ -2,6 +2,7 @@
 #define ANIMATEDTEXTBROWSER_H
 
 #include <QSet>
+#include <QObject>
 #include <QPair>
 #include <QMovie>
 #include <QTimer>

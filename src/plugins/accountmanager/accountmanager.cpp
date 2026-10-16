@@ -39,7 +39,7 @@ void AccountManager::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(XMPPSTREAMS_UUID);
+	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
 }
 
 bool AccountManager::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -105,34 +105,34 @@ QMultiMap<int, IOptionsDialogWidget *> AccountManager::optionsDialogWidgets(cons
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (ANodeId.startsWith(OPN_ACCOUNTS))
 	{
-		QStringList nodeTree = ANodeId.split(".",QString::SkipEmptyParts);
+		QStringList nodeTree = ANodeId.split(".",Qt::SkipEmptyParts);
 		if (ANodeId == OPN_ACCOUNTS)
 		{
-			widgets.insertMulti(OHO_ACCOUNTS_ACCOUNTS, FOptionsManager->newOptionsDialogHeader(tr("Accounts"),AParent));
-			widgets.insertMulti(OWO_ACCOUNTS_ACCOUNTS, new AccountsOptionsWidget(this,AParent));
+			widgets.insert(OHO_ACCOUNTS_ACCOUNTS, FOptionsManager->newOptionsDialogHeader(tr("Accounts"),AParent));
+			widgets.insert(OWO_ACCOUNTS_ACCOUNTS, new AccountsOptionsWidget(this,AParent));
 
-			widgets.insertMulti(OHO_ACCOUNTS_COMMON, FOptionsManager->newOptionsDialogHeader(tr("Common account settings"),AParent));
+			widgets.insert(OHO_ACCOUNTS_COMMON, FOptionsManager->newOptionsDialogHeader(tr("Common account settings"),AParent));
 			
 			QComboBox *resourceCombox = newResourceComboBox(QUuid(),AParent);
-			widgets.insertMulti(OWO_ACCOUNTS_DEFAULTRESOURCE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ACCOUNT_DEFAULTRESOURCE),tr("Default resource:"),resourceCombox,AParent));
+			widgets.insert(OWO_ACCOUNTS_DEFAULTRESOURCE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_ACCOUNT_DEFAULTRESOURCE),tr("Default resource:"),resourceCombox,AParent));
 		}
 		else if (nodeTree.count()==3 && nodeTree.at(0)==OPN_ACCOUNTS && nodeTree.at(2)=="Parameters")
 		{
 			OptionsNode options = Options::node(OPV_ACCOUNT_ITEM,nodeTree.at(1));
 
-			widgets.insertMulti(OHO_ACCOUNTS_PARAMS_ACCOUNT,FOptionsManager->newOptionsDialogHeader(tr("Account"),AParent));
-			widgets.insertMulti(OWO_ACCOUNTS_PARAMS_NAME,FOptionsManager->newOptionsDialogWidget(options.node("name"),tr("Name:"),AParent));
-			widgets.insertMulti(OWO_ACCOUNTS_PARAMS_PASSWORD,FOptionsManager->newOptionsDialogWidget(options.node("password"),tr("Password:"),AParent));
+			widgets.insert(OHO_ACCOUNTS_PARAMS_ACCOUNT,FOptionsManager->newOptionsDialogHeader(tr("Account"),AParent));
+			widgets.insert(OWO_ACCOUNTS_PARAMS_NAME,FOptionsManager->newOptionsDialogWidget(options.node("name"),tr("Name:"),AParent));
+			widgets.insert(OWO_ACCOUNTS_PARAMS_PASSWORD,FOptionsManager->newOptionsDialogWidget(options.node("password"),tr("Password:"),AParent));
 
-			QComboBox *resourceCombox = newResourceComboBox(nodeTree.at(1),AParent);
-			widgets.insertMulti(OWO_ACCOUNTS_PARAMS_RESOURCE,FOptionsManager->newOptionsDialogWidget(options.node("resource"),tr("Resource:"),resourceCombox,AParent));
+			QComboBox *resourceCombox = newResourceComboBox(QUuid(nodeTree.at(1)),AParent);
+			widgets.insert(OWO_ACCOUNTS_PARAMS_RESOURCE,FOptionsManager->newOptionsDialogWidget(options.node("resource"),tr("Resource:"),resourceCombox,AParent));
 		}
 		else if (nodeTree.count()==3 && nodeTree.at(0)==OPN_ACCOUNTS && nodeTree.at(2)=="Additional")
 		{
 			OptionsNode options = Options::node(OPV_ACCOUNT_ITEM,nodeTree.at(1));
 
-			widgets.insertMulti(OHO_ACCOUNTS_ADDITIONAL_SETTINGS, FOptionsManager->newOptionsDialogHeader(tr("Additional settings"),AParent));
-			widgets.insertMulti(OWO_ACCOUNTS_ADDITIONAL_REQUIRESECURE,FOptionsManager->newOptionsDialogWidget(options.node("require-encryption"),tr("Require secure connection to server"),AParent));
+			widgets.insert(OHO_ACCOUNTS_ADDITIONAL_SETTINGS, FOptionsManager->newOptionsDialogHeader(tr("Additional settings"),AParent));
+			widgets.insert(OWO_ACCOUNTS_ADDITIONAL_REQUIRESECURE,FOptionsManager->newOptionsDialogWidget(options.node("require-encryption"),tr("Require secure connection to server"),AParent));
 		}
 
 	}
@@ -379,7 +379,7 @@ void AccountManager::onShowAccountOptions(bool)
 {
 	Action *action = qobject_cast<Action *>(sender());
 	if (action)
-		showAccountOptionsDialog(action->data(ADR_ACCOUNT_ID).toString());
+		showAccountOptionsDialog(QUuid(action->data(ADR_ACCOUNT_ID).toString()));
 }
 
 void AccountManager::onShowCreateAccountWizard()

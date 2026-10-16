@@ -2,6 +2,7 @@
 #define SIMPLEOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/imessagestylemanager.h>
 #include <interfaces/ioptionsmanager.h>
 #include "simplemessagestyleengine.h"

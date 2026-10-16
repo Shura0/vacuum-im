@@ -2,6 +2,7 @@
 #define IBOOKMARKS_H
 
 #include <QUrl>
+#include <QObject>
 #include <QDialog>
 #include <QDomElement>
 #include <utils/jid.h>
@@ -78,6 +79,6 @@ protected:
 	virtual void bookmarksChanged(const Jid &AStreamJid) =0;
 };
 
-Q_DECLARE_INTERFACE(IBookmarks,"Vacuum.Plugin.IBookmarks/1.3")
+Q_DECLARE_INTERFACE(IBookmarks,"Vacuum.Plugin.IBookmarks/1.3");
 
 #endif // IBOOKMARKS_H

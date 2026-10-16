@@ -77,7 +77,7 @@ XmppError::XmppError(const XmppErrorDataPointer &AData)
 
 bool XmppError::isNull() const
 {
-	return d==NULL || d->FErrorNS.isEmpty() || d->FCondition.isEmpty();
+	return !d || d->FErrorNS.isEmpty() || d->FCondition.isEmpty();
 }
 
 bool XmppError::isSaslError() const

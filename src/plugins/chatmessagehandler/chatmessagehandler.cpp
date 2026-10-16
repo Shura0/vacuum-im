@@ -1,3 +1,5 @@
+#include <utils/qtcompat.h>
+#include <QActionGroup>
 #include "chatmessagehandler.h"
 
 #include <QMouseEvent>
@@ -69,9 +71,9 @@ void ChatMessageHandler::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
-	APluginInfo->dependences.append(MESSAGEPROCESSOR_UUID);
-	APluginInfo->dependences.append(MESSAGESTYLES_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
+	APluginInfo->dependences.append(QUuid(MESSAGEPROCESSOR_UUID));
+	APluginInfo->dependences.append(QUuid(MESSAGESTYLES_UUID));
 }
 
 
@@ -367,7 +369,7 @@ INotification ChatMessageHandler::messageNotify(INotifications *ANotifications, 
 					notify.data.insert(NDR_POPUP_TEXT,AMessage.body());
 				}
 
-				FNotifiedMessages.insertMulti(window, AMessage.data(MDR_MESSAGE_ID).toInt());
+				FNotifiedMessages.insert(window, AMessage.data(MDR_MESSAGE_ID).toInt());
 			}
 		}
 		else if (window == NULL)

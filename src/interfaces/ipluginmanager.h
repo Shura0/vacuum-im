@@ -2,6 +2,7 @@
 #define IPLUGINMANAGER_H
 
 #include <QUrl>
+#include <QObject>
 #include <QUuid>
 #include <QList>
 #include <QLocale>
@@ -60,7 +61,7 @@ protected:
 	virtual void shutdownStarted() =0;
 };
 
-Q_DECLARE_INTERFACE(IPlugin,"Vacuum.Core.IPlugin/1.0")
-Q_DECLARE_INTERFACE(IPluginManager,"Vacuum.Core.IPluginManager/1.2")
+Q_DECLARE_INTERFACE(IPlugin,"Vacuum.Core.IPlugin/1.0");
+Q_DECLARE_INTERFACE(IPluginManager,"Vacuum.Core.IPluginManager/1.2");
 
 #endif

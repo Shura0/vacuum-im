@@ -62,7 +62,7 @@ if (APPLE)
 	list(APPEND ADD_LIBS "-framework Carbon -framework IOKit -framework Cocoa")
 endif (APPLE)
 
-target_link_libraries(${VACUUM_UTILS_NAME} ${ADD_LIBS} Qt5::Gui Qt5::Widgets Qt5::Xml Qt5::Network)
+target_link_libraries(${VACUUM_UTILS_NAME} ${ADD_LIBS} Qt6::Gui Qt6::Widgets Qt6::Xml Qt6::Network)
 
 if (WIN32)
 	set_target_properties(${VACUUM_UTILS_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

@@ -2,6 +2,7 @@
 #define SELECTICONMENU_H
 
 #include <QScrollArea>
+#include <QObject>
 #include "selecticonwidget.h"
 #include <utils/menu.h>
 

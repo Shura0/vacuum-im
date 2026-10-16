@@ -2,6 +2,7 @@
 #define IPRIVACYLISTS_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/irostermanager.h>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
@@ -103,6 +104,6 @@ protected:
 	virtual void requestFailed(const QString &AId, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IPrivacyLists,"Vacuum.Plugin.IPrivacyLists/1.3")
+Q_DECLARE_INTERFACE(IPrivacyLists,"Vacuum.Plugin.IPrivacyLists/1.3");
 
 #endif

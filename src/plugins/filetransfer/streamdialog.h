@@ -2,6 +2,7 @@
 #define STREAMDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QCheckBox>
 #include <interfaces/ifiletransfer.h>
 #include <interfaces/ifilestreamsmanager.h>

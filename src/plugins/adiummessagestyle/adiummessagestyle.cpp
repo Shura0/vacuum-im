@@ -356,7 +356,7 @@ void AdiumMessageStyle::loadSenderColors()
 {
 	QFile colors(FResourcePath + "/Incoming/SenderColors.txt");
 	if (colors.open(QFile::ReadOnly))
-		FSenderColors = QString::fromUtf8(colors.readAll()).split(':',QString::SkipEmptyParts);
+		FSenderColors = QString::fromUtf8(colors.readAll()).split(':',Qt::SkipEmptyParts);
 }
 
 QString AdiumMessageStyle::loadFileData(const QString &AFileName, const QString &DefValue) const

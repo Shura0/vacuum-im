@@ -2,6 +2,7 @@
 #define SHORTCUTOPTIONSDELEGATE_H
 
 #include <QStyledItemDelegate>
+#include <QObject>
 
 enum ShortcutColumns {
 	SCL_NAME,

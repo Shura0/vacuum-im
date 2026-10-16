@@ -2,6 +2,7 @@
 #define CHATWINDOW_H
 
 #include <interfaces/imessagewidgets.h>
+#include <QObject>
 #include <interfaces/ixmppstreammanager.h>
 #include "ui_chatwindow.h"
 

@@ -2,6 +2,7 @@
 #define TRANSFERTHREAD_H
 
 #include <QFile>
+#include <QObject>
 #include <QThread>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>

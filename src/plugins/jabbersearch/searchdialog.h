@@ -2,6 +2,7 @@
 #define SEARCHDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/ijabbersearch.h>
 #include <interfaces/idataforms.h>
 #include <interfaces/iservicediscovery.h>

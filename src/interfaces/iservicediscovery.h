@@ -2,6 +2,7 @@
 #define ISERVICEDISCOVERY_H
 
 #include <QIcon>
+#include <QObject>
 #include <QStringList>
 #include <QTreeWidgetItem>
 #include <interfaces/ipluginmanager.h>
@@ -139,9 +140,9 @@ protected:
 	virtual void featureHandlerRemoved(const QString &AFeature, IDiscoFeatureHandler *AHandler) =0;
 };
 
-Q_DECLARE_INTERFACE(IDiscoHandler,"Vacuum.Plugin.IDiscoHandler/1.0")
-Q_DECLARE_INTERFACE(IDiscoFeatureHandler,"Vacuum.Plugin.IDiscoFeatureHandler/1.0")
-Q_DECLARE_INTERFACE(IDiscoItemsWindow,"Vacuum.Plugin.IDiscoItemsWindow/1.1")
-Q_DECLARE_INTERFACE(IServiceDiscovery,"Vacuum.Plugin.IServiceDiscovery/1.5")
+Q_DECLARE_INTERFACE(IDiscoHandler,"Vacuum.Plugin.IDiscoHandler/1.0");
+Q_DECLARE_INTERFACE(IDiscoFeatureHandler,"Vacuum.Plugin.IDiscoFeatureHandler/1.0");
+Q_DECLARE_INTERFACE(IDiscoItemsWindow,"Vacuum.Plugin.IDiscoItemsWindow/1.1");
+Q_DECLARE_INTERFACE(IServiceDiscovery,"Vacuum.Plugin.IServiceDiscovery/1.5");
 
 #endif

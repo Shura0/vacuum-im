@@ -178,7 +178,7 @@ void DefaultConnection::ignoreSslErrors()
 
 QList<QSslError> DefaultConnection::sslErrors() const
 {
-	return FSocket.sslErrors();
+	return FSocket.sslHandshakeErrors();
 }
 
 QSsl::SslProtocol DefaultConnection::protocol() const
@@ -222,8 +222,9 @@ void DefaultConnection::addCaSertificates(const QList<QSslCertificate> &ACertifi
 	foreach(const QSslCertificate &cert, ACertificates)
 	{
 		if (!cert.isNull() && !curSerts.contains(cert))
-			FSocket.addCaCertificate(cert);
+			curSerts.append(cert);
 	}
+	setCaCertificates(curSerts);
 }
 
 void DefaultConnection::setCaCertificates(const QList<QSslCertificate> &ACertificates)

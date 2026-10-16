@@ -1,0 +1,49 @@
+# Qt 6 build (non-blocking tracking job)
+#
+# Purpose: track Qt6 migration progress. This job is expected to FAIL until the
+# CMake build system is migrated from Qt5 to Qt6 (Phase 1). It is marked
+# continue-on-error so it never blocks the Qt5 build.
+#
+# See /home/shura/.opencode/plan/qt6-migration.md
+
+name: Qt6 build (non-blocking)
+
+on:
+  push:
+    branches: [ qt6 ]
+  pull_request:
+    branches: [ qt6 ]
+  workflow_dispatch:
+
+jobs:
+  qt6:
+    name: Qt 6.8 (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.8
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          modules: 'qtsvg qtmultimedia'
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libx11-dev libxss-dev \
+            zlib1g-dev libhunspell-dev libidn11-dev \
+            libssl-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPLUGIN_adiummessagestyle=OFF
+
+      - name: Build
+        run: cmake --build build --parallel 4

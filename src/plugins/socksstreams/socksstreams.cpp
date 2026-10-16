@@ -31,7 +31,7 @@ void SocksStreams::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool SocksStreams::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -190,7 +190,7 @@ void SocksStreams::loadMethodSettings(IDataStreamSocket *ASocket, const OptionsN
 		if (ANode.value("use-account-network-proxy").toBool())
 			stream->setNetworkProxy(accountNetworkProxy(stream->streamJid()));
 		else if (FConnectionManager)
-			stream->setNetworkProxy(FConnectionManager->proxyById(ANode.value("user-network-proxy").toString()).proxy);
+			stream->setNetworkProxy(FConnectionManager->proxyById(QUuid(ANode.value("user-network-proxy").toString())).proxy);
 	}
 	else
 	{

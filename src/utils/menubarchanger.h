@@ -2,6 +2,7 @@
 #define MENUBARCHANGER_H
 
 #include <QMenuBar>
+#include <QObject>
 #include <QMultiMap>
 #include "utilsexport.h"
 #include "menu.h"

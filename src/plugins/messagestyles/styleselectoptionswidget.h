@@ -2,6 +2,7 @@
 #define STYLESELECTOPTIONSWIDGET_H
 
 #include <QLabel>
+#include <QObject>
 #include <QWidget>
 #include <QComboBox>
 #include <interfaces/ioptionsmanager.h>

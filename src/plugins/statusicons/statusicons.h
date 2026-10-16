@@ -1,7 +1,8 @@
 #ifndef STATUSICONS_H
 #define STATUSICONS_H
 
-#include <QRegExp>
+#include <QRegularExpression>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/istatusicons.h>
 #include <interfaces/irostermanager.h>
@@ -26,7 +27,7 @@ public:
 	~StatusIcons();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return STATUSICONS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(STATUSICONS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -2,6 +2,7 @@
 #define FILEWORKER_H
 
 #include <QQueue>
+#include <QObject>
 #include <QMutex>
 #include <QThread>
 #include <QWaitCondition>

@@ -2,6 +2,7 @@
 #define IREGISTRATION_H
 
 #include <QUrl>
+#include <QObject>
 #include <interfaces/idataforms.h>
 #include <interfaces/ixmppstreammanager.h>
 #include <utils/xmpperror.h>
@@ -66,6 +67,6 @@ protected:
 	virtual void registerSuccess(const QString &AId) =0;
 };
 
-Q_DECLARE_INTERFACE(IRegistration,"Vacuum.Plugin.IRegistration/1.3")
+Q_DECLARE_INTERFACE(IRegistration,"Vacuum.Plugin.IRegistration/1.3");
 
 #endif // IREGISTRATION_H

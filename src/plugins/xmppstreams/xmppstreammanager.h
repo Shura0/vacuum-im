@@ -2,6 +2,7 @@
 #define XMPPSTREAMS_H
 
 #include <QMultiMap>
+#include <QObject>
 #include <definitions/namespaces.h>
 #include <definitions/optionvalues.h>
 #include <interfaces/ipluginmanager.h>
@@ -21,7 +22,7 @@ public:
 	~XmppStreamManager();
 	virtual QObject *instance() {return this;}
 	//IPlugin
-	virtual QUuid pluginUuid() const { return XMPPSTREAMS_UUID;}
+	virtual QUuid pluginUuid() const { return QUuid(XMPPSTREAMS_UUID);}
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

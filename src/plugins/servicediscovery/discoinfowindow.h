@@ -2,6 +2,7 @@
 #define DISCOINFOWINDOW_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iservicediscovery.h>
 #include "ui_discoinfowindow.h"
 

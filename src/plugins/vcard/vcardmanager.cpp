@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "vcardmanager.h"
 
 #include <QFile>
@@ -340,7 +341,7 @@ QMultiMap<int, IOptionsDialogWidget *> VCardManager::optionsDialogWidgets(const 
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId==OPN_COMMON)
 	{
-		widgets.insertMulti(OWO_COMMON_VCARDIMAGE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_COMMON_RESTRICT_VCARD_IMAGES_SIZE),tr("Restrict maximum vCard images size"),AParent));
+		widgets.insert(OWO_COMMON_VCARDIMAGE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_COMMON_RESTRICT_VCARD_IMAGES_SIZE),tr("Restrict maximum vCard images size"),AParent));
 	}
 	return widgets;
 }
@@ -666,10 +667,10 @@ void VCardManager::onRostersViewIndexClipboardMenu(const QList<IRosterIndex *> &
 				commonStrings += vcard->value(VVN_DESCRIPTION);
 
 				static const QStringList emailTagList = QStringList() << "HOME" << "WORK" << "INTERNET" << "X400";
-				QSet<QString> emailStrings = vcard->values(VVN_EMAIL,emailTagList).keys().toSet();
+				QSet<QString> emailStrings = qToSet(vcard->values(VVN_EMAIL,emailTagList).keys());
 
 				static const QStringList phoneTagList = QStringList() << "HOME" << "WORK" << "CELL" << "MODEM";
-				QSet<QString> phoneStrings = vcard->values(VVN_TELEPHONE,phoneTagList).keys().toSet();
+				QSet<QString> phoneStrings = qToSet(vcard->values(VVN_TELEPHONE,phoneTagList).keys());
 
 				foreach(Action *action, createClipboardActions(commonStrings,AMenu))
 					AMenu->addAction(action,AG_RVCBM_VCARD_COMMON,true);
@@ -795,7 +796,7 @@ void VCardManager::onRosterItemReceived(IRoster *ARoster, const IRosterItem &AIt
 		{
 			if (!FUpdateTimer.isActive())
 				FUpdateTimer.start();
-			FUpdateQueue.insertMulti(ARoster->streamJid(),AItem.itemJid);
+			FUpdateQueue.insert(ARoster->streamJid(),AItem.itemJid);
 		}
 	}
 }

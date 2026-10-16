@@ -2,6 +2,7 @@
 #define OPTIONSDIALOG_H
 
 #include <QStandardItemModel>
+#include <QObject>
 #include <QSortFilterProxyModel>
 #include <QObjectCleanupHandler>
 #include <interfaces/ioptionsmanager.h>

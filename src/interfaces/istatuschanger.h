@@ -2,6 +2,7 @@
 #define ISTATUSCHANGER_H
 
 #include <utils/jid.h>
+#include <QObject>
 #include <utils/menu.h>
 
 #define STATUSCHANGER_UUID "{F0D57BD2-0CD4-4606-9CEE-15977423F8DC}"
@@ -51,6 +52,6 @@ protected:
 	virtual void statusItemRemoved(int AStatusId) =0;
 };
 
-Q_DECLARE_INTERFACE(IStatusChanger,"Vacuum.Plugin.IStatusChanger/1.1")
+Q_DECLARE_INTERFACE(IStatusChanger,"Vacuum.Plugin.IStatusChanger/1.1");
 
 #endif

@@ -2,6 +2,7 @@
 #define SETUPPLUGINSDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QDomDocument>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>

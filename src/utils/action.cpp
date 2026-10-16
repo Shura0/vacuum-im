@@ -64,7 +64,8 @@ void Action::setData(const QHash<int,QVariant> &AData)
 {
 	if (AData != FData)
 	{
-		FData.unite(AData);
+		for (QHash<int,QVariant>::const_iterator it=AData.constBegin(); it!=AData.constEnd(); ++it)
+			FData.insert(it.key(),it.value());
 		emit changed();
 	}
 }
@@ -189,6 +190,6 @@ void Action::onMenuDestroyed(Menu *AMenu)
 	if (AMenu == FMenu)
 	{
 		FMenu = NULL;
-		QAction::setMenu(NULL);
+		QAction::setMenu(nullptr);
 	}
 }

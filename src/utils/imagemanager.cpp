@@ -3,6 +3,24 @@
 #include <QBitmap>
 #include <QPainter>
 
+static void setImageAlphaChannel(QImage &AImage, const QImage &AAlphaSource)
+{
+	if (AImage.isNull() || AAlphaSource.isNull())
+		return;
+	QImage dst = AImage.convertToFormat(QImage::Format_ARGB32);
+	QImage alpha = AAlphaSource.convertToFormat(QImage::Format_Alpha8);
+	if (alpha.size() != dst.size())
+		alpha = alpha.scaled(dst.size());
+	for (int y=0; y<dst.height(); ++y)
+	{
+		QRgb *dstLine = reinterpret_cast<QRgb *>(dst.scanLine(y));
+		const uchar *alphaLine = alpha.constScanLine(y);
+		for (int x=0; x<dst.width(); ++x)
+			dstLine[x] = (dstLine[x] & 0x00FFFFFF) | (quint32(alphaLine[x]) << 24);
+	}
+	AImage = dst;
+}
+
 ImageManager::ImageManager()
 {
 
@@ -134,7 +152,7 @@ QImage ImageManager::colorized(const QImage &AImage, const QColor &AColor)
 		painter.fillRect(result.rect(), AColor);
 		painter.end();
 
-		result.setAlphaChannel(AImage.alphaChannel());
+		setImageAlphaChannel(result, AImage);
 		return result;
 	}
 	return AImage;
@@ -152,7 +170,7 @@ QImage ImageManager::opacitized(const QImage &AImage, double AOpacity)
 		painter.drawImage(0, 0, AImage);
 		painter.end();
 
-		result.setAlphaChannel(AImage.alphaChannel());
+		setImageAlphaChannel(result, AImage);
 		return result;
 	}
 	return AImage;
@@ -169,7 +187,7 @@ QImage ImageManager::addSpace(const QImage &AImage, int ALeft, int ATop, int ARi
 		painter.drawImage(ALeft, ATop, AImage);
 		painter.end();
 
-		result.setAlphaChannel(AImage.alphaChannel());
+		setImageAlphaChannel(result, AImage);
 		return result;
 	}
 	return AImage;

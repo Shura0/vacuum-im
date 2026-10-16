@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "filetransfer.h"
 
 #include <QMimeData>
@@ -72,8 +73,8 @@ void FileTransfer::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(FILESTREAMSMANAGER_UUID);
-	APluginInfo->dependences.append(DATASTREAMSMANAGER_UUID);
+	APluginInfo->dependences.append(QUuid(FILESTREAMSMANAGER_UUID));
+	APluginInfo->dependences.append(QUuid(DATASTREAMSMANAGER_UUID));
 }
 
 bool FileTransfer::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -254,8 +255,8 @@ QMultiMap<int, IOptionsDialogWidget *> FileTransfer::optionsDialogWidgets(const 
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId==OPN_DATATRANSFER)
 	{
-		widgets.insertMulti(OWO_DATATRANSFER_AUTORECEIVE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_FILETRANSFER_AUTORECEIVE),tr("Automatically receive files from authorized contacts"),AParent));
-		widgets.insertMulti(OWO_DATATRANSFER_HIDEONSTART,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_FILETRANSFER_HIDEONSTART),tr("Hide file transfer dialog after transfer started"),AParent));
+		widgets.insert(OWO_DATATRANSFER_AUTORECEIVE,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_FILETRANSFER_AUTORECEIVE),tr("Automatically receive files from authorized contacts"),AParent));
+		widgets.insert(OWO_DATATRANSFER_HIDEONSTART,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_FILETRANSFER_HIDEONSTART),tr("Hide file transfer dialog after transfer started"),AParent));
 	}
 	return widgets;
 }
@@ -634,7 +635,7 @@ bool FileTransfer::fileStreamProcessRequest(int AOrder, const QString &AStreamId
 					LOG_STRM_INFO(ARequest.to(),QString("Receive file stream created, from=%1, sid=%2").arg(ARequest.from(),AStreamId));
 				}
 
-				QList<QString> methods = AMethods.toSet().intersect(Options::node(OPV_FILESTREAMS_ACCEPTABLEMETHODS).value().toStringList().toSet()).toList();
+				QList<QString> methods = qToSet(AMethods).intersect(qToSet(Options::node(OPV_FILESTREAMS_ACCEPTABLEMETHODS).value().toStringList())).values();
 
 				QString dirName = Options::node(OPV_FILESTREAMS_DEFAULTDIR).value().toString();
 				if (Options::node(OPV_FILESTREAMS_GROUPBYSENDER).value().toBool())

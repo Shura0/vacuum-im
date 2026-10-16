@@ -2,9 +2,11 @@
 #define IDATAFORMS_H
 
 #include <QUrl>
+#include <QObject>
 #include <QDialog>
 #include <QTableWidget>
 #include <QDomDocument>
+#include <QRegularExpression>
 #include <QDialogButtonBox>
 #include <utils/xmpperror.h>
 #include <utils/toolbarchanger.h>
@@ -64,7 +66,7 @@ struct IDataValidate
 	QString method;
 	QString min;
 	QString max;
-	QRegExp regexp;
+	QRegularExpression regexp;
 	QString listMin;
 	QString listMax;
 };
@@ -288,12 +290,12 @@ protected:
 	virtual void urlLoadFailed(const QUrl &AUrl, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IDataTableWidget,"Vacuum.Plugin.IDataTableWidget/1.1")
-Q_DECLARE_INTERFACE(IDataMediaWidget,"Vacuum.Plugin.IDataMediaWidget/1.1")
-Q_DECLARE_INTERFACE(IDataFieldWidget,"Vacuum.Plugin.IDataFieldWidget/1.1")
-Q_DECLARE_INTERFACE(IDataFormWidget,"Vacuum.Plugin.IDataFormWidget/1.2")
-Q_DECLARE_INTERFACE(IDataDialogWidget,"Vacuum.Plugin.IDataDialogWidget/1.0")
-Q_DECLARE_INTERFACE(IDataLocalizer,"Vacuum.Plugin.IDataLocalizer/1.0")
-Q_DECLARE_INTERFACE(IDataForms,"Vacuum.Plugin.IDataForms/1.4")
+Q_DECLARE_INTERFACE(IDataTableWidget,"Vacuum.Plugin.IDataTableWidget/1.1");
+Q_DECLARE_INTERFACE(IDataMediaWidget,"Vacuum.Plugin.IDataMediaWidget/1.1");
+Q_DECLARE_INTERFACE(IDataFieldWidget,"Vacuum.Plugin.IDataFieldWidget/1.1");
+Q_DECLARE_INTERFACE(IDataFormWidget,"Vacuum.Plugin.IDataFormWidget/1.2");
+Q_DECLARE_INTERFACE(IDataDialogWidget,"Vacuum.Plugin.IDataDialogWidget/1.0");
+Q_DECLARE_INTERFACE(IDataLocalizer,"Vacuum.Plugin.IDataLocalizer/1.0");
+Q_DECLARE_INTERFACE(IDataForms,"Vacuum.Plugin.IDataForms/1.4");
 
 #endif //IDATAFORMS_H

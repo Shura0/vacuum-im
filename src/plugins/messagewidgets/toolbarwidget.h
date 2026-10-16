@@ -2,6 +2,7 @@
 #define TOOLBARWIDGET_H
 
 #include <QToolBar>
+#include <QObject>
 #include <interfaces/imessagewidgets.h>
 
 class ToolBarWidget :

@@ -2,6 +2,7 @@
 #define ADDRESS_H
 
 #include <interfaces/imessagewidgets.h>
+#include <QObject>
 #include <interfaces/ipresencemanager.h>
 
 class Address : 

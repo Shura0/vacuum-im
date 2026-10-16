@@ -2,6 +2,7 @@
 #define SASLBINDFEATURE_H
 
 #include <interfaces/ixmppstreammanager.h>
+#include <QObject>
 
 class SASLBindFeature :
 	public QObject,

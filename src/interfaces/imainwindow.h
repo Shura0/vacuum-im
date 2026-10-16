@@ -2,6 +2,7 @@
 #define IMAINWINDOW_H
 
 #include <QToolBar>
+#include <QObject>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QMainWindow>
@@ -106,11 +107,11 @@ public:
 	virtual IMainWindow *mainWindow() const = 0;
 };
 
-Q_DECLARE_INTERFACE(IMainTabPage,"Vacuum.Plugin.IMainTabPage/1.0")
-Q_DECLARE_INTERFACE(IMainTabWidget,"Vacuum.Plugin.IMainTabWidget/1.0")
-Q_DECLARE_INTERFACE(IMainCentralPage,"Vacuum.Plugin.IMainCentralPage/1.0")
-Q_DECLARE_INTERFACE(IMainCentralWidget,"Vacuum.Plugin.IMainCentralWidget/1.0")
-Q_DECLARE_INTERFACE(IMainWindow,"Vacuum.Plugin.IMainWindow/1.3")
-Q_DECLARE_INTERFACE(IMainWindowPlugin,"Vacuum.Plugin.IMainWindowPlugin/1.3")
+Q_DECLARE_INTERFACE(IMainTabPage,"Vacuum.Plugin.IMainTabPage/1.0");
+Q_DECLARE_INTERFACE(IMainTabWidget,"Vacuum.Plugin.IMainTabWidget/1.0");
+Q_DECLARE_INTERFACE(IMainCentralPage,"Vacuum.Plugin.IMainCentralPage/1.0");
+Q_DECLARE_INTERFACE(IMainCentralWidget,"Vacuum.Plugin.IMainCentralWidget/1.0");
+Q_DECLARE_INTERFACE(IMainWindow,"Vacuum.Plugin.IMainWindow/1.3");
+Q_DECLARE_INTERFACE(IMainWindowPlugin,"Vacuum.Plugin.IMainWindowPlugin/1.3");
 
 #endif // IMAINWINDOW_H

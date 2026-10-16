@@ -2,6 +2,7 @@
 #define CONSOLEPLUGIN_H
 
 #include <QObjectCleanupHandler>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ixmppstreammanager.h>
 #include <interfaces/imainwindow.h>
@@ -21,7 +22,7 @@ public:
 	~ConsolePlugin();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return CONSOLE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CONSOLE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

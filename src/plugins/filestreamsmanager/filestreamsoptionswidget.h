@@ -2,6 +2,7 @@
 #define FILESTREAMSOPTIONS_H
 
 #include <QWidget>
+#include <QObject>
 #include <QCheckBox>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>

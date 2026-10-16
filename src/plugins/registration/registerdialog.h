@@ -2,6 +2,7 @@
 #define REGISTERDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <interfaces/iregistraton.h>
 #include <interfaces/idataforms.h>
 #include "ui_registerdialog.h"

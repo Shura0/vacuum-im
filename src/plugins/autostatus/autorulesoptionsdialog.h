@@ -2,6 +2,7 @@
 #define AUTORULESOPTIONSDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QDialogButtonBox>

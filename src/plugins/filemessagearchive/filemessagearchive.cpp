@@ -1,8 +1,8 @@
+#include <utils/qtcompat.h>
 #include "filemessagearchive.h"
 
 #include <QDir>
 #include <QUuid>
-#include <QStringRef>
 #include <QMutexLocker>
 #include <QDirIterator>
 #include <QMapIterator>
@@ -21,7 +21,7 @@
 
 #define CATEGORY_GATEWAY      "gateway"
 
-FileMessageArchive::FileMessageArchive() : FMutex(QMutex::Recursive)
+FileMessageArchive::FileMessageArchive() : FMutex()
 {
 	FPluginManager = NULL;
 	FArchiver = NULL;
@@ -65,7 +65,7 @@ void FileMessageArchive::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEARCHIVER_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEARCHIVER_UUID));
 }
 
 bool FileMessageArchive::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -142,7 +142,7 @@ bool FileMessageArchive::startPlugin()
 
 QUuid FileMessageArchive::engineId() const
 {
-	return FILEMESSAGEARCHIVE_UUID;
+	return QUuid(FILEMESSAGEARCHIVE_UUID);
 }
 
 QString FileMessageArchive::engineName() const
@@ -622,7 +622,7 @@ QList<IArchiveHeader> FileMessageArchive::loadFileHeaders(const Jid &AStreamJid,
 						IArchiveHeader header;
 						if (checkRequestFile(fpath,ARequest,&header))
 						{
-							filesMap.insertMulti(fname,header);
+							filesMap.insert(fname,header);
 							if ((quint32)filesMap.count() > ARequest.maxItems)
 								filesMap.erase(ARequest.order==Qt::AscendingOrder ? --filesMap.end() : filesMap.begin());
 						}
@@ -631,7 +631,7 @@ QList<IArchiveHeader> FileMessageArchive::loadFileHeaders(const Jid &AStreamJid,
 			}
 		}
 
-		QMapIterator<QString,IArchiveHeader> fileIt(filesMap);
+		QMultiMapIterator<QString,IArchiveHeader> fileIt(filesMap);
 		if (ARequest.order == Qt::DescendingOrder)
 			fileIt.toBack();
 		while (ARequest.order==Qt::AscendingOrder ? fileIt.hasNext() : fileIt.hasPrevious())
@@ -665,7 +665,7 @@ IArchiveHeader FileMessageArchive::saveFileCollection(const Jid &AStreamJid, con
 			{
 				QMultiMap<int, QString> curMessages;
 				foreach(const Message &message, collection.body.messages)
-					curMessages.insertMulti(collection.header.start.secsTo(message.dateTime()),message.body());
+					curMessages.insert(collection.header.start.secsTo(message.dateTime()),message.body());
 
 				foreach(const Message &message, ACollection.body.messages)
 					if (!curMessages.contains(collection.header.start.secsTo(message.dateTime()),message.body()))
@@ -677,7 +677,7 @@ IArchiveHeader FileMessageArchive::saveFileCollection(const Jid &AStreamJid, con
 			{
 				for (QMultiMap<QDateTime, QString>::const_iterator it=ACollection.body.notes.constBegin(); it!=ACollection.body.notes.constEnd(); ++it)
 					if (!collection.body.notes.contains(it.key(),it.value()))
-						newBody.notes.insertMulti(it.key(),it.value());
+						newBody.notes.insert(it.key(),it.value());
 			}
 
 			collection = ACollection;

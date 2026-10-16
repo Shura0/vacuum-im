@@ -2,6 +2,7 @@
 #define COMPRESSFEATUREFACTORY_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/ioptionsmanager.h>
 #include <interfaces/iaccountmanager.h>
 #include <interfaces/ixmppstreammanager.h>
@@ -23,7 +24,7 @@ public:
 	~CompressFeatureFactory();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return COMPRESS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(COMPRESS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

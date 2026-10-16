@@ -2,6 +2,7 @@
 #define CONNECTIONOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <QVBoxLayout>
 #include <interfaces/iconnectionmanager.h>
 #include <interfaces/iaccountmanager.h>

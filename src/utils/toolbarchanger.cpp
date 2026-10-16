@@ -153,7 +153,7 @@ QAction *ToolBarChanger::insertWidget(QWidget *AWidget, int AGroup)
 		QAction *handle = before!=NULL ? FToolBar->insertWidget(before, AWidget) : FToolBar->addWidget(AWidget);
 		insertGroupSeparator(AGroup,handle);
 
-		FWidgets.insertMulti(AGroup,AWidget);
+		FWidgets.insert(AGroup,AWidget);
 		FHandles.insert(AWidget, handle);
 		connect(AWidget,SIGNAL(destroyed(QObject *)),SLOT(onWidgetDestroyed(QObject *)));
 
@@ -299,7 +299,7 @@ void ToolBarChanger::onUpdateVisibilityAndWidth()
 			{
 				visibleItemsCount++;
 				if (visibleItemsCount == 1)
-					maxWidth = widget->sizeHint().width() + FToolBar->layout()->margin()*2;
+					maxWidth = widget->sizeHint().width() + FToolBar->layout()->contentsMargins().left()*2;
 				else
 					break;
 			}

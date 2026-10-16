@@ -2,6 +2,7 @@
 #define INFOWIDGET_H
 
 #include <interfaces/imessagewidgets.h>
+#include <QObject>
 #include <interfaces/iavatars.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>

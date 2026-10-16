@@ -2,6 +2,7 @@
 #define IJABBERSEARCH_H
 
 #include <interfaces/idataforms.h>
+#include <QObject>
 #include <utils/jid.h>
 #include <utils/xmpperror.h>
 
@@ -58,6 +59,6 @@ protected:
 	virtual void searchError(const QString &AId, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IJabberSearch,"Vacuum.Plugin.IJabberSearch/1.1")
+Q_DECLARE_INTERFACE(IJabberSearch,"Vacuum.Plugin.IJabberSearch/1.1");
 
 #endif

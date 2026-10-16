@@ -2,6 +2,7 @@
 #define SORTFILTERPROXYMODEL_H
 
 #include <QSortFilterProxyModel>
+#include <QObject>
 #include <interfaces/irostersview.h>
 #include <interfaces/ipresencemanager.h>
 

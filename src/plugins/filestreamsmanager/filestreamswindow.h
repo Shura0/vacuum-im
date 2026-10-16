@@ -2,6 +2,7 @@
 #define FILESTREAMSWINDOW_H
 
 #include <QLabel>
+#include <QObject>
 #include <QMainWindow>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>

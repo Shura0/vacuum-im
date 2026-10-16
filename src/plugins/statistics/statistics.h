@@ -2,9 +2,9 @@
 #define STATISTICS_H
 
 #include <QMap>
+#include <QObject>
 #include <QTimer>
 #include <QNetworkReply>
-#include <QDesktopWidget>
 #include <QNetworkAccessManager>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ibookmarks.h>
@@ -34,7 +34,7 @@ public:
 	~Statistics();
 	// IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return STATISTICS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(STATISTICS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();
@@ -94,7 +94,6 @@ private:
 	QMap<Jid,Jid> FSoftwareRequests;
 private:
 	QUuid FProfileId;
-	QDesktopWidget *FDesktopWidget;
 	QNetworkAccessManager *FNetworkManager;
 private:
 	bool FSendHits;

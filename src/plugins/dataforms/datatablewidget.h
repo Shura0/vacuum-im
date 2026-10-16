@@ -2,6 +2,7 @@
 #define DATATABLEWIDGET_H
 
 #include <interfaces/idataforms.h>
+#include <QObject>
 
 class DataTableWidget :
 	public QTableWidget,

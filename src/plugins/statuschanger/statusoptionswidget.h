@@ -2,6 +2,7 @@
 #define STATUSOPTIONSWIDGET_H
 
 #include <QPushButton>
+#include <QObject>
 #include <QTableWidget>
 #include <QStyledItemDelegate>
 #include <interfaces/ipresencemanager.h>

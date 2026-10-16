@@ -2,6 +2,7 @@
 #define IMESSAGESTYLEMANAGER_H
 
 #include <QUrl>
+#include <QObject>
 #include <QString>
 #include <QVariant>
 #include <QDateTime>
@@ -148,9 +149,9 @@ public:
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions) =0;
 };
 
-Q_DECLARE_INTERFACE(IMessageStyle,"Vacuum.Plugin.IMessageStyle/1.4")
-Q_DECLARE_INTERFACE(IMessageStyleEngine,"Vacuum.Plugin.IMessageStyleEngine/1.2")
-Q_DECLARE_INTERFACE(IMessageStyleManager,"Vacuum.Plugin.IMessageStyleManager/1.5")
-Q_DECLARE_INTERFACE(IMessageStyleHandler,"Vacuum.Plugin.IMessageStyleHandler/1.0")
+Q_DECLARE_INTERFACE(IMessageStyle,"Vacuum.Plugin.IMessageStyle/1.4");
+Q_DECLARE_INTERFACE(IMessageStyleEngine,"Vacuum.Plugin.IMessageStyleEngine/1.2");
+Q_DECLARE_INTERFACE(IMessageStyleManager,"Vacuum.Plugin.IMessageStyleManager/1.5");
+Q_DECLARE_INTERFACE(IMessageStyleHandler,"Vacuum.Plugin.IMessageStyleHandler/1.0");
 
 #endif // IMESSAGESTYLEMANAGER_H

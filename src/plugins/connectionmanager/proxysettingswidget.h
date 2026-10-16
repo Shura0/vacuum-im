@@ -2,6 +2,7 @@
 #define PROXYSETTINGSWIDGET_H
 
 #include <QWidget>
+#include <QObject>
 #include <interfaces/iconnectionmanager.h>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_proxysettingswidget.h"

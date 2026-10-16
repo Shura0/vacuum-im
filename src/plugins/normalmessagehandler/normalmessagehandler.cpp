@@ -68,9 +68,9 @@ void NormalMessageHandler::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(MESSAGEWIDGETS_UUID);
-	APluginInfo->dependences.append(MESSAGEPROCESSOR_UUID);
-	APluginInfo->dependences.append(MESSAGESTYLES_UUID);
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
+	APluginInfo->dependences.append(QUuid(MESSAGEPROCESSOR_UUID));
+	APluginInfo->dependences.append(QUuid(MESSAGESTYLES_UUID));
 }
 
 bool NormalMessageHandler::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -348,7 +348,7 @@ INotification NormalMessageHandler::messageNotify(INotifications *ANotifications
 					notify.data.insert(NDR_POPUP_TEXT,AMessage.body());
 				}
 
-				FNotifiedMessages.insertMulti(window,AMessage.data(MDR_MESSAGE_ID).toInt());
+				FNotifiedMessages.insert(window,AMessage.data(MDR_MESSAGE_ID).toInt());
 			}
 		}
 		else
@@ -370,7 +370,7 @@ IMessageWindow *NormalMessageHandler::messageShowNotified(int AMessageId)
 			IMessageNormalWindow *window = findWindow(message.to(),message.from());
 			if (window)
 			{
-				FNotifiedMessages.insertMulti(window,AMessageId);
+				FNotifiedMessages.insert(window,AMessageId);
 				window->showTabPage();
 				return window;
 			}
@@ -395,7 +395,7 @@ QMultiMap<int, IOptionsDialogWidget *> NormalMessageHandler::optionsDialogWidget
 	QMultiMap<int, IOptionsDialogWidget *> widgets;
 	if (FOptionsManager && ANodeId==OPN_MESSAGES)
 	{
-		widgets.insertMulti(OWO_MESSAGES_UNNOTIFYALLNORMAL,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_UNNOTIFYALLNORMAL),tr("Consider all single contacts messages as read when read the first"),AParent));
+		widgets.insert(OWO_MESSAGES_UNNOTIFYALLNORMAL,FOptionsManager->newOptionsDialogWidget(Options::node(OPV_MESSAGES_UNNOTIFYALLNORMAL),tr("Consider all single contacts messages as read when read the first"),AParent));
 	}
 	return widgets;
 }

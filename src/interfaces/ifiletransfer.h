@@ -2,6 +2,7 @@
 #define IFILETRANSFER_H
 
 #include <QString>
+#include <QObject>
 #include <interfaces/ifilestreamsmanager.h>
 #include <utils/xmpperror.h>
 #include <utils/stanza.h>
@@ -49,6 +50,6 @@ protected:
 	virtual void publicFileReceiveRejected(const QString &ARequestId, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IFileTransfer,"Vacuum.Plugin.IFileTransfer/1.1")
+Q_DECLARE_INTERFACE(IFileTransfer,"Vacuum.Plugin.IFileTransfer/1.1");
 
 #endif // IFILETRANSFER_H

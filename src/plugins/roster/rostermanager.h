@@ -2,6 +2,7 @@
 #define ROSTERMANAGER_H
 
 #include <QObjectCleanupHandler>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ipresencemanager.h>
 #include "roster.h"
@@ -19,7 +20,7 @@ public:
 	~RosterManager();
 	virtual QObject* instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ROSTER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

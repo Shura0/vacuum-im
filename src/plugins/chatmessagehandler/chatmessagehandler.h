@@ -4,6 +4,7 @@
 #define CHATMESSAGEHANDLER_UUID "{b60cc0e4-8006-4909-b926-fcb3cbc506f0}"
 
 #include <QTimer>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/imessagewidgets.h>
@@ -50,7 +51,7 @@ public:
 	~ChatMessageHandler();
 	//IPlugin
 	virtual QObject *instance() { return this; }
-	virtual QUuid pluginUuid() const { return CHATMESSAGEHANDLER_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(CHATMESSAGEHANDLER_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

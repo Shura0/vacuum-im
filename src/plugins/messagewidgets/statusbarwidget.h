@@ -2,6 +2,7 @@
 #define STATUSBARWIDGET_H
 
 #include <QStatusBar>
+#include <QObject>
 #include <interfaces/imessagewidgets.h>
 
 class StatusBarWidget :

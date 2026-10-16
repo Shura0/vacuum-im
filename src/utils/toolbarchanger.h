@@ -2,6 +2,7 @@
 #define TOOLBARCHANGER_H
 
 #include <QEvent>
+#include <QObject>
 #include <QToolBar>
 #include <QMultiMap>
 #include <QToolButton>

@@ -2,6 +2,7 @@
 #define GATEWAYS_H
 
 #include <QSet>
+#include <QObject>
 #include <QTimer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/igateways.h>
@@ -31,7 +32,7 @@ public:
 	~Gateways();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return GATEWAYS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(GATEWAYS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

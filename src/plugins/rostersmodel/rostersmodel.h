@@ -2,6 +2,7 @@
 #define ROSTERSMODEL_H
 
 #include <interfaces/ipluginmanager.h>
+#include <QObject>
 #include <interfaces/irostersmodel.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>
@@ -24,7 +25,7 @@ public:
 	~RostersModel();
 	virtual AdvancedItemModel *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return ROSTERSMODEL_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(ROSTERSMODEL_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

@@ -2,6 +2,7 @@
 #define CREATEACCOUNTWIZARD_H
 
 #include <QMap>
+#include <QObject>
 #include <QLabel>
 #include <QWizard>
 #include <QLineEdit>

@@ -2,6 +2,7 @@
 #define ISOCKSSTREAMS_H
 
 #include <QIODevice>
+#include <QObject>
 #include <QTcpSocket>
 #include <QNetworkProxy>
 #include <interfaces/idatastreamsmanager.h>
@@ -45,7 +46,7 @@ protected:
 	virtual void localConnectionAccepted(const QString &AKey, QTcpSocket *ATcpSocket) =0;
 };
 
-Q_DECLARE_INTERFACE(ISocksStream,"Vacuum.Plugin.ISocksStream/1.2")
-Q_DECLARE_INTERFACE(ISocksStreams,"Vacuum.Plugin.ISocksStreams/1.1")
+Q_DECLARE_INTERFACE(ISocksStream,"Vacuum.Plugin.ISocksStream/1.2");
+Q_DECLARE_INTERFACE(ISocksStreams,"Vacuum.Plugin.ISocksStreams/1.1");
 
 #endif // ISOCKSSTREAMS_H

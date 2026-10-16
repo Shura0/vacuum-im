@@ -1,3 +1,4 @@
+#include <utils/qtcompat.h>
 #include "xmppstream.h"
 
 #include <QTextDocument>
@@ -381,7 +382,7 @@ void XmppStream::insertXmppDataHandler(int AOrder, IXmppDataHandler *AHandler)
 	if (AHandler && !FDataHandlers.contains(AOrder, AHandler))
 	{
 		LOG_STRM_DEBUG(streamJid(),QString("XMPP data handler inserted, order=%1, address=%2").arg(AOrder).arg((quint64)AHandler));
-		FDataHandlers.insertMulti(AOrder, AHandler);
+		FDataHandlers.insert(AOrder, AHandler);
 		emit dataHandlerInserted(AOrder,AHandler);
 	}
 }
@@ -401,7 +402,7 @@ void XmppStream::insertXmppStanzaHandler(int AOrder, IXmppStanzaHadler *AHandler
 	if (AHandler && !FStanzaHandlers.contains(AOrder, AHandler))
 	{
 		LOG_STRM_DEBUG(streamJid(),QString("XMPP stanza handler inserted, order=%1, address=%2").arg(AOrder).arg((quint64)AHandler));
-		FStanzaHandlers.insertMulti(AOrder, AHandler);
+		FStanzaHandlers.insert(AOrder, AHandler);
 		emit stanzaHandlerInserted(AOrder, AHandler);
 	}
 }
@@ -467,7 +468,7 @@ void XmppStream::processFeatures()
 
 void XmppStream::clearActiveFeatures()
 {
-	foreach(IXmppFeature *feature, FActiveFeatures.toSet())
+	foreach(IXmppFeature *feature, qToSet(FActiveFeatures))
 		delete feature->instance();
 	FActiveFeatures.clear();
 }
@@ -507,7 +508,7 @@ bool XmppStream::startFeature(const QString &AFeatureNS, const QDomElement &AFea
 bool XmppStream::processDataHandlers(QByteArray &AData, bool ADataOut)
 {
 	bool hooked = false;
-	QMapIterator<int, IXmppDataHandler *> it(FDataHandlers);
+	QMultiMapIterator<int, IXmppDataHandler *> it(FDataHandlers);
 	if (!ADataOut)
 		it.toBack();
 	while (!hooked && (ADataOut ? it.hasNext() : it.hasPrevious()))
@@ -532,7 +533,7 @@ bool XmppStream::processStanzaHandlers(Stanza &AStanza, bool AStanzaOut)
 		LOG_STRM_TYPE(Logger::Stanza,streamJid(),QString("Stanza received:\n\n%1").arg(AStanza.toString(2)));
 
 	bool hooked = false;
-	QMapIterator<int, IXmppStanzaHadler *> it(FStanzaHandlers);
+	QMultiMapIterator<int, IXmppStanzaHadler *> it(FStanzaHandlers);
 	if (!AStanzaOut)
 	{
 		AStanza.setTo(FStreamJid.full());

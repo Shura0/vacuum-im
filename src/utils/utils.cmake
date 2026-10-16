@@ -68,4 +68,4 @@ set(HEADERS "action.h"
 			"widgetmanager.h"
 			"xmpperror.h")
 
-qt5_wrap_cpp(MOC_SOURCES ${HEADERS})
+qt_wrap_cpp(MOC_SOURCES ${HEADERS})

@@ -2,6 +2,7 @@
 #define IMESSAGECARBOMS_H
 
 #include <QString>
+#include <QObject>
 #include <utils/jid.h>
 #include <utils/message.h>
 #include <utils/xmpperror.h>
@@ -22,6 +23,6 @@ protected:
 	virtual void errorReceived(const Jid &AStreamJid, const XmppError &AError) =0;
 };
 
-Q_DECLARE_INTERFACE(IMessageCarbons,"Vacuum.Plugin.IMessageCarbons/1.1")
+Q_DECLARE_INTERFACE(IMessageCarbons,"Vacuum.Plugin.IMessageCarbons/1.1");
 
 #endif // IMESSAGECARBOMS_H

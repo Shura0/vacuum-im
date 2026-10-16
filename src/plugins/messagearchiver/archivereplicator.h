@@ -2,6 +2,7 @@
 #define ARCHIVEREPLICATOR_H
 
 #include <QTimer>
+#include <QObject>
 #include <interfaces/imessagearchiver.h>
 #include "replicateworker.h"
 

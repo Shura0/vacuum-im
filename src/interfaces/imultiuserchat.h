@@ -2,6 +2,7 @@
 #define IMULTIUSERCHAT_H
 
 #include <QMenuBar>
+#include <QObject>
 #include <QTreeView>
 #include <interfaces/idataforms.h>
 #include <interfaces/irostersmodel.h>
@@ -316,10 +317,10 @@ protected:
 	virtual void registeredNickReceived(const QString &AId, const QString &ANick) =0;
 };
 
-Q_DECLARE_INTERFACE(IMultiUser,"Vacuum.Plugin.IMultiUser/1.1")
-Q_DECLARE_INTERFACE(IMultiUserChat,"Vacuum.Plugin.IMultiUserChat/1.7")
-Q_DECLARE_INTERFACE(IMultiUserView,"Vacuum.Plugin.IMultiUserView/1.0")
-Q_DECLARE_INTERFACE(IMultiUserChatWindow,"Vacuum.Plugin.IMultiUserChatWindow/1.4")
-Q_DECLARE_INTERFACE(IMultiUserChatManager,"Vacuum.Plugin.IMultiUserChatManager/1.9")
+Q_DECLARE_INTERFACE(IMultiUser,"Vacuum.Plugin.IMultiUser/1.1");
+Q_DECLARE_INTERFACE(IMultiUserChat,"Vacuum.Plugin.IMultiUserChat/1.7");
+Q_DECLARE_INTERFACE(IMultiUserView,"Vacuum.Plugin.IMultiUserView/1.0");
+Q_DECLARE_INTERFACE(IMultiUserChatWindow,"Vacuum.Plugin.IMultiUserChatWindow/1.4");
+Q_DECLARE_INTERFACE(IMultiUserChatManager,"Vacuum.Plugin.IMultiUserChatManager/1.9");
 
 #endif //IMULTIUSERCHAT_H

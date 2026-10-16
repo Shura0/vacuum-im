@@ -2,6 +2,7 @@
 #define IRECENTCONTACTS_H
 
 #include <QIcon>
+#include <QObject>
 #include <QList>
 #include <QDateTime>
 #include <interfaces/irostersmodel.h>
@@ -81,7 +82,7 @@ protected:
 
 Q_DECLARE_METATYPE(IRecentItem);
 
-Q_DECLARE_INTERFACE(IRecentItemHandler,"Vacuum.Plugin.IRecentItemHandler/1.0")
-Q_DECLARE_INTERFACE(IRecentContacts,"Vacuum.Plugin.IRecentContacts/1.4")
+Q_DECLARE_INTERFACE(IRecentItemHandler,"Vacuum.Plugin.IRecentItemHandler/1.0");
+Q_DECLARE_INTERFACE(IRecentContacts,"Vacuum.Plugin.IRecentContacts/1.4");
 
 #endif //IRECENTCONTACTS_H

@@ -2,6 +2,7 @@
 #define PRESENCEMANAGER_H
 
 #include <QSet>
+#include <QObject>
 #include <QObjectCleanupHandler>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ipresencemanager.h>
@@ -20,7 +21,7 @@ public:
 	~PresenceManager();
 	virtual QObject* instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return PRESENCE_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(PRESENCE_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects() { return true; }

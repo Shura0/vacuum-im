@@ -2,6 +2,7 @@
 #define COMMANDDIALOG_H
 
 #include <QDialog>
+#include <QObject>
 #include <QPushButton>
 #include <interfaces/icommands.h>
 #include <interfaces/idataforms.h>

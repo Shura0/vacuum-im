@@ -2,6 +2,7 @@
 #define IPRESENCEMANAGER_H
 
 #include <QList>
+#include <QObject>
 #include <QDateTime>
 #include <interfaces/ixmppstreammanager.h>
 #include <utils/jid.h>
@@ -107,7 +108,7 @@ protected:
 	virtual void contactStateChanged(const Jid &AStreamJid, const Jid &AContactJid, bool AStateOnline) =0;
 };
 
-Q_DECLARE_INTERFACE(IPresence,"Vacuum.Plugin.IPresence/1.4")
-Q_DECLARE_INTERFACE(IPresenceManager,"Vacuum.Plugin.IPresenceManager/1.4")
+Q_DECLARE_INTERFACE(IPresence,"Vacuum.Plugin.IPresence/1.4");
+Q_DECLARE_INTERFACE(IPresenceManager,"Vacuum.Plugin.IPresenceManager/1.4");
 
 #endif  //IPRESENCEMANAGER_H

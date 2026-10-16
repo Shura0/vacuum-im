@@ -2,6 +2,7 @@
 #define SELECTICONWIDGET_H
 
 #include <QMap>
+#include <QObject>
 #include <QLabel>
 #include <QEvent>
 #include <QGridLayout>

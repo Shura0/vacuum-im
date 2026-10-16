@@ -2,6 +2,7 @@
 #define ARCHIVEOPTIONS_H
 
 #include <QItemDelegate>
+#include <QObject>
 #include <interfaces/imessagearchiver.h>
 #include <interfaces/ioptionsmanager.h>
 #include "ui_archiveaccountoptionswidget.h"

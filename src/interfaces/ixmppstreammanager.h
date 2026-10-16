@@ -2,6 +2,7 @@
 #define IXMPPSTREAMMANAGER_H
 
 #include <QByteArray>
+#include <QObject>
 #include <QStringList>
 #include <utils/jid.h>
 #include <utils/stanza.h>
@@ -133,7 +134,7 @@ Q_DECLARE_INTERFACE(IXmppDataHandler,"Vacuum.Plugin.IXmppDataHandler/1.0");
 Q_DECLARE_INTERFACE(IXmppStanzaHadler,"Vacuum.Plugin.IXmppStanzaHadler/1.0");
 Q_DECLARE_INTERFACE(IXmppFeature,"Vacuum.Plugin.IXmppFeature/1.1");
 Q_DECLARE_INTERFACE(IXmppFeatureFactory,"Vacuum.Plugin.IXmppFeatureFactory/1.1");
-Q_DECLARE_INTERFACE(IXmppStream, "Vacuum.Plugin.IXmppStream/1.4")
-Q_DECLARE_INTERFACE(IXmppStreamManager,"Vacuum.Plugin.IXmppStreamManager/1.4")
+Q_DECLARE_INTERFACE(IXmppStream, "Vacuum.Plugin.IXmppStream/1.4");
+Q_DECLARE_INTERFACE(IXmppStreamManager,"Vacuum.Plugin.IXmppStreamManager/1.4");
 
 #endif // IXMPPSTREAMMANAGER_H

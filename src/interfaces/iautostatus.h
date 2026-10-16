@@ -2,6 +2,7 @@
 #define IAUTOSTATUS_H
 
 #include <QUuid>
+#include <QObject>
 
 #define AUTOSTATUS_UUID "{89687A92-B483-4d7a-B2CF-267A05D6CC5D}"
 
@@ -32,6 +33,6 @@ protected:
 	virtual void ruleActivated(const QUuid &ARuleId) =0;
 };
 
-Q_DECLARE_INTERFACE(IAutoStatus,"Vacuum.Plugin.IAutoStatus/1.1")
+Q_DECLARE_INTERFACE(IAutoStatus,"Vacuum.Plugin.IAutoStatus/1.1");
 
 #endif

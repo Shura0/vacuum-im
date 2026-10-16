@@ -42,8 +42,8 @@ void DataStreamsManger::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->version = "1.0";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
-	APluginInfo->dependences.append(DATAFORMS_UUID);
-	APluginInfo->dependences.append(STANZAPROCESSOR_UUID);
+	APluginInfo->dependences.append(QUuid(DATAFORMS_UUID));
+	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 }
 
 bool DataStreamsManger::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -141,8 +141,8 @@ QMultiMap<int, IOptionsDialogWidget *> DataStreamsManger::optionsDialogWidgets(c
 		int index = 0;
 		foreach(IDataStreamMethod *method, FMethods)
 		{
-			widgets.insertMulti(OHO_DATATRANSFER_METHODNAME + index, FOptionsManager->newOptionsDialogHeader(tr("Transfer method %1").arg(method->methodName()),AParent));
-			widgets.insertMulti(OWO_DATATRANSFER_METHODSETTINGS + index, method->methodSettingsWidget(settingsProfileNode(QUuid(),method->methodNS()),AParent));
+			widgets.insert(OHO_DATATRANSFER_METHODNAME + index, FOptionsManager->newOptionsDialogHeader(tr("Transfer method %1").arg(method->methodName()),AParent));
+			widgets.insert(OWO_DATATRANSFER_METHODSETTINGS + index, method->methodSettingsWidget(settingsProfileNode(QUuid(),method->methodNS()),AParent));
 			index += 10;
 		}
 	}
@@ -355,11 +355,11 @@ void DataStreamsManger::removeProfile(IDataStreamProfile *AProfile)
 QList<QUuid> DataStreamsManger::settingsProfiles() const
 {
 	QList<QUuid> sprofiles;
-	sprofiles.append(QUuid().toString());
+	sprofiles.append(QUuid());
 
 	foreach(const QString &sprofile, Options::node(OPV_DATASTREAMS_ROOT).childNSpaces("settings-profile"))
-		if (!sprofiles.contains(sprofile))
-			sprofiles.append(sprofile);
+		if (!sprofiles.contains(QUuid(sprofile)))
+			sprofiles.append(QUuid(sprofile));
 
 	return sprofiles;
 }
@@ -388,7 +388,7 @@ void DataStreamsManger::removeSettingsProfile(const QUuid &AProfileId)
 	if (!AProfileId.isNull())
 	{
 		Options::node(OPV_DATASTREAMS_ROOT).removeChilds("settings-profile",AProfileId.toString());
-		emit settingsProfileRemoved(AProfileId.toString());
+		emit settingsProfileRemoved(AProfileId);
 	}
 }
 

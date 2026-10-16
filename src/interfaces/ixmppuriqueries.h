@@ -2,6 +2,7 @@
 #define IXMPPURIQUERIES_H
 
 #include <QUrl>
+#include <QObject>
 #include <QMultiMap>
 #include <utils/jid.h>
 
@@ -29,7 +30,7 @@ protected:
 	virtual void uriHandlerRemoved(int AOrder, IXmppUriHandler *AHandler) =0;
 };
 
-Q_DECLARE_INTERFACE(IXmppUriHandler,"Vacuum.Plugin.IXmppUriHandler/1.0")
-Q_DECLARE_INTERFACE(IXmppUriQueries,"Vacuum.Plugin.IXmppUriQueries/1.1")
+Q_DECLARE_INTERFACE(IXmppUriHandler,"Vacuum.Plugin.IXmppUriHandler/1.0");
+Q_DECLARE_INTERFACE(IXmppUriQueries,"Vacuum.Plugin.IXmppUriQueries/1.1");
 
 #endif

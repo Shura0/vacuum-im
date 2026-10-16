@@ -2,6 +2,7 @@
 #define RECENTCONTACTS_H
 
 #include <QMap>
+#include <QObject>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/irecentcontacts.h>
 #include <interfaces/irostersmodel.h>
@@ -33,7 +34,7 @@ public:
 	~RecentContacts();
 	virtual QObject *instance() { return this; }
 	//IPlugin
-	virtual QUuid pluginUuid() const { return RECENTCONTACTS_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(RECENTCONTACTS_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();

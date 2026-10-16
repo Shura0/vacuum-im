@@ -2,6 +2,7 @@
 #define STANZAPROCESSOR_H
 
 #include <QTimer>
+#include <QObject>
 #include <QMultiMap>
 #include <QDomDocument>
 #include <interfaces/ipluginmanager.h>
@@ -33,7 +34,7 @@ public:
 	~StanzaProcessor();
 	//IPlugin
 	virtual QObject* instance() { return this; }
-	virtual QUuid pluginUuid() const { return STANZAPROCESSOR_UUID; }
+	virtual QUuid pluginUuid() const { return QUuid(STANZAPROCESSOR_UUID); }
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects() { return true; }

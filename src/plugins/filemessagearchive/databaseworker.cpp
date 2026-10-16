@@ -220,7 +220,7 @@ bool DatabaseTaskOpenDatabase::initializeDatabase(QSqlDatabase &ADatabase)
 		QSqlQuery createQuery(ADatabase);
 		for (int i=structureVersion; i<DATABASE_STRUCTURE_VERSION; i++)
 		{
-			QStringList commands = databaseUpdates[i].createQuery.split(';',QString::SkipEmptyParts);
+			QStringList commands = databaseUpdates[i].createQuery.split(';',Qt::SkipEmptyParts);
 			foreach(const QString &command, commands)
 			{
 				if (!createQuery.exec(command))
@@ -423,7 +423,7 @@ void DatabaseTaskLoadHeaders::run()
 				else while (selectQuery.next())
 				{
 					DatabaseArchiveHeader header;
-					header.engineId = FILEMESSAGEARCHIVE_UUID;
+					header.engineId = QUuid(FILEMESSAGEARCHIVE_UUID);
 					header.with = Jid(selectQuery.value(0).toString(),selectQuery.value(1).toString(),selectQuery.value(2).toString());
 					header.start = DateTime(selectQuery.value(3).toString()).toLocal();
 					header.subject = selectQuery.value(4).toString();
@@ -740,7 +740,7 @@ void DatabaseTaskLoadModifications::run()
 			{
 				IArchiveModification item;
 				item.action = (IArchiveModification::ModifyAction)loadQuery.value(1).toInt();
-				item.header.engineId = FILEMESSAGEARCHIVE_UUID;
+				item.header.engineId = QUuid(FILEMESSAGEARCHIVE_UUID);
 				item.header.with = loadQuery.value(2).toString();
 				item.header.start = DateTime(loadQuery.value(3).toString()).toLocal();
 				item.header.version = loadQuery.value(4).toInt();

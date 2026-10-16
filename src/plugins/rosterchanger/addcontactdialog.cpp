@@ -107,7 +107,7 @@ void AddContactDialog::initialize()
 	FRoster = rosterManager!=NULL ? rosterManager->findRoster(FStreamJid) : NULL;
 	if (FRoster)
 	{
-		ui.cmbGroup->addItems(FRoster->groups().toList());
+		ui.cmbGroup->addItems(FRoster->groups().values());
 		ui.cmbGroup->model()->sort(0,Qt::AscendingOrder);
 		ui.cmbGroup->setCurrentIndex(-1);
 		ui.lblGroupDelim->setText(tr("* nested group delimiter - '%1'").arg(ROSTER_GROUP_DELIMITER));

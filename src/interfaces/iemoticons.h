@@ -2,6 +2,7 @@
 #define IEMOTICONS_H
 
 #include <QUrl>
+#include <QObject>
 #include <QMap>
 #include <QIcon>
 #include <QString>
@@ -21,6 +22,6 @@ public:
 	virtual QMap<int, QString> findImageEmoticons(const QTextDocument *ADocument, int AStartPos=0, int ALength=-1) const =0;
 };
 
-Q_DECLARE_INTERFACE(IEmoticons,"Vacuum.Plugin.IEmoticons/1.0")
+Q_DECLARE_INTERFACE(IEmoticons,"Vacuum.Plugin.IEmoticons/1.0");
 
 #endif

@@ -2,6 +2,7 @@
 #define PRESENCE_H
 
 #include <interfaces/ipresencemanager.h>
+#include <QObject>
 #include <interfaces/istanzaprocessor.h>
 #include <interfaces/ixmppstreammanager.h>
 

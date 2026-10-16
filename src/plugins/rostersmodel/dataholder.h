@@ -2,6 +2,7 @@
 #define DATAHOLDER_H
 
 #include <interfaces/irostersmodel.h>
+#include <QObject>
 
 class DataHolder : 
 	public QObject,
