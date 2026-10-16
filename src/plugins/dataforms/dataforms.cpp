@@ -883,7 +883,7 @@ bool DataForms::loadUrl(const QUrl &AUrl)
 			state.reply = FNetworkManager.get(QNetworkRequest(AUrl));
 			state.reply->setReadBufferSize(0);
 			connect(state.reply,SIGNAL(finished()),SLOT(onNetworkReplyFinished()));
-			connect(state.reply,SIGNAL(error(QNetworkReply::NetworkError)),SLOT(onNetworkReplyError(QNetworkReply::NetworkError)));
+			connect(state.reply,SIGNAL(errorOccurred(QNetworkReply::NetworkError)),SLOT(onNetworkReplyError(QNetworkReply::NetworkError)));
 			connect(state.reply,SIGNAL(sslErrors(const QList<QSslError> &)),SLOT(onNetworkReplySSLErrors(const QList<QSslError> &)));
 			FUrlRequests.insert(AUrl,state);
 		}

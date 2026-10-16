@@ -546,7 +546,7 @@ void SocksStream::setTcpSocket(QTcpSocket *ASocket)
 		LOG_STRM_DEBUG(FStreamJid,QString("Socks stream data socket selected, address=%1, sid=%2").arg(ASocket->peerAddress().toString(),FStreamId));
 		connect(ASocket,SIGNAL(readyRead()), SLOT(onTcpSocketReadyRead()));
 		connect(ASocket,SIGNAL(bytesWritten(qint64)),SLOT(onTcpSocketBytesWritten(qint64)));
-		connect(ASocket,SIGNAL(error(QAbstractSocket::SocketError)),SLOT(onTcpSocketError(QAbstractSocket::SocketError)));
+		connect(ASocket,SIGNAL(errorOccurred(QAbstractSocket::SocketError)),SLOT(onTcpSocketError(QAbstractSocket::SocketError)));
 		connect(ASocket,SIGNAL(disconnected()),SLOT(onTcpSocketDisconnected()));
 		QWriteLocker locker(&FThreadLock);
 		FTcpSocket = ASocket;
@@ -800,7 +800,7 @@ bool SocksStream::connectToHost()
 				SLOT(onHostSocketProxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *)));
 			connect(FTcpSocket,SIGNAL(connected()),SLOT(onHostSocketConnected()));
 			connect(FTcpSocket,SIGNAL(readyRead()), SLOT(onHostSocketReadyRead()));
-			connect(FTcpSocket,SIGNAL(error(QAbstractSocket::SocketError)), SLOT(onHostSocketError(QAbstractSocket::SocketError)));
+			connect(FTcpSocket,SIGNAL(errorOccurred(QAbstractSocket::SocketError)), SLOT(onHostSocketError(QAbstractSocket::SocketError)));
 			connect(FTcpSocket,SIGNAL(disconnected()),SLOT(onHostSocketDisconnected()));
 			FTcpSocket->setProxy(FNetworkProxy);
 		}
