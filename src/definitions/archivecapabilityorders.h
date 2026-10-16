@@ -14,6 +14,7 @@
 //ArchiveManagement
 #define ACO_MANAGE_FILEARCHIVE                         500
 #define ACO_MANAGE_SERVERARCHIVE                       1000
+#define ACO_MANAGE_MAMARCHIVE                          1100
 
 //Replication
 #define ACO_REPLICATION_FILEARCHIVE                    500

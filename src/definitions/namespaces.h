@@ -95,6 +95,10 @@
 #define NS_MESSAGE_CARBONS                      "urn:xmpp:carbons:2"
 #define NS_MESSAGE_FORWARD                      "urn:xmpp:forward:0"
 
+#define NS_MAM                                   "urn:xmpp:mam:2"
+#define NS_MAM_1                                 "urn:xmpp:mam:1"
+#define NS_MAM_0                                 "urn:xmpp:mam:0"
+
 #define NS_VACUUM_PRIVATESTORAGE_UPDATE         "vacuum:privatestorage:update"
 
 #endif // DEF_NAMESPACES_H

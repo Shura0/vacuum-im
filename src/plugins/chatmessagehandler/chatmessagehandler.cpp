@@ -30,13 +30,47 @@
 #include <utils/options.h>
 #include <utils/logger.h>
 
-#define HISTORY_MESSAGES          10
+#define HISTORY_MESSAGES          20
 #define HISTORY_TIME_DELTA        5
 #define HISTORY_DUBLICATE_DELTA   2*60
 #define HISTORY_COLLECTION_TIME   20*60
 
+// Delay before the server archive is re-queried after a reconnection. It gives
+// service discovery time to report the archive capabilities of the server.
+#define HISTORY_CATCHUP_TIMEOUT   5000
+// Number of recently displayed messages kept in memory to detect the copies of
+// the already shown messages that the archive may return after a reconnection.
+#define HISTORY_DUPLICATE_MESSAGES 20
+
 #define ADR_STREAM_JID            Action::DR_StreamJid
 #define ADR_CONTACT_JID           Action::DR_Parametr1
+
+static bool isSameMessage(const Message &AMessage, const Message &AOther)
+{
+	// Same origin stanza id is an exact match. Only archives preserve it, but when
+	// both sides have one it settles the question immediately.
+	if (!AMessage.id().isEmpty() && !AOther.id().isEmpty())
+		return AMessage.id()==AOther.id();
+
+	// An archive copy differs from the live copy only by network/clock skew, so
+	// require the same direction, the same body and a close timestamp.
+	return AMessage.data(MDR_MESSAGE_DIRECTION)==AOther.data(MDR_MESSAGE_DIRECTION)
+		&& AMessage.body()==AOther.body()
+		&& qAbs(AMessage.dateTime().secsTo(AOther.dateTime()))<HISTORY_DUBLICATE_DELTA;
+}
+
+// Consecutive copies of the same message (from different archive engines, or
+// from the live stream) collapse into a single entry.
+static void collapseSameMessages(QList<Message> &AMessages)
+{
+	QList<Message> collapsed;
+	foreach(const Message &message, AMessages)
+	{
+		if (collapsed.isEmpty() || !isSameMessage(collapsed.last(),message))
+			collapsed.append(message);
+	}
+	AMessages = collapsed;
+}
 
 static const QList<int> ChatHandlerRosterKinds = QList<int>() << RIK_CONTACT << RIK_AGENT << RIK_MY_RESOURCE << RIK_METACONTACT << RIK_METACONTACT_ITEM;
 
@@ -57,6 +91,9 @@ ChatMessageHandler::ChatMessageHandler()
 	FAccountManager = NULL;
 	FXmppUriQueries = NULL;
 	FRecentContacts = NULL;
+
+	FCatchUpTimer.setSingleShot(true);
+	connect(&FCatchUpTimer,SIGNAL(timeout()),SLOT(onCatchUpTimerTimeout()));
 }
 
 ChatMessageHandler::~ChatMessageHandler()
@@ -154,6 +191,8 @@ bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AI
 		FMessageArchiver = qobject_cast<IMessageArchiver *>(plugin->instance());
 		if (FMessageArchiver)
 		{
+			connect(FMessageArchiver->instance(),SIGNAL(archivePrefsOpened(const Jid &)),SLOT(onArchivePrefsOpened(const Jid &)));
+			connect(FMessageArchiver->instance(),SIGNAL(archivePrefsClosed(const Jid &)),SLOT(onArchivePrefsClosed(const Jid &)));
 			connect(FMessageArchiver->instance(),SIGNAL(messagesLoaded(const QString &, const IArchiveCollectionBody &)),
 				SLOT(onArchiveMessagesLoaded(const QString &, const IArchiveCollectionBody &)));
 			connect(FMessageArchiver->instance(),SIGNAL(requestFailed(const QString &, const XmppError &)),
@@ -570,6 +609,10 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 		IArchiveCollectionBody history = FHistoryMessages.take(AWindow);
 		std::stable_sort(history.messages.begin(),history.messages.end(),qGreater<Message>());
 
+		// Remove copies of the same message that different archive engines and
+		// the live stream may both deliver.
+		collapseSameMessages(history.messages);
+
 		// Remove extra history messages
 		if (history.messages.count() > HISTORY_MESSAGES)
 		{
@@ -588,7 +631,7 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 		{
 			const Message &hmessage = history.messages.at(messageItEnd);
 			const Message &pmessage = pending.at(pending.count()-messageItEnd-1);
-			if (hmessage.body()==pmessage.body() && qAbs(hmessage.dateTime().secsTo(pmessage.dateTime()))<HISTORY_DUBLICATE_DELTA)
+			if (isSameMessage(hmessage,pmessage))
 				messageItEnd++;
 			else
 				break;
@@ -655,6 +698,76 @@ void ChatMessageHandler::requestHistory(IMessageChatWindow *AWindow)
 				LOG_STRM_WARNING(it.key(),QString("Failed to send chat history load request, with=%1").arg(request.with.bare()));
 			}
 		}
+	}
+}
+
+void ChatMessageHandler::requestCatchUpHistory(IMessageChatWindow *AWindow)
+{
+	if (FMessageArchiver && Options::node(OPV_MESSAGES_LOADHISTORY).value().toBool()
+		&& !FHistoryRequests.values().contains(AWindow) && !FCatchUpRequests.values().contains(AWindow))
+	{
+		// Messages are requested starting from the last message already shown in
+		// the window, so only the archive entries received while the stream was
+		// disconnected are appended (duplicates are filtered out by isSameMessage).
+		QDateTime start = FWindowStatus.value(AWindow).lastMessageTime;
+		if (start.isValid())
+		{
+			start = start.addSecs(1);
+			IArchiveRequest request;
+			request.order = Qt::AscendingOrder;
+			request.start = start;
+			request.end = QDateTime::currentDateTime();
+
+			QMultiMap<Jid,Jid> addresses = AWindow->address()->availAddresses(true);
+			for (QMultiMap<Jid,Jid>::const_iterator it=addresses.constBegin(); it!=addresses.constEnd(); ++it)
+			{
+				request.with = it.value();
+				request.exactmatch = !request.with.hasNode();
+
+				QString reqId = FMessageArchiver->loadMessages(it.key(),request);
+				if (!reqId.isEmpty())
+				{
+					LOG_STRM_INFO(it.key(),QString("History catch-up request sent, with=%1, start=%2, id=%3").arg(request.with.bare(),start.toString(Qt::ISODate),reqId));
+					FCatchUpRequests.insert(reqId,AWindow);
+				}
+				else
+				{
+					LOG_STRM_WARNING(it.key(),QString("Failed to send history catch-up request, with=%1").arg(request.with.bare()));
+				}
+			}
+		}
+	}
+}
+
+void ChatMessageHandler::appendHistoryMessages(IMessageChatWindow *AWindow, const QList<Message> &AMessages)
+{
+	QList<Message> messages = AMessages;
+	std::stable_sort(messages.begin(),messages.end(),qLess<Message>());
+
+	// The server archive and the local file archive may both return the same
+	// message with a slightly different timestamp, and pages of the same
+	// server query may overlap, so drop the copies first.
+	collapseSameMessages(messages);
+
+	foreach(const Message &message, messages)
+	{
+		const WindowStatus &wstatus = FWindowStatus.value(AWindow);
+		if (wstatus.lastMessageTime.isValid() && message.dateTime()<=wstatus.lastMessageTime)
+			continue;
+
+		// The archive may also return the messages which are already shown in
+		// the window after reconnection or a client restart.
+		bool duplicate = false;
+		foreach(const Message &shown, wstatus.lastMessages)
+		{
+			if (isSameMessage(message,shown))
+			{
+				duplicate = true;
+				break;
+			}
+		}
+		if (!duplicate)
+			showStyledMessage(AWindow,message);
 	}
 }
 
@@ -759,6 +872,14 @@ void ChatMessageHandler::showStyledMessage(IMessageChatWindow *AWindow, const Me
 
 	showDateSeparator(AWindow,options.time);
 	AWindow->viewWidget()->appendMessage(AMessage,options);
+
+	WindowStatus &wstatus = FWindowStatus[AWindow];
+	if (!wstatus.lastMessageTime.isValid() || AMessage.dateTime()>wstatus.lastMessageTime)
+		wstatus.lastMessageTime = AMessage.dateTime();
+
+	wstatus.lastMessages.append(AMessage);
+	while (wstatus.lastMessages.count() > HISTORY_DUPLICATE_MESSAGES)
+		wstatus.lastMessages.removeFirst();
 }
 
 bool ChatMessageHandler::isSelectionAccepted(const QList<IRosterIndex *> &ASelected) const
@@ -848,6 +969,8 @@ void ChatMessageHandler::onWindowDestroyed()
 
 		foreach(const QString &reqId, FHistoryRequests.keys(window))
 			FHistoryRequests.remove(reqId);
+		foreach(const QString &reqId, FCatchUpRequests.keys(window))
+			FCatchUpRequests.remove(reqId);
 		FHistoryMessages.remove(window);
 
 		FWindows.removeAt(FWindows.indexOf(window));
@@ -1090,9 +1213,42 @@ void ChatMessageHandler::onShortcutActivated(const QString &AId, QWidget *AWidge
 	}
 }
 
+void ChatMessageHandler::onArchivePrefsOpened(const Jid &AStreamJid)
+{
+	// The archive is always re-opened when the stream is (re)connected. Query
+	// the server archive afterwards so that the messages received while the
+	// connection was down are appended to the already opened chat windows.
+	FCatchUpStreams.insert(AStreamJid);
+	FCatchUpTimer.start(HISTORY_CATCHUP_TIMEOUT);
+}
+
+void ChatMessageHandler::onArchivePrefsClosed(const Jid &AStreamJid)
+{
+	FCatchUpStreams.remove(AStreamJid);
+}
+
+void ChatMessageHandler::onCatchUpTimerTimeout()
+{
+	QSet<Jid> streams = FCatchUpStreams;
+	FCatchUpStreams.clear();
+	foreach(const Jid &streamJid, streams)
+	{
+		foreach(IMessageChatWindow *window, FWindows)
+		{
+			if (window->streamJid()==streamJid)
+				requestCatchUpHistory(window);
+		}
+	}
+}
+
 void ChatMessageHandler::onArchiveRequestFailed(const QString &AId, const XmppError &AError)
 {
-	if (FHistoryRequests.contains(AId))
+	if (FCatchUpRequests.contains(AId))
+	{
+		IMessageChatWindow *window = FCatchUpRequests.take(AId);
+		LOG_STRM_WARNING(window->streamJid(),QString("Failed to load chat history catch-up, id=%1: %2").arg(AId,AError.condition()));
+	}
+	else if (FHistoryRequests.contains(AId))
 	{
 		IMessageChatWindow *window = FHistoryRequests.take(AId);
 		LOG_STRM_WARNING(window->streamJid(),QString("Failed to load chat history, id=%1: %2").arg(AId,AError.condition()));
@@ -1103,7 +1259,13 @@ void ChatMessageHandler::onArchiveRequestFailed(const QString &AId, const XmppEr
 
 void ChatMessageHandler::onArchiveMessagesLoaded(const QString &AId, const IArchiveCollectionBody &ABody)
 {
-	if (FHistoryRequests.contains(AId))
+	if (FCatchUpRequests.contains(AId))
+	{
+		IMessageChatWindow *window = FCatchUpRequests.take(AId);
+		LOG_STRM_INFO(window->streamJid(),QString("Chat history catch-up loaded, with=%1, id=%2").arg(window->contactJid().bare(),AId));
+		appendHistoryMessages(window,ABody.messages);
+	}
+	else if (FHistoryRequests.contains(AId))
 	{
 		IMessageChatWindow *window = FHistoryRequests.take(AId);
 		LOG_STRM_INFO(window->streamJid(),QString("Chat history loaded, id=%1").arg(AId));

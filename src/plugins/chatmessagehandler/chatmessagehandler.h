@@ -3,6 +3,7 @@
 
 #define CHATMESSAGEHANDLER_UUID "{b60cc0e4-8006-4909-b926-fcb3cbc506f0}"
 
+#include <QSet>
 #include <QTimer>
 #include <QObject>
 #include <interfaces/ipluginmanager.h>
@@ -26,8 +27,12 @@
 
 struct WindowStatus {
 	QDateTime startTime;
+	QDateTime lastMessageTime;
 	QDateTime createTime;
 	QDate lastDateSeparator;
+	// Recently displayed messages, used to filter out the copies returned by
+	// the server archive after a reconnection that were already shown live.
+	QList<Message> lastMessages;
 };
 
 struct WindowContent {
@@ -79,6 +84,8 @@ protected:
 	void removeNotifiedMessages(IMessageChatWindow *AWindow);
 	void showHistory(IMessageChatWindow *AWindow);
 	void requestHistory(IMessageChatWindow *AWindow);
+	void requestCatchUpHistory(IMessageChatWindow *AWindow);
+	void appendHistoryMessages(IMessageChatWindow *AWindow, const QList<Message> &AMessages);
 	void setMessageStyle(IMessageChatWindow *AWindow);
 	void showDateSeparator(IMessageChatWindow *AWindow, const QDateTime &ADateTime);
 	void fillContentOptions(const Jid &AStreamJid, const Jid &AContactJid, IMessageStyleContentOptions &AOptions) const;
@@ -109,6 +116,9 @@ protected slots:
 	void onChangeWindowAddressAction();
 	void onActiveStreamRemoved(const Jid &AStreamJid);
 	void onShortcutActivated(const QString &AId, QWidget *AWidget);
+	void onArchivePrefsOpened(const Jid &AStreamJid);
+	void onArchivePrefsClosed(const Jid &AStreamJid);
+	void onCatchUpTimerTimeout();
 	void onArchiveRequestFailed(const QString &AId, const XmppError &AError);
 	void onArchiveMessagesLoaded(const QString &AId, const IArchiveCollectionBody &ABody);
 	void onRostersViewIndexContextMenu(const QList<IRosterIndex *> &AIndexes, quint32 ALabelId, Menu *AMenu);
@@ -136,9 +146,13 @@ private:
 	QMap<IMessageChatWindow *, WindowStatus> FWindowStatus;
 private:
 	QMap<QString, IMessageChatWindow *> FHistoryRequests;
+	QMap<QString, IMessageChatWindow *> FCatchUpRequests;
 	QMap<IMessageChatWindow *, QList<Message> > FPendingMessages;
 	QMap<IMessageChatWindow *, QList<WindowContent> > FPendingContent;
 	QMap<IMessageChatWindow *, IArchiveCollectionBody> FHistoryMessages;
+private:
+	QTimer FCatchUpTimer;
+	QSet<Jid> FCatchUpStreams;
 };
 
 #endif // CHATMESSAGEHANDLER_H
