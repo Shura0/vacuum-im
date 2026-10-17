@@ -33,6 +33,10 @@
 #define MSMC_MENTION                        "mention"
 #define MSMC_MECOMMAND                      "me_command"
 
+//Message Style Content Classes
+#define MSMC_QUOTE                          "xxxquote"
+#define MSMC_ADDRESS                        "xxxaddress"
+
 //Message Style Status Keywords
 #define MSSK_ONLINE                         "online"
 #define MSSK_OFFLINE                        "offline"
@@ -120,6 +124,8 @@ protected:
 	QString makeContentTemplate(const IMessageStyleContentOptions &AOptions, const WidgetStatus &AStatus) const;
 	void fillContentKeywords(QString &AHtml, const IMessageStyleContentOptions &AOptions, const WidgetStatus &AStatus) const;
 	QString prepareMessage(const QString &AHtml, const IMessageStyleContentOptions &AOptions) const;
+	QString markQuotedLines(const QString &AHtml) const;
+	QString markAddresses(const QString &AHtml) const;
 protected:
 	bool eventFilter(QObject *AWatched, QEvent *AEvent);
 protected slots:

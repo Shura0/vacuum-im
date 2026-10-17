@@ -1,0 +1,92 @@
+/* "Special" variant of the Chat Style.
+   Draws a horizontal line under every message (as a cell bottom border, since
+   a variant stylesheet can't insert an <hr>) and highlights quoted lines
+   (starting with '>'). */
+
+.xxxwrapper 
+{
+  border-style		:none;
+  font-size		:medium;
+  margin-top		:5px;
+  margin-bottom		:12px;
+}
+
+.xxxmessage
+{
+  white-space		:pre-wrap;
+  padding-left		:10px;
+}
+
+/* Separator line under each incoming/outgoing message */
+.message .xxxmessage
+{
+  border-bottom		:1px solid #c0c0c0;
+}
+
+.xxxsender
+{
+  white-space		:nowrap;
+  font-weight		:bold;
+}
+
+.xxxtime 
+{
+  white-space		:nowrap;
+  font-size             :small;
+  color			:gray;
+}
+
+.xxxtopic
+{
+  padding-left		:15px;
+  padding-right		:15px;
+}
+
+.consecutive
+{
+  margin-top		:0px;
+}
+
+.status .xxxmessage
+{
+  color			:darkgreen;
+}
+
+.notification .xxxmessage
+{
+  color			:darkblue;
+}
+
+.event .xxxmessage
+{
+  color			:darkred;
+}
+
+.mention .xxxmessage
+{
+  background-color	:mistyrose;
+}
+
+.date_separator .xxxmessage
+{
+  color			:darkCyan;
+}
+
+.date_separator .xxxtime
+{
+  color                 :transparent;
+}
+
+/* Quoted lines (start with '>') */
+.xxxquote
+{
+  color			:#2f6f4f;
+  font-style		:italic;
+  background-color	:#f0f5f0;
+}
+
+/* Addresses like '@nickname' or '@nickname@server' */
+.xxxaddress
+{
+  font-weight		:bold;
+}

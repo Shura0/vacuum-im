@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QRegularExpression>
 #include <QDomDocument>
 #include <QTextBlock>
 #include <QScrollBar>
@@ -34,6 +35,28 @@ static const char *SenderColors[] =  {
 	"steelblue", "teal", "tomato", "violet"
 };
 static int SenderColorsCount = sizeof(SenderColors)/sizeof(SenderColors[0]);
+
+// Split a complete QTextDocument (as dumped by TextManager::getDocumentBody) into
+// its document wrapper, the <body> content and the trailing part. When there is
+// no <body> the whole string is treated as the body.
+static void splitHtmlBody(const QString &AHtml, QString &APrefix, QString &ABody, QString &ASuffix)
+{
+	static const QRegularExpression bodyRegexp("<body[^>]*>(.*)</body>",QRegularExpression::CaseInsensitiveOption|QRegularExpression::DotMatchesEverythingOption);
+
+	QRegularExpressionMatch bodyMatch = bodyRegexp.match(AHtml);
+	if (bodyMatch.hasMatch())
+	{
+		APrefix = AHtml.left(bodyMatch.capturedStart(1));
+		ABody = bodyMatch.captured(1).trimmed();
+		ASuffix = AHtml.mid(bodyMatch.capturedEnd(1));
+	}
+	else
+	{
+		APrefix.clear();
+		ABody = AHtml;
+		ASuffix.clear();
+	}
+}
 
 QString SimpleMessageStyle::FSharedPath = QString();
 
@@ -572,7 +595,82 @@ QString SimpleMessageStyle::prepareMessage(const QString &AHtml, const IMessageS
 		cursor.insertHtml(QString("<i>*&nbsp;%1</i>&nbsp;").arg(AOptions.senderName));
 		return TextManager::getDocumentBody(doc);
 	}
+	else if (AOptions.kind == IMessageStyleContentOptions::KindMessage)
+	{
+		return markQuotedLines(markAddresses(AHtml));
+	}
 	return AHtml;
+}
+
+QString SimpleMessageStyle::markQuotedLines(const QString &AHtml) const
+{
+	static const QRegularExpression brRegexp("<br\\s*/?>",QRegularExpression::CaseInsensitiveOption);
+	static const QRegularExpression tagsRegexp("<[^>]*>");
+	static const QRegularExpression leadingTagsRegexp("^((?:<[^>]*>)*)");
+	static const QRegularExpression trailingTagsRegexp("((?:<[^>]*>)*)$");
+
+	// AHtml is a complete QTextDocument dumped by TextManager::getDocumentBody,
+	// so isolate its body: otherwise the first line is polluted by the <head>
+	// style text and its leading '>' is never detected. The document wrapper is
+	// kept intact so that fonts and other styles are preserved.
+	QString prefix;
+	QString suffix;
+	QString body;
+	splitHtmlBody(AHtml,prefix,body,suffix);
+
+	QStringList lines = body.split(brRegexp);
+	for (int i=0; i<lines.count(); i++)
+	{
+		QString text = lines.at(i);
+		text.remove(tagsRegexp);
+		text.replace("&nbsp;"," ");
+		text.replace("&gt;",">");
+		text.replace("&lt;","<");
+		text.replace("&amp;","&");
+
+		if (text.trimmed().startsWith('>'))
+		{
+			QString line = lines.at(i);
+			QString leadingTags = leadingTagsRegexp.match(line).captured(1);
+			QString trailingTags = trailingTagsRegexp.match(line).captured(1);
+			QString content = line.mid(leadingTags.length(),line.length()-leadingTags.length()-trailingTags.length());
+			lines[i] = leadingTags + QString("<span class=\"%1\">").arg(MSMC_QUOTE) + content + "</span>" + trailingTags;
+		}
+	}
+
+	return prefix + lines.join("<br />") + suffix;
+}
+
+QString SimpleMessageStyle::markAddresses(const QString &AHtml) const
+{
+	static const QRegularExpression tagsRegexp("<[^>]*>");
+	static const QRegularExpression addressRegexp(
+		"((?<![A-Za-z0-9_.-])@[A-Za-z0-9_]+(?:[.\\-][A-Za-z0-9_]+)*(?:@[A-Za-z0-9_]+(?:[.\\-][A-Za-z0-9_]+)*)?)");
+
+	QString prefix;
+	QString suffix;
+	QString body;
+	splitHtmlBody(AHtml,prefix,body,suffix);
+
+	// Wrap '@nickname' / '@nickname@server' addresses that appear in the text.
+	// The body is walked tag by tag so that tags and their attributes (for
+	// example <a href="mailto:user@server">) are never modified.
+	QString result;
+	int pos = 0;
+	QRegularExpressionMatchIterator it = tagsRegexp.globalMatch(body);
+	while (it.hasNext())
+	{
+		QRegularExpressionMatch match = it.next();
+		QString text = body.mid(pos,match.capturedStart()-pos);
+		text.replace(addressRegexp,QString("<span class=\"%1\">\\1</span>").arg(MSMC_ADDRESS));
+		result += text + match.captured();
+		pos = match.capturedEnd();
+	}
+	QString text = body.mid(pos);
+	text.replace(addressRegexp,QString("<span class=\"%1\">\\1</span>").arg(MSMC_ADDRESS));
+	result += text;
+
+	return prefix + result + suffix;
 }
 
 bool SimpleMessageStyle::eventFilter(QObject *AWatched, QEvent *AEvent)
