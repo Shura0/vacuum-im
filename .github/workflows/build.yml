@@ -19,8 +19,12 @@ jobs:
       - name: Install Qt 6.8
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.*'
-          modules: 'qtsvg qtmultimedia'
+          version: '6.8.3'
+          # Since Qt 6.7 the `qtsvg` archive ships inside the base desktop
+          # package and is no longer selectable as a module; passing it makes
+          # aqt fail with "The packages ['qtsvg'] were not found ...".
+          # Qt Svg is still installed, so only the real addons are listed here.
+          modules: 'qtmultimedia'
           cache: true
 
       - name: Install system dependencies
