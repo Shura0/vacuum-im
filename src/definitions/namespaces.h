@@ -99,6 +99,9 @@
 #define NS_MAM_1                                 "urn:xmpp:mam:1"
 #define NS_MAM_0                                 "urn:xmpp:mam:0"
 
+#define NS_MESSAGE_RECEIPTS                      "urn:xmpp:receipts"
+#define NS_MESSAGE_MARKERS                       "urn:xmpp:chat-markers:0"
+
 #define NS_VACUUM_PRIVATESTORAGE_UPDATE         "vacuum:privatestorage:update"
 
 #endif // DEF_NAMESPACES_H
