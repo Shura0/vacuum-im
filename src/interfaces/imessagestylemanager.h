@@ -73,6 +73,7 @@ struct IMessageStyleContentOptions
 	int direction;
 	bool noScroll;
 	QDateTime time;
+	QString messageId;
 	QString timeFormat;
 	QString senderId;
 	QString senderName;

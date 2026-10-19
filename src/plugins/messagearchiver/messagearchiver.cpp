@@ -1264,6 +1264,10 @@ void MessageArchiver::elementToCollection(const Jid &AStreamJid, const QDomEleme
 
 			message.setType(nick.isEmpty() ? Message::Chat : Message::GroupChat);
 
+			QString messageId = nodeElem.attribute("id");
+			if (!messageId.isEmpty())
+				message.setId(messageId);
+
 			QString utc = nodeElem.attribute("utc");
 			if (utc.isEmpty())
 			{
@@ -1360,6 +1364,9 @@ void MessageArchiver::collectionToElement(const IArchiveCollection &ACollection,
 
 				if (groupChat)
 					messageElem.setAttribute("name",messageIt->fromJid().resource());
+
+				if (!messageIt->id().isEmpty())
+					messageElem.setAttribute("id",messageIt->id());
 
 				if (ASaveMode==ARCHIVE_SAVE_MESSAGE || ASaveMode==ARCHIVE_SAVE_STREAM)
 				{

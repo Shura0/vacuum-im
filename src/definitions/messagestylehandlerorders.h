@@ -6,5 +6,6 @@
 
 #define MSHO_IMAGEVIEWER                       200
 #define MSHO_MESSAGERECEIPTS                   250
+#define MSHO_MESSAGECHATMARKERS                260
 
 #endif // MESSAGESTYLEHANDLERORDERS_H

@@ -4,6 +4,7 @@
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
 #include <utils/logger.h>
+#include <utils/options.h>
 #include <QTextBrowser>
 #include <QTextBlock>
 #include <QTextCharFormat>
@@ -12,6 +13,12 @@
 #include <QColor>
 #include <QFont>
 #include <QTimer>
+#include <QFile>
+#include <QSaveFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <algorithm>
 
 // XEP-0184 Message Delivery Receipts.
 //
@@ -95,14 +102,21 @@ static bool appendReceiptMarker(QTextBrowser *ABrowser, const QString &AMessageI
 
 MessageReceipts::MessageReceipts()
 {
+	FPluginManager = NULL;
 	FStanzaProcessor = NULL;
 	FDiscovery = NULL;
 	FMessageProcessor = NULL;
 	FMessageWidgets = NULL;
+	FMarkerRecordsLoaded = false;
+
+	FSaveTimer.setSingleShot(true);
+	connect(&FSaveTimer,&QTimer::timeout,this,[this]() { saveMarkerRecords(); });
 }
 
 MessageReceipts::~MessageReceipts()
 {
+	if (FSaveTimer.isActive() && FMarkerRecordsLoaded)
+		saveMarkerRecords();
 	if (FMessageWidgets)
 		FMessageWidgets->removeStyleHandler(MSHO_MESSAGERECEIPTS,this);
 }
@@ -124,6 +138,8 @@ void MessageReceipts::pluginInfo(IPluginInfo *APluginInfo)
 bool MessageReceipts::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 {
 	Q_UNUSED(AInitOrder);
+	FPluginManager = APluginManager;
+
 	IPlugin *plugin = APluginManager->pluginInterface("IStanzaProcessor").value(0,NULL);
 	if (plugin)
 	{
@@ -182,6 +198,7 @@ bool MessageReceipts::messageReadWrite(int AOrder, const Jid &AStreamJid, Messag
 			AMessage.stanza().addElement("request",NS_MESSAGE_RECEIPTS);
 			LOG_STRM_DEBUG(AStreamJid,QString("Message receipt requested, to=%1, id=%2").arg(AMessage.to(),AMessage.id()));
 			emit messageReceiptRequested(AStreamJid,AMessage);
+			setMarkerRecord(AStreamJid,AMessage.toJid(),AMessage.id(),AMessage.dateTime(),MarkerPending);
 			enqueueReceiptMarker(AStreamJid,AMessage.id(),AMessage.toJid());
 		}
 	}
@@ -262,8 +279,15 @@ void MessageReceipts::sendMessageReceipt(const Jid &AStreamJid, const Message &A
 	}
 }
 
-void MessageReceipts::showMessageReceipt(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid) const
+void MessageReceipts::showMessageReceipt(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid)
 {
+	if (AMessageId.isEmpty())
+		return;
+
+	// The delivery state is remembered even when there is no open chat window
+	// so the mark can be restored once the history is shown again.
+	setMarkerRecord(AStreamJid,AContactJid,AMessageId,QDateTime::currentDateTime(),MarkerDelivered);
+
 	IMessageChatWindow *window = FMessageWidgets!=NULL ? FMessageWidgets->findChatWindow(AStreamJid,AContactJid,false) : NULL;
 	if (window == NULL || window->viewWidget()==NULL)
 	{
@@ -303,8 +327,38 @@ void MessageReceipts::showMessageReceipt(const Jid &AStreamJid, const QString &A
 
 bool MessageReceipts::messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions)
 {
+	Q_UNUSED(AHtml);
+
 	if (AOrder != MSHO_MESSAGERECEIPTS)
 		return false;
+
+	if (AWidget == NULL
+		|| AOptions.kind != IMessageStyleContentOptions::KindMessage
+		|| AOptions.direction != IMessageStyleContentOptions::DirectionOut)
+		return true;
+
+	// History messages are restored from the previously saved delivery state.
+	// The invisible token is appended to the message html so a deferred patch
+	// can locate the exact message even when the whole history is rendered in
+	// one go (the "last block" heuristic of the live path would not work).
+	if (AOptions.type & IMessageStyleContentOptions::TypeHistory)
+	{
+		int state;
+		if (!AOptions.messageId.isEmpty() && markerRecordState(AOptions.messageId,state)
+			&& qobject_cast<QTextBrowser *>(AWidget)!=NULL)
+		{
+			AModifiedHtml += receiptToken(AOptions.messageId);
+			QPointer<QWidget> widget = AWidget;
+			QString messageId = AOptions.messageId;
+			bool delivered = state==MarkerDelivered;
+			QTimer::singleShot(0,this,[this,widget,messageId,delivered]() {
+				QTextBrowser *browser = qobject_cast<QTextBrowser *>(widget.data());
+				if (browser != NULL)
+					patchReceiptMarker(browser,messageId,delivered);
+			});
+		}
+		return true;
+	}
 
 	// AModifiedHtml already contains what other handlers made of the html,
 	// so it must not be reset here (it would, e.g., undo the placeholders
@@ -312,12 +366,6 @@ bool MessageReceipts::messageStyleContentInsert(int AOrder, QWidget *AWidget, co
 	// not rendered yet either, so nothing is appended to the html: instead,
 	// schedule a deferred insertion of pending markers into the style
 	// document when the message content is appended.
-	if (AWidget == NULL
-		|| AOptions.kind != IMessageStyleContentOptions::KindMessage
-		|| AOptions.direction != IMessageStyleContentOptions::DirectionOut
-		|| (AOptions.type & IMessageStyleContentOptions::TypeHistory))
-		return true;
-
 	ReceiptMarkerTarget *target = findMarkerTarget(AWidget);
 	if (target != NULL && !target->flushing && !target->ids.isEmpty())
 	{
@@ -333,6 +381,47 @@ bool MessageReceipts::messageStyleContentInsert(int AOrder, QWidget *AWidget, co
 		});
 	}
 	return true;
+}
+
+void MessageReceipts::patchReceiptMarker(QTextBrowser *ABrowser, const QString &AMessageId, bool ADelivered) const
+{
+	if (ABrowser==NULL || AMessageId.isEmpty())
+		return;
+
+	QTextCursor found = ABrowser->document()->find(receiptToken(AMessageId));
+	if (found.isNull())
+	{
+		LOG_DEBUG(QString("Failed to find historical receipt marker in style document, id=%1").arg(AMessageId));
+		return;
+	}
+
+	QTextCursor cursor(found);
+	cursor.removeSelectedText();
+
+	QTextCharFormat format;
+	format.setForeground(ADelivered ? QColor(30,142,61) : QColor(176,176,176));
+	if (ADelivered)
+		format.setFontWeight(QFont::Bold);
+
+	QString marker;
+	marker += QChar(0x00A0);
+	marker += QChar(0x2713);
+
+	qreal usableWidth = ABrowser->viewport()->width() - 2*ABrowser->document()->documentMargin();
+	QFontMetricsF metrics(ABrowser->font());
+	qreal markerWidth = metrics.horizontalAdvance(marker) + 8;
+	if (usableWidth > markerWidth)
+	{
+		QTextOption::Tab tab;
+		tab.type = QTextOption::RightTab;
+		tab.position = usableWidth - markerWidth;
+
+		QTextBlockFormat blockFormat = cursor.blockFormat();
+		blockFormat.setTabPositions(blockFormat.tabPositions() << tab);
+		cursor.setBlockFormat(blockFormat);
+		marker.prepend(QChar(0x0009));
+	}
+	cursor.insertText(marker,format);
 }
 
 void MessageReceipts::flushReceiptMarkers(ReceiptMarkerTarget *ATarget)
@@ -417,5 +506,140 @@ bool MessageReceipts::isSupportedByContact(const Jid &AStreamJid, const Jid &ACo
 			FDiscovery->requestDiscoInfo(AStreamJid,AContactJid);
 		}
 	}
+	return true;
+}
+
+QString MessageReceipts::markerChatKey(const Jid &AStreamJid, const Jid &AContactJid)
+{
+	return AStreamJid.pBare()+"\n"+AContactJid.pBare();
+}
+
+QString MessageReceipts::markerStateFilePath() const
+{
+	QString dir = Options::filesPath();
+	if (dir.isEmpty() && FPluginManager!=NULL)
+		dir = FPluginManager->homePath();
+	return dir.isEmpty() ? QString() : dir + "/messagereceipts.state";
+}
+
+void MessageReceipts::loadMarkerRecords()
+{
+	if (FMarkerRecordsLoaded)
+		return;
+	FMarkerRecordsLoaded = true;
+
+	QFile file(markerStateFilePath());
+	if (!file.open(QFile::ReadOnly))
+		return;
+
+	QJsonParseError error;
+	QJsonDocument doc = QJsonDocument::fromJson(file.readAll(),&error);
+	if (error.error!=QJsonParseError::NoError || !doc.isObject())
+	{
+		LOG_WARNING(QString("Failed to parse message receipts state: %1").arg(error.errorString()));
+		return;
+	}
+
+	foreach(const QJsonValue &value, doc.object().value("messages").toArray())
+	{
+		QJsonObject object = value.toObject();
+		QString messageId = object.value("id").toString();
+		if (messageId.isEmpty())
+			continue;
+		MarkerRecord record;
+		record.chatKey = object.value("chat").toString();
+		record.time = (qint64)object.value("time").toDouble();
+		record.state = object.value("state").toInt();
+		FMarkerRecords.insert(messageId,record);
+	}
+}
+
+void MessageReceipts::scheduleMarkerRecordsSave()
+{
+	// Debounce the write: several markers may arrive in a burst and the whole
+	// state is serialized on every change.
+	if (!FSaveTimer.isActive())
+		FSaveTimer.start(2000);
+}
+
+void MessageReceipts::saveMarkerRecords() const
+{
+	QString filePath = markerStateFilePath();
+	if (filePath.isEmpty())
+		return;
+
+	QJsonArray messages;
+	for (QHash<QString, MarkerRecord>::const_iterator it=FMarkerRecords.constBegin(); it!=FMarkerRecords.constEnd(); ++it)
+	{
+		QJsonObject object;
+		object.insert("id",it.key());
+		object.insert("chat",it->chatKey);
+		object.insert("time",(double)it->time);
+		object.insert("state",it->state);
+		messages.append(object);
+	}
+
+	QJsonObject root;
+	root.insert("version",1);
+	root.insert("messages",messages);
+
+	QSaveFile file(filePath);
+	if (file.open(QFile::WriteOnly))
+	{
+		file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+		if (!file.commit())
+			LOG_WARNING(QString("Failed to save message receipts state to file=%1: %2").arg(filePath,file.errorString()));
+	}
+	else
+	{
+		LOG_WARNING(QString("Failed to open message receipts state file=%1: %2").arg(filePath,file.errorString()));
+	}
+}
+
+void MessageReceipts::pruneMarkerRecords()
+{
+	static const int MaxRecords = 1000;
+	if (FMarkerRecords.count() <= MaxRecords)
+		return;
+
+	QList<QPair<qint64, QString> > sorted;
+	for (QHash<QString, MarkerRecord>::const_iterator it=FMarkerRecords.constBegin(); it!=FMarkerRecords.constEnd(); ++it)
+		sorted.append(qMakePair(it->time,it.key()));
+	std::sort(sorted.begin(),sorted.end());
+
+	int removeCount = FMarkerRecords.count()-MaxRecords;
+	for (int i=0; i<removeCount; i++)
+		FMarkerRecords.remove(sorted.at(i).second);
+}
+
+void MessageReceipts::setMarkerRecord(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessageId, const QDateTime &ATime, int AState)
+{
+	if (AMessageId.isEmpty())
+		return;
+
+	loadMarkerRecords();
+
+	MarkerRecord &record = FMarkerRecords[AMessageId];
+	record.chatKey = markerChatKey(AStreamJid,AContactJid);
+	if (record.time <= 0)
+		record.time = ATime.isValid() ? ATime.toSecsSinceEpoch() : QDateTime::currentSecsSinceEpoch();
+	record.state = AState;
+
+	pruneMarkerRecords();
+	scheduleMarkerRecordsSave();
+}
+
+bool MessageReceipts::markerRecordState(const QString &AMessageId, int &AState)
+{
+	if (AMessageId.isEmpty())
+		return false;
+
+	loadMarkerRecords();
+
+	QHash<QString, MarkerRecord>::const_iterator it = FMarkerRecords.constFind(AMessageId);
+	if (it == FMarkerRecords.constEnd())
+		return false;
+
+	AState = it->state;
 	return true;
 }

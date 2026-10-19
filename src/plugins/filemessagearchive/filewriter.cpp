@@ -110,6 +110,11 @@ bool FileWriter::writeMessage(const Message &AMessage, const QString &ASaveMode,
 			if (FGroupchat)
 				FXmlWriter->writeAttribute("name",contactJid.resource());
 
+			// The stanza id is needed to restore per-message state (delivery
+			// receipts, chat markers) after the history is loaded again.
+			if (!AMessage.id().isEmpty())
+				FXmlWriter->writeAttribute("id",AMessage.id());
+
 			if (ASaveMode == ARCHIVE_SAVE_BODY)
 				FXmlWriter->writeTextElement("body",AMessage.body());
 			else

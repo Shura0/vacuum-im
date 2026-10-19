@@ -856,6 +856,7 @@ void ChatMessageHandler::showStyledMessage(IMessageChatWindow *AWindow, const Me
 	options.kind = IMessageStyleContentOptions::KindMessage;
 
 	options.time = AMessage.dateTime();
+	options.messageId = AMessage.id();
 	if (options.time.secsTo(FWindowStatus.value(AWindow).createTime)>HISTORY_TIME_DELTA)
 		options.type |= IMessageStyleContentOptions::TypeHistory;
 
