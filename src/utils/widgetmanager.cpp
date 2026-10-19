@@ -155,24 +155,26 @@ WidgetManager *WidgetManager::instance()
 void WidgetManager::raiseWidget(QWidget *AWidget)
 {
 #ifdef Q_OS_LINUX
-	static Atom         NET_ACTIVE_WINDOW = 0;
-	XClientMessageEvent xev;
-
-	if (NET_ACTIVE_WINDOW == 0)
+	// Do nothing on Wayland and other platforms without an X11 display -
+	// QWidget::raise() below is the only reliable way to raise a window there.
+	if (Display *dpy = wmX11Display())
 	{
-		Display *dpy      = wmX11Display();
-		NET_ACTIVE_WINDOW = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+		static Atom         NET_ACTIVE_WINDOW = 0;
+		XClientMessageEvent xev;
+
+		if (NET_ACTIVE_WINDOW == 0)
+			NET_ACTIVE_WINDOW = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+
+		xev.type         = ClientMessage;
+		xev.window       = AWidget->winId();
+		xev.message_type = NET_ACTIVE_WINDOW;
+		xev.format       = 32;
+		xev.data.l[0]    = MESSAGE_SOURCE_PAGER;
+		xev.data.l[1]    = 0;//X11Info::appUserTime();
+		xev.data.l[2]    = xev.data.l[3] = xev.data.l[4] = 0;
+
+		XSendEvent(dpy, DefaultRootWindow(dpy), False, SubstructureNotifyMask | SubstructureRedirectMask, (XEvent*)&xev);
 	}
-
-	xev.type         = ClientMessage;
-	xev.window       = AWidget->winId();
-	xev.message_type = NET_ACTIVE_WINDOW;
-	xev.format       = 32;
-	xev.data.l[0]    = MESSAGE_SOURCE_PAGER;
-	xev.data.l[1]    = 0;//X11Info::appUserTime();
-	xev.data.l[2]    = xev.data.l[3] = xev.data.l[4] = 0;
-
-	XSendEvent(wmX11Display(), DefaultRootWindow(wmX11Display()), False, SubstructureNotifyMask | SubstructureRedirectMask, (XEvent*)&xev);
 #endif //Q_OS_LINUX
 
 	AWidget->raise();
