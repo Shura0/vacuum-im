@@ -101,6 +101,7 @@
 
 #define NS_MESSAGE_RECEIPTS                      "urn:xmpp:receipts"
 #define NS_MESSAGE_MARKERS                       "urn:xmpp:chat-markers:0"
+#define NS_MESSAGE_CORRECT                       "urn:xmpp:message-correct:0"
 
 #define NS_VACUUM_PRIVATESTORAGE_UPDATE         "vacuum:privatestorage:update"
 

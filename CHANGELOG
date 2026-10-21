@@ -7,6 +7,7 @@ LEGEND
 
 ------
   [!] Added new plugin for spell checking
+  [!] Added new plugin for editing of the sent chat messages (XEP-0308)
   [!] Adden new plugin for keeping all user IM clients engaged in a conversation
   [!] Added new plugin for viewing recently used contacts in main window
   [!] Added new plugin for collecting statistics

@@ -194,7 +194,12 @@ bool MessageReceipts::messageReadWrite(int AOrder, const Jid &AStreamJid, Messag
 		if (isOutgoingRequestable(AStreamJid,AMessage))
 		{
 			// A receipt is always for a stanza id, so one has to be present.
-			AMessage.setRandomId();
+			// It is generated only when the id is empty, so the other
+			// plugins which already queued their marks for this id (the chat
+			// markers plugin does it before this editor) do not become
+			// out of sync with the final id sent on the wire.
+			if (AMessage.id().isEmpty())
+				AMessage.setRandomId();
 			AMessage.stanza().addElement("request",NS_MESSAGE_RECEIPTS);
 			LOG_STRM_DEBUG(AStreamJid,QString("Message receipt requested, to=%1, id=%2").arg(AMessage.to(),AMessage.id()));
 			emit messageReceiptRequested(AStreamJid,AMessage);
@@ -455,6 +460,7 @@ void MessageReceipts::enqueueReceiptMarker(const Jid &AStreamJid, const QString 
 	QWidget *styleWidget = window!=NULL && window->viewWidget()!=NULL ? window->viewWidget()->styleWidget() : NULL;
 	if (styleWidget == NULL || AMessageId.isEmpty())
 		return;
+
 	ReceiptMarkerTarget *target = findMarkerTarget(styleWidget);
 	if (target != NULL)
 	{

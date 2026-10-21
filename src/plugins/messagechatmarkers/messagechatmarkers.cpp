@@ -223,7 +223,6 @@ bool MessageChatMarkers::messageReadWrite(int AOrder, const Jid &AStreamJid, Mes
 			if (isIncomingDisplayed(AStreamJid,AMessage))
 			{
 				QString messageId = displayedElem.attribute("id");
-				LOG_STRM_DEBUG(AStreamJid,QString("Chat marker received, from=%1, id=%2").arg(AMessage.from(),messageId));
 				emit messageDisplayedReceived(AStreamJid,messageId,AMessage.fromJid());
 				showDisplayedMarker(AStreamJid,messageId,AMessage.fromJid());
 			}
@@ -447,7 +446,8 @@ void MessageChatMarkers::showDisplayedMarker(const Jid &AStreamJid, const QStrin
 	MarkerTarget *target = findMarkerTarget(browser);
 	if (target == NULL)
 	{
-		LOG_STRM_DEBUG(AStreamJid,QString("Chat marker received for a message without a style marker, id=%1").arg(AMessageId));
+		// TEMP DIAGNOSTIC
+		LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker target not found for the browser, id=%1").arg(AMessageId));
 		return;
 	}
 
@@ -457,7 +457,8 @@ void MessageChatMarkers::showDisplayedMarker(const Jid &AStreamJid, const QStrin
 	int index = target->sentIds.indexOf(AMessageId);
 	if (index < 0)
 	{
-		LOG_STRM_DEBUG(AStreamJid,QString("Chat marker references an unknown or already displayed message, id=%1").arg(AMessageId));
+		// TEMP DIAGNOSTIC
+		LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker references unknown or already displayed message, id=%1, sentIds=%2").arg(AMessageId,target->sentIds.join(";")));
 		return;
 	}
 
@@ -465,16 +466,20 @@ void MessageChatMarkers::showDisplayedMarker(const Jid &AStreamJid, const QStrin
 	{
 		QString messageId = target->sentIds.takeAt(0);
 		QTextCursor found = browser->document()->find(messageMarkerToken(messageId));
-		if (!found.isNull())
+		if (found.isNull())
 		{
-			found.removeSelectedText();
-			QTextCharFormat format;
-			format.setForeground(QColor(30,142,61));
-			format.setFontWeight(QFont::Bold);
-			// Placed right after the delivery check of the receipts plugin so
-			// both marks read as a single "double check" pair.
-			found.insertText(QChar(0x2714),format);
+			// TEMP DIAGNOSTIC
+			LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker token not found in the document, id=%1").arg(messageId));
+			continue;
 		}
+
+		found.removeSelectedText();
+		QTextCharFormat format;
+		format.setForeground(QColor(30,142,61));
+		format.setFontWeight(QFont::Bold);
+		// Placed right after the delivery check of the receipts plugin so
+		// both marks read as a single "double check" pair.
+		found.insertText(QChar(0x2714),format);
 	}
 }
 
@@ -569,8 +574,8 @@ void MessageChatMarkers::flushMarkerTarget(MarkerTarget *ATarget)
 		bool inserted = browser!=NULL ? appendMessageMarkerToken(browser,messageId) : false;
 		if (inserted)
 			ATarget->sentIds.append(messageId);
-		else
-			LOG_DEBUG(QString("Failed to insert chat marker to style document, id=%1").arg(messageId));
+		// TEMP DIAGNOSTIC
+		LOG_INFO(QString("[MessageChatMarkers] marker token inserted, id=%1, ok=%2").arg(messageId).arg(inserted));
 	}
 
 	// Drop targets for widgets which are gone.
