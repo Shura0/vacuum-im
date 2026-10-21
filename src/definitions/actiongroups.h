@@ -103,6 +103,7 @@
 #define AG_RVCM_GATEWAYS_RESOLVE                                800
 #define AG_RVCM_GATEWAYS_REMOVE                                 800
 #define AG_RVCM_VCARD_SHOW                                      900
+#define AG_RVCM_CONTACTMUTER_OPTIONS                            1000
 #define AG_RVCM_MULTIUSERCHAT_EXIT                              1000
 
 //RostersView - ClipboardMenu

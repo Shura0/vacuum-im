@@ -12,6 +12,7 @@
 #define RTTO_MULTIUSERCHAT_ROLE                     352
 #define RTTO_MULTIUSERCHAT_AFFILIATION              354
 #define RTTO_BIRTHDAY_NOTIFY                        700
+#define RTTO_CONTACTMUTER                           710
 #define RTTO_ROSTERSVIEW_RESOURCE_TOPLINE           1000
 #define RTTO_ROSTERSVIEW_RESOURCE_NAME              1010
 #define RTTO_ROSTERSVIEW_RESOURCE_STATUS_TEXT       1080

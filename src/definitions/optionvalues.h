@@ -193,6 +193,10 @@
 #define OPV_NOTIFICATIONS_TYPEKINDS_ITEM                "notifications.type-kinds.type"
 #define OPV_NOTIFICATIONS_KINDENABLED_ITEM              "notifications.kind-enabled.kind"
 
+//ContactMuter
+#define OPV_CONTACTMUTER_MUTERS_ROOT                    "contactmuter.muters"
+#define OPV_CONTACTMUTER_MUTER_ITEM                     "contactmuter.muters.muter"
+
 // ConnectionManager
 #define OPV_PROXY_ROOT                                  "proxy"
 #define OPV_PROXY_DEFAULT                               "proxy.default"

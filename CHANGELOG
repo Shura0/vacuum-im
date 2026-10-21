@@ -6,6 +6,7 @@ LEGEND
   [-] Bug fix
 
 ------
+  [!] Added new plugin for muting notifications of individual contacts
   [!] Added new plugin for spell checking
   [!] Added new plugin for editing of the sent chat messages (XEP-0308)
   [!] Adden new plugin for keeping all user IM clients engaged in a conversation
