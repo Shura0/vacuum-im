@@ -10,6 +10,7 @@
 #include <utils/options.h>
 #include <utils/pluginhelper.h>
 #include <definitions/messageviewurlhandlerorders.h>
+#include <definitions/messagemarks.h>
 #include <definitions/resources.h>
 #include <QDesktopServices>
 #include <definitions/optionvalues.h>
@@ -253,6 +254,7 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 		fillContentKeywords(content,AOptions,wstatus);
 		QString messageHtml = prepareMessage(AHtml,AOptions);
 		messageHtml = processStyleContent(AWidget, messageHtml, AOptions);
+		messageHtml += processContentSlots(AWidget, content, AOptions);
 		content.replace("%message%",messageHtml);
 
 		ContentItem item;
@@ -583,6 +585,55 @@ QString SimpleMessageStyle::processStyleContent(QWidget *AWidget, const QString 
 		it.value()->messageStyleContentInsert(it.key(), AWidget, AHtml, modifiedHtml, AOptions);
 	}
 	return modifiedHtml;
+}
+
+QString SimpleMessageStyle::processContentSlots(QWidget *AWidget, QString &AHtml, const IMessageStyleContentOptions &AOptions)
+{
+	// Fills the %contentSlot:<name>% placeholders of the content template with the
+	// fragments contributed by the style handlers. The reserved "marks" slot is
+	// always requested: when the template has no such placeholder its fragments are
+	// returned to be appended to the message body (invisible anchors only).
+	QString bodyTail;
+	if (!FMessageWidgets)
+		return bodyTail;
+
+	static const QRegularExpression slotRx("%contentSlot:([A-Za-z0-9_-]+)%");
+
+	QList<QString> slotNames;
+	QRegularExpressionMatchIterator matchIt = slotRx.globalMatch(AHtml);
+	while (matchIt.hasNext())
+	{
+		QString name = matchIt.next().captured(1);
+		if (!slotNames.contains(name))
+			slotNames.append(name);
+	}
+	if (!slotNames.contains(MSM_CONTENT_SLOT_MARKS))
+		slotNames.append(MSM_CONTENT_SLOT_MARKS);
+
+	QMultiMap<int, IMessageStyleHandler *> handlers = FMessageWidgets->styleHandlers();
+	for (QList<QString>::const_iterator nameIt = slotNames.constBegin(); nameIt != slotNames.constEnd(); ++nameIt)
+	{
+		const QString slotName = *nameIt;
+		const QString placeholder = QString("%contentSlot:%1%").arg(slotName);
+		const bool inTemplate = AHtml.contains(placeholder);
+
+		QStringList parts;
+		for (QMultiMap<int, IMessageStyleHandler *>::const_iterator it = handlers.constBegin(); it != handlers.constEnd(); ++it)
+		{
+			QString part = it.value()->messageStyleContentSlot(it.key(), AWidget, slotName, inTemplate, AOptions);
+			if (!part.isEmpty())
+				parts.append(part);
+		}
+
+		if (inTemplate)
+			AHtml.replace(placeholder, parts.join(QString()));
+		else if (slotName == MSM_CONTENT_SLOT_MARKS)
+			bodyTail = parts.join(QString());
+	}
+
+	// Never leak a placeholder of an unknown slot into the document.
+	AHtml.remove(slotRx);
+	return bodyTail;
 }
 
 QString SimpleMessageStyle::prepareMessage(const QString &AHtml, const IMessageStyleContentOptions &AOptions) const

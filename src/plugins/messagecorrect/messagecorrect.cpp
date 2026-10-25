@@ -3,6 +3,7 @@
 #include <definitions/namespaces.h>
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
+#include <definitions/messagemarks.h>
 #include <definitions/optionnodes.h>
 #include <definitions/optionvalues.h>
 #include <definitions/optionwidgetorders.h>
@@ -100,9 +101,10 @@ static QString displayedMarkerToken(const QString &AMessageId)
 	quint32 hash = qHash(AMessageId);
 	QString token;
 	static const ushort keys[] = {0x2063,0x2062,0x2061,0x2060,0x200D,0x200C,0x200B};
+	const int keyCount = sizeof(keys)/sizeof(keys[0]);
 	for (int i=0; i<6; i++)
 	{
-		token += QChar(keys[hash & 0x07]);
+		token += QChar(keys[hash % keyCount]);
 		hash >>= 3;
 	}
 	return token;
@@ -113,33 +115,46 @@ static QString displayedMarkerToken(const QString &AMessageId)
 // glyphs of the other plugins are aligned.
 static void appendEditedNote(QTextBrowser *ABrowser, QTextCursor &ACursor)
 {
-	const QChar pencil(0x270E); // ✎ lower right pencil
-	QTextCharFormat format;
-	format.setForeground(QColor(128,128,128));
-
 	const qreal usableWidth = ABrowser->viewport()->width() - 2*ABrowser->document()->documentMargin();
-	const qreal pencilWidth = QFontMetricsF(ABrowser->font()).horizontalAdvance(pencil) + 4;
-	if (usableWidth > pencilWidth)
+	const qreal pencilWidth = QFontMetricsF(ABrowser->font()).horizontalAdvance(QChar(0x270E)) + 4;
+	const QString pencilHtml = QString("<span class=\"%1\">&#9998;</span>").arg(MSMC_MARK_EDITED);
+
+	QTextBlockFormat blockFormat = ACursor.blockFormat();
+	QList<QTextOption::Tab> tabs = blockFormat.tabPositions();
+	int rightTab = -1;
+	for (int i=0; i<tabs.count(); i++)
 	{
-		// The delivery marks of the other plugins are already aligned with
-		// the right tab stops of the block, so their tab stops are shifted
-		// left to make a room for the pencil at the right border.
-		QTextBlockFormat blockFormat = ACursor.blockFormat();
-		QList<QTextOption::Tab> tabs = blockFormat.tabPositions();
-		for (int i=0; i<tabs.count(); i++)
-			tabs[i].position = qBound<qreal>(pencilWidth,tabs.at(i).position-pencilWidth-4,usableWidth);
+		if (tabs.at(i).type == QTextOption::RightTab)
+		{
+			rightTab = i;
+			break;
+		}
+	}
+
+	if (rightTab>=0)
+	{
+		// The pencil is a part of the right aligned run of the marks, so it
+		// can never be wrapped to the next line on its own. A thin space
+		// keeps it visually detached from the checks.
+		ACursor.insertText(QString(QChar(0x2009)));
+	}
+	else if (usableWidth > pencilWidth)
+	{
+		// No marks were aligned in this line (e.g. receipts are off): the
+		// pencil gets its own right aligned tab stop.
 		QTextOption::Tab tab;
 		tab.type = QTextOption::RightTab;
 		tab.position = usableWidth - pencilWidth;
 		blockFormat.setTabPositions(tabs << tab);
 		ACursor.setBlockFormat(blockFormat);
-		ACursor.insertText(QString(QChar(0x0009))+pencil,format);
+		ACursor.insertText(QChar(0x0009));
 	}
 	else
 	{
 		// The line is too narrow for the tab alignment.
-		ACursor.insertText(QString(" ") + pencil,format);
+		ACursor.insertText(QString(" "));
 	}
+	ACursor.insertHtml(pencilHtml);
 }
 
 MessageCorrect::MessageCorrect()
@@ -630,11 +645,11 @@ void MessageCorrect::pruneContentTraces()
 	}
 }
 
-void MessageCorrect::registerContentSlot(QTextBrowser *ABrowser, const QString &AMessageId, QString &AModifiedHtml)
+QString MessageCorrect::registerContentSlot(QTextBrowser *ABrowser, const QString &AMessageId)
 {
 	ContentTrace *trace = findContentTrace(ABrowser);
 	if (trace == NULL)
-		return;
+		return QString();
 
 	ContentSlot slot;
 	slot.endToken = contentToken(FTokenCounter);
@@ -644,11 +659,8 @@ void MessageCorrect::registerContentSlot(QTextBrowser *ABrowser, const QString &
 	while (trace->slotList.count() > MAX_CONTENT_SLOTS)
 		trace->slotList.removeFirst();
 
-	// The token is appended to the message html, so it is placed after the
-	// last symbol of the content (chars before the html would start an
-	// outdated empty paragraph in the template of the style).
-	AModifiedHtml += slot.endToken;
-
+	// The token is returned to the style engine which places it at the end of
+	// the content, after the visible marks of the other plugins.
 	if (!AMessageId.isEmpty() && FCorrectionTargets.contains(AMessageId))
 	{
 		// The content is a correction: try to patch it into the place of
@@ -667,21 +679,29 @@ void MessageCorrect::registerContentSlot(QTextBrowser *ABrowser, const QString &
 			}
 		});
 	}
+	return slot.endToken;
 }
 
 bool MessageCorrect::messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions)
 {
-	Q_UNUSED(AHtml);
-	if (AOrder != MSHO_MESSAGECORRECT)
-		return false;
+	Q_UNUSED(AWidget); Q_UNUSED(AHtml); Q_UNUSED(AModifiedHtml); Q_UNUSED(AOptions);
+	return AOrder == MSHO_MESSAGECORRECT;
+}
 
-	if (AWidget != NULL)
-	{
-		QTextBrowser *browser = qobject_cast<QTextBrowser *>(AWidget);
-		if (browser != NULL)
-			registerContentSlot(browser,AOptions.messageId,AModifiedHtml);
-	}
-	return true;
+QString MessageCorrect::messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions)
+{
+	Q_UNUSED(ASlotInTemplate);
+	if (AOrder != MSHO_MESSAGECORRECT || ASlotName != MSM_CONTENT_SLOT_MARKS || AWidget == NULL)
+		return QString();
+
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(AWidget);
+	if (browser == NULL)
+		return QString();
+
+	// The invisible token pins the end of every content, so it has to be
+	// contributed even when the style has no slot: the engine appends it to
+	// the message body in that case.
+	return registerContentSlot(browser,AOptions.messageId);
 }
 
 bool MessageCorrect::patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace *ATrace, const QString &AMessageId)
@@ -771,7 +791,11 @@ bool MessageCorrect::patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace 
 	QTextBlock oldBodyBlock = document->findBlock(targetEndToken.selectionStart());
 	const int oldBlockEnd = oldBodyBlock.isValid() ? oldBodyBlock.position()+oldBodyBlock.length()-1 : targetEndToken.selectionStart();
 	QTextBlock newBodyBlock = document->findBlock(newToken.selectionStart());
-	const int newBundleEnd = newBodyBlock.isValid() ? newBodyBlock.position()+newBodyBlock.length()-1 : document->characterCount();
+	int newBundleEnd = newBodyBlock.isValid() ? newBodyBlock.position()+newBodyBlock.length()-1 : document->characterCount();
+	// The content templates may leave whitespace after the slot placeholder,
+	// it would open a gap between the moved marks and the pencil.
+	while (newBundleEnd > newToken.selectionStart() && document->characterAt(newBundleEnd-1).isSpace())
+		newBundleEnd--;
 
 	// Try to replace only the body of the displayed message, so the header
 	// with the sender and time of the first version stays in the place.
@@ -851,6 +875,15 @@ bool MessageCorrect::patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace 
 		if (!oldDisplayedId.isEmpty() && oldDisplayedId!=AMessageId
 			&& !rescuedTokens.contains(displayedMarkerToken(oldDisplayedId)))
 			replaceCursor.insertText(displayedMarkerToken(oldDisplayedId));
+		// The pencil belongs to the line of the marks: the cursor could have
+		// moved past the content after a fragment insertion, so it is anchored
+		// to the block which keeps the end token of the new version.
+		QTextCursor pinCursor = document->find(ATrace->slotList.at(appendIndex).endToken);
+		if (!pinCursor.isNull())
+		{
+			replaceCursor.setPosition(pinCursor.block().position());
+			replaceCursor.movePosition(QTextCursor::EndOfBlock);
+		}
 		appendEditedNote(ABrowser,replaceCursor);
 
 		// The end token of the replaced block pins the trailing marks of
@@ -860,10 +893,6 @@ bool MessageCorrect::patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace 
 		ATrace->slotList.removeAt(appendIndex);
 		pruneContentTraces();
 		LOG_INFO(QString("[MessageCorrect] message body replaced in place, id=%1").arg(AMessageId));
-		// TEMP DIAGNOSTIC
-		LOG_INFO(QString("[MessageCorrect] marker tokens in document, old=%1, new=%2").arg(
-			document->find(displayedMarkerToken(oldDisplayedId)).isNull()?"missing":"present",
-			document->find(displayedMarkerToken(AMessageId)).isNull()?"missing":"present"));
 		ABrowser->verticalScrollBar()->setSliderPosition(scrollPosition);
 		return true;
 	}
@@ -913,6 +942,15 @@ bool MessageCorrect::patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace 
 		if (!oldDisplayedId.isEmpty() && oldDisplayedId!=AMessageId
 			&& !rescuedTokens.contains(displayedMarkerToken(oldDisplayedId)))
 			targetCursor.insertText(displayedMarkerToken(oldDisplayedId));
+		// The pencil belongs to the line of the marks: the cursor is placed
+		// after the inserted block, so it is anchored to the block which keeps
+		// the end token of the new version.
+		QTextCursor pinCursor = document->find(ATrace->slotList.at(appendIndex).endToken);
+		if (!pinCursor.isNull())
+		{
+			targetCursor.setPosition(pinCursor.block().position());
+			targetCursor.movePosition(QTextCursor::EndOfBlock);
+		}
 		appendEditedNote(ABrowser,targetCursor);
 
 		// The identity of the replaced block points to the new version, and

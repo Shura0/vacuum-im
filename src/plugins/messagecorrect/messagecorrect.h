@@ -85,6 +85,7 @@ public:
 	virtual bool messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessage, int ADirection);
 	//IMessageStyleHandler
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
+	virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions);
 	//IOptionsDialogHolder
 	virtual QMultiMap<int, IOptionsDialogWidget *> optionsDialogWidgets(const QString &ANodeId, QWidget *AParent);
 protected: // correction protocol
@@ -106,8 +107,7 @@ protected: // editing outgoing messages
 protected: // displayed content slots
 	ContentTrace *findContentTrace(QWidget *AWidget);
 	void pruneContentTraces();
-	void registerContentSlot(QTextBrowser *ABrowser, const QString &AMessageId, QString &AModifiedHtml);
-	void patchCorrectedMessage(const QPointer<QWidget> &AWidget, const QString &AMessageId);
+	QString registerContentSlot(QTextBrowser *ABrowser, const QString &AMessageId);
 	bool patchCorrectedMessage(QTextBrowser *ABrowser, ContentTrace *ATrace, const QString &AMessageId);
 protected slots:
 	void onChatWindowCreated(IMessageChatWindow *AWindow);

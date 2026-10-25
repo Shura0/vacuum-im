@@ -47,6 +47,7 @@ public:
 	virtual bool messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessage, int ADirection);
 	//IMessageStyleHandler
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
+	virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions);
 signals:
 	//Message Delivery Receipts
 	void messageReceiptRequested(const Jid &AStreamJid, const Message &AMessage);
@@ -67,8 +68,7 @@ protected:
 	void sendMessageReceipt(const Jid &AStreamJid, const Message &AMessage) const;
 	void showMessageReceipt(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid);
 	bool isSupportedByContact(const Jid &AStreamJid, const Jid &AContactJid) const;
-	void enqueueReceiptMarker(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid);
-	void patchReceiptMarker(QTextBrowser *ABrowser, const QString &AMessageId, bool ADelivered) const;
+	void applyReceiptMark(QTextBrowser *ABrowser, const QString &AMessageId, bool ADelivered) const;
 	// Persistent state of the delivery marks. It is stored separately from the
 	// history archive because a receipt arrives after the message was saved.
 	QString markerStateFilePath() const;
@@ -80,15 +80,6 @@ protected:
 	bool markerRecordState(const QString &AMessageId, int &AState);
 	static QString markerChatKey(const Jid &AStreamJid, const Jid &AContactJid);
 private:
-	struct ReceiptMarkerTarget
-	{
-		QPointer<QWidget> widget;
-		QStringList ids;
-		bool flushing;
-	};
-	ReceiptMarkerTarget *findMarkerTarget(QWidget *AWidget);
-	void flushReceiptMarkers(ReceiptMarkerTarget *ATarget);
-	QList<ReceiptMarkerTarget> FPendingMarkers;
 	IPluginManager *FPluginManager;
 	IStanzaProcessor *FStanzaProcessor;
 	IServiceDiscovery *FDiscovery;

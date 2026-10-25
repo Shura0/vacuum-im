@@ -54,6 +54,7 @@ public:
 	virtual bool messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessage, int ADirection);
 	//IMessageStyleHandler
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
+	virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions);
 	//IOptionsDialogHolder
 	virtual QMultiMap<int, IOptionsDialogWidget *> optionsDialogWidgets(const QString &ANodeId, QWidget *AParent);
 signals:
@@ -66,13 +67,6 @@ protected:
 		Jid streamJid;
 		Jid contactJid;
 		QString messageId;
-	};
-	struct MarkerTarget
-	{
-		QPointer<QWidget> widget;
-		QStringList pendingIds;
-		QStringList sentIds;
-		bool flushing;
 	};
 	enum MarkerState {
 		MarkerRequested,
@@ -96,10 +90,6 @@ protected:
 	void flushDisplayedMarkers(IMessageChatWindow *AWindow);
 	bool isChatWindowDisplayed(IMessageChatWindow *AWindow) const;
 	IMessageChatWindow *findChatWindow(QWidget *AStyleWidget) const;
-	MarkerTarget *findMarkerTarget(QWidget *AWidget);
-	void enqueueMarkerToken(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid);
-	void flushMarkerTarget(MarkerTarget *ATarget);
-	void pruneMarkerTargets();
 	void patchDisplayedMarker(QTextBrowser *ABrowser, const QString &AMessageId) const;
 	// Persistent state of the displayed marks. It is stored separately from
 	// the history archive because a chat marker arrives after the message was
@@ -110,7 +100,6 @@ protected:
 	void saveMarkerRecords() const;
 	void pruneMarkerRecords();
 	void setMarkerRecord(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessageId, const QDateTime &ATime, int AState);
-	bool isMessageDisplayed(const QString &AMessageId);
 	void confirmDisplayedMarkers(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessageId);
 	static QString chatKey(const Jid &AStreamJid, const Jid &AContactJid);
 protected slots:
@@ -128,7 +117,6 @@ private:
 private:
 	mutable QSet<QString> FRequestedDisco;
 	QHash<QString, PendingMarker> FPendingMarkers;
-	QList<MarkerTarget> FMarkerTargets;
 	bool FMarkerRecordsLoaded;
 	QHash<QString, MarkerRecord> FMarkerRecords;
 	QTimer FSaveTimer;

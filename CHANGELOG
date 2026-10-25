@@ -1,5 +1,7 @@
 LEGEND
 ------
+  [*] Marks of message delivery receipts, chat markers and message correction are placed by the message style templates via the %contentSlot:marks% placeholder, so a style defines where and whether the marks are shown
+  [*] The appearance of the message marks (pending/delivered/displayed checks and the edited note pencil) is defined by the style variant stylesheets with the vacuum-marks-* CSS classes
   [!] New plugin
   [+] New feature
   [*] Enhancement

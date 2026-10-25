@@ -38,6 +38,7 @@ public:
 	virtual bool startPlugin() { return true; }
 	// IMessageStyleHandler
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
+	virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions);
 
 private:
 	IMessageWidgets *FMessageWidgets;

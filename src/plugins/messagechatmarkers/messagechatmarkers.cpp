@@ -3,6 +3,7 @@
 #include <definitions/namespaces.h>
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
+#include <definitions/messagemarks.h>
 #include <definitions/optionnodes.h>
 #include <definitions/optionvalues.h>
 #include <definitions/optionwidgetorders.h>
@@ -33,8 +34,9 @@
 //
 // The state of an outgoing message is bound to the message in the style
 // document with an invisible per-message token (a different zero-width
-// sequence than the one used by the message receipts plugin). Once a chat
-// marker is received all messages up to the referenced one are marked as
+// sequence than the one used by the message receipts plugin) which is placed
+// by the message style template through the %contentSlot:marks% slot. Once a
+// chat marker is received all messages up to the referenced one are marked as
 // displayed, so the marker semantics stay cumulative like the spec requires.
 
 // Builds an invisible tag which binds a chat marker to a given stanza id.
@@ -43,33 +45,13 @@ static QString messageMarkerToken(const QString &AMessageId)
 	quint32 hash = qHash(AMessageId);
 	QString token;
 	static const ushort keys[] = {0x2063,0x2062,0x2061,0x2060,0x200D,0x200C,0x200B};
+	const int keyCount = sizeof(keys)/sizeof(keys[0]);
 	for (int i=0; i<6; i++)
 	{
-		token += QChar(keys[hash & 0x07]);
+		token += QChar(keys[hash % keyCount]);
 		hash >>= 3;
 	}
 	return token;
-}
-
-// Appends an invisible marker token to the end of the last non-empty text
-// block of the style document, so a displayed marker can be patched into the
-// exact message later.
-static bool appendMessageMarkerToken(QTextBrowser *ABrowser, const QString &AMessageId)
-{
-	if (ABrowser == NULL || AMessageId.isEmpty())
-		return false;
-
-	QTextDocument *document = ABrowser->document();
-	QTextBlock block = document->lastBlock();
-	while (block.isValid() && block.length()<=1 && block.previous().isValid())
-		block = block.previous(); // skip blocks created by a trailing <br>
-	if (!block.isValid() || block.length()<=1)
-		return false;
-
-	QTextCursor cursor(block);
-	cursor.movePosition(QTextCursor::EndOfBlock);
-	cursor.insertText(messageMarkerToken(AMessageId));
-	return true;
 }
 
 MessageChatMarkers::MessageChatMarkers()
@@ -212,7 +194,6 @@ bool MessageChatMarkers::messageReadWrite(int AOrder, const Jid &AStreamJid, Mes
 			LOG_STRM_DEBUG(AStreamJid,QString("Chat marker requested, to=%1, id=%2").arg(AMessage.to(),AMessage.id()));
 			emit messageMarkableRequested(AStreamJid,AMessage);
 			setMarkerRecord(AStreamJid,AMessage.toJid(),AMessage.id(),AMessage.dateTime(),MarkerRequested);
-			enqueueMarkerToken(AStreamJid,AMessage.id(),AMessage.toJid());
 		}
 	}
 	else
@@ -240,56 +221,13 @@ bool MessageChatMarkers::messageStyleContentInsert(int AOrder, QWidget *AWidget,
 {
 	Q_UNUSED(AHtml);
 	Q_UNUSED(AModifiedHtml);
+	Q_UNUSED(AOptions);
 
 	if (AOrder != MSHO_MESSAGECHATMARKERS)
 		return false;
 
 	if (AWidget == NULL)
 		return true;
-
-	// History messages are restored from the saved displayed state. The
-	// invisible token is appended to the message html so the deferred patch
-	// can find the exact message even if the whole history is rendered at once.
-	if (AOptions.kind == IMessageStyleContentOptions::KindMessage
-		&& AOptions.direction == IMessageStyleContentOptions::DirectionOut
-		&& (AOptions.type & IMessageStyleContentOptions::TypeHistory))
-	{
-		if (!AOptions.messageId.isEmpty() && isEnabled() && isMessageDisplayed(AOptions.messageId)
-			&& qobject_cast<QTextBrowser *>(AWidget)!=NULL)
-		{
-			AModifiedHtml += messageMarkerToken(AOptions.messageId);
-			QPointer<QWidget> widget = AWidget;
-			QString messageId = AOptions.messageId;
-			QTimer::singleShot(0,this,[this,widget,messageId]() {
-				QTextBrowser *browser = qobject_cast<QTextBrowser *>(widget.data());
-				if (browser != NULL)
-					patchDisplayedMarker(browser,messageId);
-			});
-		}
-		return true;
-	}
-
-	// The message itself is not rendered yet, so schedule a deferred insertion
-	// of the pending marker tokens into the style document.
-	if (AOptions.kind == IMessageStyleContentOptions::KindMessage
-		&& AOptions.direction == IMessageStyleContentOptions::DirectionOut
-		&& !(AOptions.type & IMessageStyleContentOptions::TypeHistory))
-	{
-		MarkerTarget *target = findMarkerTarget(AWidget);
-		if (target != NULL && !target->flushing && !target->pendingIds.isEmpty())
-		{
-			target->flushing = true;
-			QPointer<QWidget> widget = AWidget;
-			QTimer::singleShot(0,this,[this,widget]() {
-				if (widget != NULL)
-				{
-					MarkerTarget *target = findMarkerTarget(widget);
-					if (target != NULL)
-						flushMarkerTarget(target);
-				}
-			});
-		}
-	}
 
 	// The chat window is being rendered, so messages which are visible now
 	// can be acknowledged as displayed to the sender.
@@ -307,6 +245,42 @@ bool MessageChatMarkers::messageStyleContentInsert(int AOrder, QWidget *AWidget,
 		});
 	}
 	return true;
+}
+
+QString MessageChatMarkers::messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions)
+{
+	if (AOrder != MSHO_MESSAGECHATMARKERS || !ASlotInTemplate || ASlotName != MSM_CONTENT_SLOT_MARKS)
+		return QString();
+
+	if (AWidget == NULL
+		|| !isEnabled()
+		|| AOptions.kind != IMessageStyleContentOptions::KindMessage
+		|| AOptions.direction != IMessageStyleContentOptions::DirectionOut
+		|| AOptions.messageId.isEmpty())
+		return QString();
+
+	if (qobject_cast<QTextBrowser *>(AWidget) == NULL)
+		return QString();
+
+	// Only messages which requested a marker get the invisible token; the
+	// delivered glyph is applied by a deferred pass once the content is in
+	// the style document.
+	loadMarkerRecords();
+	QHash<QString, MarkerRecord>::const_iterator record = FMarkerRecords.constFind(AOptions.messageId);
+	if (record == FMarkerRecords.constEnd())
+		return QString();
+
+	if (record->state == MarkerDisplayed)
+	{
+		QPointer<QWidget> widget = AWidget;
+		QString messageId = AOptions.messageId;
+		QTimer::singleShot(0,this,[this,widget,messageId]() {
+			QTextBrowser *browser = qobject_cast<QTextBrowser *>(widget.data());
+			if (browser != NULL)
+				patchDisplayedMarker(browser,messageId);
+		});
+	}
+	return messageMarkerToken(AOptions.messageId);
 }
 
 bool MessageChatMarkers::isEnabled() const
@@ -419,6 +393,14 @@ void MessageChatMarkers::showDisplayedMarker(const Jid &AStreamJid, const QStrin
 	// The displayed state is saved even when the window is not open or the
 	// referenced message is not in the current style document, so it can be
 	// restored once the history is shown again.
+	loadMarkerRecords();
+	const QString key = chatKey(AStreamJid,AContactJid);
+	QSet<QString> shownIds;
+	for (QHash<QString, MarkerRecord>::const_iterator it=FMarkerRecords.constBegin(); it!=FMarkerRecords.constEnd(); ++it)
+	{
+		if (it.value().chatKey==key && it.value().state==MarkerDisplayed)
+			shownIds.insert(it.key());
+	}
 	confirmDisplayedMarkers(AStreamJid,AContactJid,AMessageId);
 
 	IMessageChatWindow *window = FMessageWidgets!=NULL ? FMessageWidgets->findChatWindow(AStreamJid,AContactJid,false) : NULL;
@@ -443,43 +425,15 @@ void MessageChatMarkers::showDisplayedMarker(const Jid &AStreamJid, const QStrin
 		return;
 	}
 
-	MarkerTarget *target = findMarkerTarget(browser);
-	if (target == NULL)
-	{
-		// TEMP DIAGNOSTIC
-		LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker target not found for the browser, id=%1").arg(AMessageId));
-		return;
-	}
-
 	// Displayed markers are cumulative: everything up to the referenced
-	// message is considered displayed. An id which is not known or which is
-	// older than the last acknowledged one is ignored (XEP-0333 §5).
-	int index = target->sentIds.indexOf(AMessageId);
-	if (index < 0)
+	// message is considered displayed. Only the messages which became
+	// displayed now get a glyph: an id which was already acknowledged before
+	// (e.g. an older version of a corrected message whose token was kept in
+	// the document) must not be painted again.
+	for (QHash<QString, MarkerRecord>::const_iterator it=FMarkerRecords.constBegin(); it!=FMarkerRecords.constEnd(); ++it)
 	{
-		// TEMP DIAGNOSTIC
-		LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker references unknown or already displayed message, id=%1, sentIds=%2").arg(AMessageId,target->sentIds.join(";")));
-		return;
-	}
-
-	for (int i=0; i<=index; i++)
-	{
-		QString messageId = target->sentIds.takeAt(0);
-		QTextCursor found = browser->document()->find(messageMarkerToken(messageId));
-		if (found.isNull())
-		{
-			// TEMP DIAGNOSTIC
-			LOG_STRM_INFO(AStreamJid,QString("[MessageChatMarkers] marker token not found in the document, id=%1").arg(messageId));
-			continue;
-		}
-
-		found.removeSelectedText();
-		QTextCharFormat format;
-		format.setForeground(QColor(30,142,61));
-		format.setFontWeight(QFont::Bold);
-		// Placed right after the delivery check of the receipts plugin so
-		// both marks read as a single "double check" pair.
-		found.insertText(QChar(0x2714),format);
+		if (it.value().chatKey==key && it.value().state==MarkerDisplayed && !shownIds.contains(it.key()))
+			patchDisplayedMarker(browser,it.key());
 	}
 }
 
@@ -532,67 +486,6 @@ IMessageChatWindow *MessageChatMarkers::findChatWindow(QWidget *AStyleWidget) co
 	return NULL;
 }
 
-MessageChatMarkers::MarkerTarget *MessageChatMarkers::findMarkerTarget(QWidget *AWidget)
-{
-	for (QList<MarkerTarget>::iterator it=FMarkerTargets.begin(); it!=FMarkerTargets.end(); ++it)
-	{
-		if (it->widget == AWidget)
-			return &(*it);
-	}
-	return NULL;
-}
-
-void MessageChatMarkers::enqueueMarkerToken(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid)
-{
-	IMessageChatWindow *window = FMessageWidgets!=NULL ? FMessageWidgets->findChatWindow(AStreamJid,AContactJid,false) : NULL;
-	QWidget *styleWidget = window!=NULL && window->viewWidget()!=NULL ? window->viewWidget()->styleWidget() : NULL;
-	if (styleWidget == NULL || AMessageId.isEmpty())
-		return;
-
-	MarkerTarget *target = findMarkerTarget(styleWidget);
-	if (target == NULL)
-	{
-		MarkerTarget newTarget;
-		newTarget.widget = QPointer<QWidget>(styleWidget);
-		newTarget.flushing = false;
-		FMarkerTargets.append(newTarget);
-		target = &FMarkerTargets.last();
-	}
-	target->pendingIds.append(AMessageId);
-
-	pruneMarkerTargets();
-}
-
-void MessageChatMarkers::flushMarkerTarget(MarkerTarget *ATarget)
-{
-	ATarget->flushing = false;
-
-	QTextBrowser *browser = ATarget->widget!=NULL ? qobject_cast<QTextBrowser *>(ATarget->widget) : NULL;
-	while (!ATarget->pendingIds.isEmpty())
-	{
-		QString messageId = ATarget->pendingIds.takeFirst();
-		bool inserted = browser!=NULL ? appendMessageMarkerToken(browser,messageId) : false;
-		if (inserted)
-			ATarget->sentIds.append(messageId);
-		// TEMP DIAGNOSTIC
-		LOG_INFO(QString("[MessageChatMarkers] marker token inserted, id=%1, ok=%2").arg(messageId).arg(inserted));
-	}
-
-	// Drop targets for widgets which are gone.
-	pruneMarkerTargets();
-}
-
-void MessageChatMarkers::pruneMarkerTargets()
-{
-	QList<MarkerTarget> targets;
-	foreach(const MarkerTarget &item, FMarkerTargets)
-	{
-		if (!item.widget.isNull())
-			targets.append(item);
-	}
-	FMarkerTargets = targets;
-}
-
 void MessageChatMarkers::onChatWindowCreated(IMessageChatWindow *AWindow)
 {
 	connect(AWindow->instance(),SIGNAL(tabPageActivated()),SLOT(onChatWindowActivated()));
@@ -629,17 +522,11 @@ void MessageChatMarkers::patchDisplayedMarker(QTextBrowser *ABrowser, const QStr
 
 	QTextCursor found = ABrowser->document()->find(messageMarkerToken(AMessageId));
 	if (found.isNull())
-	{
-		LOG_DEBUG(QString("Failed to find historical chat marker in style document, id=%1").arg(AMessageId));
 		return;
-	}
 
-	QTextCharFormat format;
-	format.setForeground(QColor(30,142,61));
-	format.setFontWeight(QFont::Bold);
 	// Placed right after the delivery check of the receipts plugin so both
 	// marks read as a single "double check" pair.
-	found.insertText(QChar(0x2714),format);
+	found.insertHtml(QString("<span class=\"%1\">&#10004;</span>").arg(MSMC_MARK_DISPLAYED));
 }
 
 QString MessageChatMarkers::markerStateFilePath() const
@@ -755,17 +642,6 @@ void MessageChatMarkers::setMarkerRecord(const Jid &AStreamJid, const Jid &ACont
 
 	pruneMarkerRecords();
 	scheduleMarkerRecordsSave();
-}
-
-bool MessageChatMarkers::isMessageDisplayed(const QString &AMessageId)
-{
-	if (AMessageId.isEmpty())
-		return false;
-
-	loadMarkerRecords();
-
-	QHash<QString, MarkerRecord>::const_iterator it = FMarkerRecords.constFind(AMessageId);
-	return it!=FMarkerRecords.constEnd() && it->state==MarkerDisplayed;
 }
 
 void MessageChatMarkers::confirmDisplayedMarkers(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessageId)

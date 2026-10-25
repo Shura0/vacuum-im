@@ -64,3 +64,26 @@
 {
   color                 :transparent;
 }
+
+/* Message marks placed by the %contentSlot:marks% template slot */
+.vacuum-marks-pending
+{
+	color : #b0b0b0;
+}
+
+.vacuum-marks-delivered
+{
+	color : #1e8e3e;
+	font-weight : bold;
+}
+
+.vacuum-marks-displayed
+{
+	color : #1e8e3e;
+	font-weight : bold;
+}
+
+.vacuum-marks-edited
+{
+	color : #808080;
+}

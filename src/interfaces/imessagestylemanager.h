@@ -148,11 +148,17 @@ class IMessageStyleHandler
 {
 public:
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions) =0;
+	// Called once for each appended content with the reserved slot name "marks" and for every other
+	// slot name found in the content template. A non empty result is placed at the slot placeholder.
+	// If ASlotInTemplate is false the result is appended to the end of the message body, so handlers
+	// that always need an invisible anchor can contribute it even when the style has no slot. Visible
+	// marks must return an empty string in that case.
+	virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions) =0;
 };
 
 Q_DECLARE_INTERFACE(IMessageStyle,"Vacuum.Plugin.IMessageStyle/1.4");
 Q_DECLARE_INTERFACE(IMessageStyleEngine,"Vacuum.Plugin.IMessageStyleEngine/1.2");
 Q_DECLARE_INTERFACE(IMessageStyleManager,"Vacuum.Plugin.IMessageStyleManager/1.5");
-Q_DECLARE_INTERFACE(IMessageStyleHandler,"Vacuum.Plugin.IMessageStyleHandler/1.0");
+Q_DECLARE_INTERFACE(IMessageStyleHandler,"Vacuum.Plugin.IMessageStyleHandler/1.1");
 
 #endif // IMESSAGESTYLEMANAGER_H

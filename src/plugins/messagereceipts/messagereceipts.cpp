@@ -3,6 +3,7 @@
 #include <definitions/namespaces.h>
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
+#include <definitions/messagemarks.h>
 #include <utils/logger.h>
 #include <utils/options.h>
 #include <QTextBrowser>
@@ -27,77 +28,45 @@
 // with a request are answered right from the message editor hook, so the
 // reply does not go through the whole processing pipeline again.
 //
-// Pending receipts are displayed as a check mark appended to the end of the
-// last line of the sent message: gray while waiting, green when a
-// confirmation arrives. The marker carries a per-message tag (invisible
-// zero-width characters), so a receipt is bound to the exact message in the
-// style document. The marker is inserted right after the content of the
-// message is in the style view (schedule of a zero-delay timer, like the
-// image viewer plugin does), so it always lands on the same line.
+// Delivery state is displayed as a mark placed by the message style template
+// through the %contentSlot:marks% slot: gray check while waiting, green when a
+// confirmation arrives. The mark carries a per-message locator (invisible
+// zero-width characters) so a receipt is bound to the exact message in the
+// style document. The mark is right aligned by a tab stop which is applied by
+// a deferred pass, after the content is inserted into the style document.
 
-// Builds the tag which binds a receipt marker to a given stanza id.
-// Only the leading check mark is visible; the rest is zero-width.
-static QString receiptToken(const QString &AMessageId)
+// Invisible locator which binds a receipt mark to a given stanza id.
+static QString receiptLocator(const QString &AMessageId)
 {
 	quint32 hash = qHash(AMessageId);
 	QString token;
-	token += QChar(0x2713);
 	static const ushort keys[] = {0x200B,0x200C,0x200D,0x2060,0x2061,0x2062,0x2063};
+	const int keyCount = sizeof(keys)/sizeof(keys[0]);
 	for (int i=0; i<6; i++)
 	{
-		token += QChar(keys[hash & 0x07]);
+		token += QChar(keys[hash % keyCount]);
 		hash >>= 3;
 	}
 	return token;
 }
 
-// Inserts a gray marker with the given message id at the end of the last
-// non-empty text block of the style document, aligned to the right border
-// of the view by a right-aligned tab stop.
-static bool appendReceiptMarker(QTextBrowser *ABrowser, const QString &AMessageId)
+// Marker text used both for searching in the document and for the replacement
+// after a receipt arrives. The check mark itself is visible, the locator binds
+// it to the stanza id. Note: Qt normalizes no-break spaces of the html parser
+// to a plain space, so the separator is added by the alignment pass instead.
+static QString receiptToken(const QString &AMessageId, ushort AGlyph=0x2713)
 {
-	if (ABrowser == NULL || AMessageId.isEmpty())
-		return false;
+	QString token;
+	token += QChar(AGlyph);
+	token += receiptLocator(AMessageId);
+	return token;
+}
 
-	QTextDocument *document = ABrowser->document();
-	QTextBlock block = document->lastBlock();
-	while (block.isValid() && block.length()<=1 && block.previous().isValid())
-		block = block.previous(); // skip blocks created by a trailing <br>
-	if (!block.isValid() || block.length()<=1)
-		return false;
-
-	QTextCharFormat format;
-	format.setForeground(QColor(176,176,176));
-	QString marker;
-	marker += QChar(0x00A0); // keep the mark detached from the message text
-	marker += receiptToken(AMessageId);
-
-	// Align the marker to the right border of the view with a tab stop.
-	qreal usableWidth = ABrowser->viewport()->width() - 2*document->documentMargin();
-	QFontMetricsF metrics(ABrowser->font());
-	qreal markerWidth = metrics.horizontalAdvance(marker) + 8;
-	if (usableWidth > markerWidth)
-	{
-		QTextOption::Tab tab;
-		tab.type = QTextOption::RightTab;
-		tab.position = usableWidth - markerWidth;
-
-		QTextBlockFormat blockFormat = QTextCursor(block).blockFormat();
-		blockFormat.setTabPositions(blockFormat.tabPositions() << tab);
-
-		QTextCursor cursor(block);
-		cursor.movePosition(QTextCursor::EndOfBlock);
-		cursor.setBlockFormat(blockFormat);
-		marker.prepend(QChar(0x0009)); // tab to the right-aligned position
-		cursor.insertText(marker,format);
-	}
-	else
-	{
-		QTextCursor cursor(block);
-		cursor.movePosition(QTextCursor::EndOfBlock);
-		cursor.insertText(marker,format);
-	}
-	return true;
+static QString receiptMarkHtml(const QString &AMessageId, bool ADelivered)
+{
+	ushort glyph = ADelivered ? 0x2714 : 0x2713;
+	const char *cssClass = ADelivered ? MSMC_MARK_DELIVERED : MSMC_MARK_PENDING;
+	return QString("<span class=\"%1\">%2</span>").arg(cssClass).arg(QString(QChar(glyph))) + receiptLocator(AMessageId);
 }
 
 MessageReceipts::MessageReceipts()
@@ -204,7 +173,6 @@ bool MessageReceipts::messageReadWrite(int AOrder, const Jid &AStreamJid, Messag
 			LOG_STRM_DEBUG(AStreamJid,QString("Message receipt requested, to=%1, id=%2").arg(AMessage.to(),AMessage.id()));
 			emit messageReceiptRequested(AStreamJid,AMessage);
 			setMarkerRecord(AStreamJid,AMessage.toJid(),AMessage.id(),AMessage.dateTime(),MarkerPending);
-			enqueueReceiptMarker(AStreamJid,AMessage.id(),AMessage.toJid());
 		}
 	}
 	else
@@ -316,183 +284,131 @@ void MessageReceipts::showMessageReceipt(const Jid &AStreamJid, const QString &A
 	}
 
 	// Document-based style: patch the marker of the acknowledged message.
-	if (AMessageId.isEmpty())
-		return;
 	QTextCursor found = browser->document()->find(receiptToken(AMessageId));
 	if (found.isNull())
 	{
 		LOG_STRM_DEBUG(AStreamJid,QString("Message receipt marker not found in style document, id=%1").arg(AMessageId));
 		return;
 	}
-	QTextCharFormat format;
-	format.setForeground(QColor(30,142,61));
-	format.setFontWeight(QFont::Bold);
-	found.insertText(QChar(0x2714),format);
+	found.insertHtml(receiptMarkHtml(AMessageId,true));
 }
 
 bool MessageReceipts::messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions)
 {
-	Q_UNUSED(AHtml);
+	Q_UNUSED(AWidget); Q_UNUSED(AHtml); Q_UNUSED(AModifiedHtml); Q_UNUSED(AOptions);
+	return AOrder == MSHO_MESSAGERECEIPTS;
+}
 
-	if (AOrder != MSHO_MESSAGERECEIPTS)
-		return false;
+QString MessageReceipts::messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions)
+{
+	if (AOrder != MSHO_MESSAGERECEIPTS || !ASlotInTemplate || ASlotName != MSM_CONTENT_SLOT_MARKS)
+		return QString();
 
 	if (AWidget == NULL
 		|| AOptions.kind != IMessageStyleContentOptions::KindMessage
-		|| AOptions.direction != IMessageStyleContentOptions::DirectionOut)
-		return true;
+		|| AOptions.direction != IMessageStyleContentOptions::DirectionOut
+		|| AOptions.messageId.isEmpty())
+		return QString();
 
-	// History messages are restored from the previously saved delivery state.
-	// The invisible token is appended to the message html so a deferred patch
-	// can locate the exact message even when the whole history is rendered in
-	// one go (the "last block" heuristic of the live path would not work).
-	if (AOptions.type & IMessageStyleContentOptions::TypeHistory)
-	{
-		int state;
-		if (!AOptions.messageId.isEmpty() && markerRecordState(AOptions.messageId,state)
-			&& qobject_cast<QTextBrowser *>(AWidget)!=NULL)
-		{
-			AModifiedHtml += receiptToken(AOptions.messageId);
-			QPointer<QWidget> widget = AWidget;
-			QString messageId = AOptions.messageId;
-			bool delivered = state==MarkerDelivered;
-			QTimer::singleShot(0,this,[this,widget,messageId,delivered]() {
-				QTextBrowser *browser = qobject_cast<QTextBrowser *>(widget.data());
-				if (browser != NULL)
-					patchReceiptMarker(browser,messageId,delivered);
-			});
-		}
-		return true;
-	}
+	if (qobject_cast<QTextBrowser *>(AWidget) == NULL)
+		return QString();
 
-	// AModifiedHtml already contains what other handlers made of the html,
-	// so it must not be reset here (it would, e.g., undo the placeholders
-	// the image viewer replaced the image urls with). The message itself is
-	// not rendered yet either, so nothing is appended to the html: instead,
-	// schedule a deferred insertion of pending markers into the style
-	// document when the message content is appended.
-	ReceiptMarkerTarget *target = findMarkerTarget(AWidget);
-	if (target != NULL && !target->flushing && !target->ids.isEmpty())
-	{
-		target->flushing = true;
-		QPointer<QWidget> widget = AWidget;
-		QTimer::singleShot(0,this,[this,widget]() {
-			if (widget != NULL)
-			{
-				ReceiptMarkerTarget *target = findMarkerTarget(widget);
-				if (target != NULL)
-					flushReceiptMarkers(target);
-			}
-		});
-	}
-	return true;
+	int state;
+	if (!markerRecordState(AOptions.messageId,state))
+		return QString();
+
+	// The mark itself is drawn by the template slot; the tab stop which aligns
+	// it to the right border can only be applied after the html is inserted.
+	QPointer<QWidget> widget = AWidget;
+	QString messageId = AOptions.messageId;
+	bool delivered = state==MarkerDelivered;
+	QTimer::singleShot(0,this,[this,widget,messageId,delivered]() {
+		QTextBrowser *browser = qobject_cast<QTextBrowser *>(widget.data());
+		if (browser != NULL)
+			applyReceiptMark(browser,messageId,delivered);
+	});
+	return receiptMarkHtml(AOptions.messageId,delivered);
 }
 
-void MessageReceipts::patchReceiptMarker(QTextBrowser *ABrowser, const QString &AMessageId, bool ADelivered) const
+void MessageReceipts::applyReceiptMark(QTextBrowser *ABrowser, const QString &AMessageId, bool ADelivered) const
 {
 	if (ABrowser==NULL || AMessageId.isEmpty())
 		return;
 
-	QTextCursor found = ABrowser->document()->find(receiptToken(AMessageId));
-	if (found.isNull())
+	QTextDocument *document = ABrowser->document();
+	if (document == NULL)
+		return;
+
+	const QString locator = receiptLocator(AMessageId);
+	QTextCursor loc = document->find(locator);
+	if (loc.isNull())
 	{
-		LOG_DEBUG(QString("Failed to find historical receipt marker in style document, id=%1").arg(AMessageId));
+		LOG_DEBUG(QString("Failed to find receipt mark in style document, id=%1").arg(AMessageId));
 		return;
 	}
 
-	QTextCursor cursor(found);
-	cursor.removeSelectedText();
-
-	QTextCharFormat format;
-	format.setForeground(ADelivered ? QColor(30,142,61) : QColor(176,176,176));
+	// Restore the saved delivery state: the style slot always renders the
+	// pending mark, the delivered one is applied here.
 	if (ADelivered)
-		format.setFontWeight(QFont::Bold);
-
-	QString marker;
-	marker += QChar(0x00A0);
-	marker += QChar(0x2713);
-
-	qreal usableWidth = ABrowser->viewport()->width() - 2*ABrowser->document()->documentMargin();
-	QFontMetricsF metrics(ABrowser->font());
-	qreal markerWidth = metrics.horizontalAdvance(marker) + 8;
-	if (usableWidth > markerWidth)
 	{
-		QTextOption::Tab tab;
-		tab.type = QTextOption::RightTab;
-		tab.position = usableWidth - markerWidth;
-
-		QTextBlockFormat blockFormat = cursor.blockFormat();
-		blockFormat.setTabPositions(blockFormat.tabPositions() << tab);
-		cursor.setBlockFormat(blockFormat);
-		marker.prepend(QChar(0x0009));
-	}
-	cursor.insertText(marker,format);
-}
-
-void MessageReceipts::flushReceiptMarkers(ReceiptMarkerTarget *ATarget)
-{
-	ATarget->flushing = false;
-
-	QTextBrowser *browser = ATarget->widget!=NULL ? qobject_cast<QTextBrowser *>(ATarget->widget) : NULL;
-	while (!ATarget->ids.isEmpty())
-	{
-		QString messageId = ATarget->ids.takeFirst();
-		bool inserted = false;
-		if (browser != NULL)
-			inserted = appendReceiptMarker(browser,messageId);
-		if (!inserted)
-			LOG_DEBUG(QString("Failed to insert receipt marker to style document, id=%1").arg(messageId));
+		QTextCursor token = document->find(receiptToken(AMessageId));
+		if (!token.isNull())
+		{
+			token.insertHtml(receiptMarkHtml(AMessageId,true));
+			loc = document->find(locator);
+			if (loc.isNull())
+				return;
+		}
 	}
 
-	// Drop targets for widgets which are gone.
-	QList<ReceiptMarkerTarget> targets;
-	foreach(const ReceiptMarkerTarget &item, FPendingMarkers)
-	{
-		if (!item.widget.isNull())
-			targets.append(item);
-	}
-	FPendingMarkers = targets;
-}
-
-void MessageReceipts::enqueueReceiptMarker(const Jid &AStreamJid, const QString &AMessageId, const Jid &AContactJid)
-{
-	IMessageChatWindow *window = FMessageWidgets!=NULL ? FMessageWidgets->findChatWindow(AStreamJid,AContactJid,false) : NULL;
-	QWidget *styleWidget = window!=NULL && window->viewWidget()!=NULL ? window->viewWidget()->styleWidget() : NULL;
-	if (styleWidget == NULL || AMessageId.isEmpty())
+	// The glyph is the character right before the locator.
+	int glyphPos = loc.selectionStart()-1;
+	if (glyphPos < 0)
 		return;
 
-	ReceiptMarkerTarget *target = findMarkerTarget(styleWidget);
-	if (target != NULL)
+	qreal usableWidth = ABrowser->viewport()->width() - 2*document->documentMargin();
+	QFontMetricsF metrics(ABrowser->font());
+	QTextBlock glyphBlock = document->findBlock(glyphPos);
+	QString glyph = glyphBlock.text().mid(glyphPos-glyphBlock.position(),1);
+	qreal markerWidth = metrics.horizontalAdvance(glyph) + 8;
+
+	// The mark is aligned to the right border of the view by a tab stop: the
+	// tab itself is added here because the html parser drops tab characters.
+	QTextCursor prev(document);
+	prev.setPosition(glyphPos);
+	prev.movePosition(QTextCursor::PreviousCharacter,QTextCursor::KeepAnchor);
+	if (prev.selectedText()!=QChar(0x0009))
 	{
-		target->ids.append(AMessageId);
+		QTextCursor tabCursor(document);
+		tabCursor.setPosition(glyphPos);
+		tabCursor.insertText(usableWidth>markerWidth ? QChar(0x0009) : QChar(0x0020));
 	}
+
+	if (usableWidth <= markerWidth)
+		return;
+
+	QTextCursor blockCursor(document);
+	blockCursor.setPosition(glyphPos);
+	QTextBlockFormat blockFormat = blockCursor.block().blockFormat();
+	QList<QTextOption::Tab> tabs = blockFormat.tabPositions();
+	int rightTab = -1;
+	for (int i=0; i<tabs.count(); i++)
+	{
+		if (tabs.at(i).type == QTextOption::RightTab)
+		{
+			rightTab = i;
+			break;
+		}
+	}
+	QTextOption::Tab tab;
+	tab.type = QTextOption::RightTab;
+	tab.position = usableWidth - markerWidth;
+	if (rightTab>=0)
+		tabs[rightTab] = tab;
 	else
-	{
-		ReceiptMarkerTarget newTarget;
-		newTarget.widget = QPointer<QWidget>(styleWidget);
-		newTarget.ids.append(AMessageId);
-		newTarget.flushing = false;
-		FPendingMarkers.append(newTarget);
-	}
-
-	// Drop targets for widgets which are gone.
-	QList<ReceiptMarkerTarget> targets;
-	foreach(const ReceiptMarkerTarget &item, FPendingMarkers)
-	{
-		if (!item.widget.isNull())
-			targets.append(item);
-	}
-	FPendingMarkers = targets;
-}
-
-MessageReceipts::ReceiptMarkerTarget *MessageReceipts::findMarkerTarget(QWidget *AWidget)
-{
-	for (QList<ReceiptMarkerTarget>::iterator it=FPendingMarkers.begin(); it!=FPendingMarkers.end(); ++it)
-	{
-		if (it->widget == AWidget)
-			return &(*it);
-	}
-	return NULL;
+		tabs.append(tab);
+	blockFormat.setTabPositions(tabs);
+	blockCursor.setBlockFormat(blockFormat);
 }
 
 bool MessageReceipts::isSupportedByContact(const Jid &AStreamJid, const Jid &AContactJid) const

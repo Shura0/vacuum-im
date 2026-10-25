@@ -178,6 +178,12 @@ bool ImageViewer::initSettings()
 	return true;
 }
 
+QString ImageViewer::messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions)
+{
+	Q_UNUSED(AOrder); Q_UNUSED(AWidget); Q_UNUSED(ASlotName); Q_UNUSED(ASlotInTemplate); Q_UNUSED(AOptions);
+	return QString();
+}
+
 void ImageViewer::insertImagesInDocument(QTextDocument *doc, const QList<PendingImage> &pendingImages)
 {
 	if (!doc)

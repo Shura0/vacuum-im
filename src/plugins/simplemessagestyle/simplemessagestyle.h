@@ -147,6 +147,7 @@ private:
 	QString FOut_NextContentHTML;
 	private:
 	QString processStyleContent(QWidget *AWidget, const QString &AHtml, const IMessageStyleContentOptions &AOptions);
+	QString processContentSlots(QWidget *AWidget, QString &AHtml, const IMessageStyleContentOptions &AOptions);
 	private:
 	QString FStylePath;
 	QList<QString> FVariants;
