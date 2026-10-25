@@ -21,6 +21,7 @@
 #include <interfaces/ivcardmanager.h>
 #include <interfaces/iavatars.h>
 #include <interfaces/iaccountmanager.h>
+#include <interfaces/iendtoendencryption.h>
 #include <interfaces/istatuschanger.h>
 #include <interfaces/ixmppuriqueries.h>
 #include <interfaces/irecentcontacts.h>
@@ -94,6 +95,8 @@ protected:
 	bool isSelectionAccepted(const QList<IRosterIndex *> &ASelected) const;
 	QMap<Jid, QList<Jid> > getSortedAddresses(const QMultiMap<Jid,Jid> &AAddresses) const;
 protected slots:
+	// Emitted when the end-to-end encryption plugin is being destroyed
+	void onEndToEndEncryptionDestroyed(QObject *AObject);
 	void onWindowActivated();
 	void onWindowClosed();
 	void onWindowDestroyed();
@@ -139,6 +142,8 @@ private:
 	IAccountManager *FAccountManager;
 	IXmppUriQueries *FXmppUriQueries;
 	IRecentContacts *FRecentContacts;
+	IEndToEndEncryption *FEndToEndEncryption;
+	IPluginManager *FPluginManager;
 private:
 	QList<IMessageChatWindow *> FWindows;
 	QMap<IMessageChatWindow *, QTimer *> FDestroyTimers;

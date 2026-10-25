@@ -511,9 +511,16 @@ QList<IArchiveHeader> MamArchive::groupHeaders(const Jid &AStreamJid, const QLis
 	for (int i=0; i<sorted.count(); ++i)
 	{
 		const Message &message = sorted.at(i);
-		bool duplicate = !unique.isEmpty() && unique.last().body()==message.body()
+		bool encrypted = !message.stanza().firstElement(QStringLiteral("encrypted")).isNull()
+			|| (!unique.isEmpty() && !unique.last().stanza().firstElement(QStringLiteral("encrypted")).isNull());
+		bool sameId = !unique.isEmpty() && !unique.last().id().isEmpty()
+			&& unique.last().id()==message.id();
+		bool differentIds = !unique.isEmpty() && !unique.last().id().isEmpty()
+			&& !message.id().isEmpty() && unique.last().id()!=message.id();
+		bool duplicate = !differentIds && !unique.isEmpty()
+			&& unique.last().body()==message.body()
 			&& unique.last().data(MDR_MESSAGE_DIRECTION)==message.data(MDR_MESSAGE_DIRECTION)
-			&& (unique.last().id()==message.id() || qAbs(unique.last().dateTime().secsTo(message.dateTime()))<2);
+			&& (sameId || (!encrypted && qAbs(unique.last().dateTime().secsTo(message.dateTime()))<2));
 		if (!duplicate)
 			unique.append(message);
 	}

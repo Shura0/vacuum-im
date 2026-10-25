@@ -126,6 +126,7 @@ ArchiveViewWindow::ArchiveViewWindow(IMessageArchiver *AArchiver, const QMultiMa
 	FUrlProcessor = PluginHelper::pluginInstance<IUrlProcessor>();
 	FMetaContacts = PluginHelper::pluginInstance<IMetaContacts>();
 	FMessageProcessor = PluginHelper::pluginInstance<IMessageProcessor>();
+	FEndToEndEncryption = PluginHelper::pluginInstance<IEndToEndEncryption>();
 	FFileMessageArchive = PluginHelper::pluginInstance<IFileMessageArchive>();
 	FMessageStyleManager = PluginHelper::pluginInstance<IMessageStyleManager>();
 
@@ -829,6 +830,7 @@ ArchiveHeader ArchiveViewWindow::loadingCollectionHeader() const
 
 void ArchiveViewWindow::showCollection(const ArchiveCollection &ACollection)
 {
+	FCurrentStreamJid = ACollection.header.stream;
 	if (FSelectedHeaderIndex == 0)
 	{
 		ui.tbrMessages->clear();
@@ -1028,18 +1030,33 @@ QString ArchiveViewWindow::showNote(const QString &ANote, const IMessageStyleCon
 
 QString ArchiveViewWindow::showMessage(const Message &AMessage, const IMessageStyleContentOptions &AOptions)
 {
+	Message message = AMessage;
+	const int direction = AOptions.direction == IMessageStyleContentOptions::DirectionOut
+		? IMessageProcessor::DirectionOut : IMessageProcessor::DirectionIn;
+	const bool wasEncrypted = !message.stanza().firstElement(QStringLiteral("encrypted"),
+		QStringLiteral("eu.siacs.conversations.axolotl")).isNull();
+	const QString originalBody = message.body();
+	if (FEndToEndEncryption == NULL)
+		FEndToEndEncryption = PluginHelper::pluginInstance<IEndToEndEncryption>();
+	if (FEndToEndEncryption != NULL)
+		FEndToEndEncryption->decryptMessage(FCurrentStreamJid,message,direction);
+	if (message.body().isEmpty() && !originalBody.isEmpty())
+		message.setBody(originalBody);
+	if (message.body().isEmpty() && wasEncrypted)
+		message.setBody(tr("[This message is OMEMO encrypted]"));
+
 	QString html;
 	bool hasText = false;
 
 	QTextDocument doc;
 	if (FMessageProcessor)
 	{
-		hasText = FMessageProcessor->messageToText(AMessage,&doc);
+		hasText = FMessageProcessor->messageToText(message,&doc);
 	}
 	else
 	{
 		hasText = true;
-		doc.setPlainText(AMessage.body());
+		doc.setPlainText(message.body());
 	}
 
 	if (hasText)

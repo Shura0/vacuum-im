@@ -2,6 +2,7 @@
 #define DEF_STANZAHANDLERORDERS_H
 
 //Message In
+#define SHO_MI_OMEMO_DECRYPT           90
 #define SHO_MI_REMOTECONTROL          100
 #define SHO_MI_PRIVATESTORAGE         300
 #define SHO_MI_CAPTCHAFORMS           300
@@ -12,6 +13,7 @@
 //Message Out
 #define SHO_MO_ARCHIVER               200
 #define SHO_MO_CHATSTATES             500
+#define SHO_MO_OMEMO_ENCRYPT          900
 
 //Presence In
 #define SHO_PI_AVATARS                400

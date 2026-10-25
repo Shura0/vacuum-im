@@ -1,0 +1,17 @@
+set(SOURCES
+	omemo.cpp
+	omemoaccount.cpp
+	omemocrypto.cpp
+	omemodevicesdialog.cpp
+	omemoenvelope.cpp
+	omemostore.cpp
+)
+set(HEADERS
+	omemo.h
+	omemoaccount.h
+	omemocrypto.h
+	omemodefinitions.h
+	omemodevicesdialog.h
+	omemoenvelope.h
+	omemostore.h
+)

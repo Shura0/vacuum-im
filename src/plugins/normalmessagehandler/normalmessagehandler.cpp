@@ -758,6 +758,7 @@ void NormalMessageHandler::showStyledMessage(IMessageNormalWindow *AWindow, cons
 	IMessageStyleContentOptions options;
 	options.time = AMessage.dateTime();
 	options.timeFormat = FMessageStyleManager->timeFormat(options.time);
+	options.messageId = AMessage.id();
 	options.direction = IMessageStyleContentOptions::DirectionIn;
 	options.noScroll = true;
 	fillContentOptions(AWindow,options);

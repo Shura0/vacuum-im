@@ -21,6 +21,7 @@
 
 //MessageWidgets - InfowWidgetToolBar
 #define TBG_MWIWTB_ADDRESSMENU                                  500
+#define TBG_MWIWTB_OMEMO                                        700
 #define TBG_MWIWTB_BOOKMARKS                                    900
 
 //MessageWidgets - EditWidgetToolBar

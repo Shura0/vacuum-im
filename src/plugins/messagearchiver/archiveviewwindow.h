@@ -16,6 +16,7 @@
 #include <interfaces/imessagestylemanager.h>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imessageprocessor.h>
+#include <interfaces/iendtoendencryption.h>
 #include <interfaces/ifilemessagearchive.h>
 #include <interfaces/iurlprocessor.h>
 #include "ui_archiveviewwindow.h"
@@ -156,6 +157,8 @@ private:
 	IRosterManager *FRosterManager;
 	IUrlProcessor *FUrlProcessor;
 	IMessageProcessor *FMessageProcessor;
+	IEndToEndEncryption *FEndToEndEncryption;
+	Jid FCurrentStreamJid;
 	IFileMessageArchive *FFileMessageArchive;
 	IMessageStyleManager *FMessageStyleManager;
 private:

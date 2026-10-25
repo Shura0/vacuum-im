@@ -8,6 +8,11 @@ LEGEND
   [-] Bug fix
 
 ------
+  [*] Marks of message delivery receipts, chat markers and message correction are placed by the message style templates via the %contentSlot:marks% placeholder, so a style defines where the marks are shown
+  [*] The appearance of the message marks (pending/delivered/displayed checks and the edited note pencil) is defined by the style variant stylesheets with the vacuum-marks-* CSS classes, with the built-in look as a fallback
+  [!] Added new plugin for end-to-end encryption of 1:1 chats (legacy OMEMO 0.3, XEP-0384)
+  [+] OMEMO: per-chat encryption switch and per-message encryption status marks
+  [+] OMEMO: decrypted message plaintext is cached in the encrypted store and the History dialog decrypts OMEMO messages
   [!] Added new plugin for muting notifications of individual contacts
   [!] Added new plugin for spell checking
   [!] Added new plugin for editing of the sent chat messages (XEP-0308)
@@ -25,6 +30,10 @@ LEGEND
   [*] History view windows is made more convenient
   [*] Redesigned setup plugins dialog
   [*] Redesigned options dialog
+  [-] Message marks (delivery receipts, read markers and OMEMO status) could be placed on a separate line from the message text
+  [-] OMEMO-encrypted messages from the local or server archive could remain undecrypted or be dropped as duplicates when the application loads history before the stream is connected
+  [-] OMEMO device list and bundles could not be published on servers which support PEP but do not advertise a pubsub/pep service-discovery identity
+  [-] Chat messages with images and copies of one message from the local and server archives could be displayed twice in the chat window
   [-] The application may fail in some cases after unsuccessful Stanza-session initialization
   [-] In private chats history of communication are loaded even if the relevant setting has been disabled
   [-] When changing the nickname in the conference the nickname was not changed in the active conferences menu in the roster window

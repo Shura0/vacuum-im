@@ -10,17 +10,39 @@ TextManager::TextManager()
 
 QString TextManager::getDocumentBody(const QTextDocument &ADocument)
 {
-	QRegularExpression body("<body.*>(.*)</body>");
+	QRegularExpression body("<body[^>]*>(.*)</body>",
+		QRegularExpression::CaseInsensitiveOption|QRegularExpression::DotMatchesEverythingOption);
 
 	QString html = ADocument.toHtml();
 	QRegularExpressionMatch bodyMatch = body.match(html);
 	html = bodyMatch.hasMatch() ? bodyMatch.captured(1).trimmed() : html;
 
-	// XXX Replace <P> inserted by QTextDocument with <SPAN>
-	if (html.first(3).compare(QString("<p "), Qt::CaseInsensitive)==0 && html.last(4).compare(QString("</p>"), Qt::CaseInsensitive)==0)
+	// QTextDocument wraps every line in a <p> block.  Message style templates
+	// append their marks after %message%; if the wrapper stays block-based,
+	// every mark (receipts, read markers, OMEMO) moves to a separate line.
+	// Keep the content inline: a single paragraph becomes a span, multiple
+	// paragraphs become spans separated by <br />.
+	if (html.first(3).compare(QString("<p "), Qt::CaseInsensitive)==0
+		&& html.last(4).compare(QString("</p>"), Qt::CaseInsensitive)==0)
 	{
-		html.replace(1, 1, "span");
-		html.replace(html.length() - 2, 1, "span");
+		if (html.count(QString("</p>"),Qt::CaseInsensitive)==1)
+		{
+			html.replace(1, 1, "span");
+			html.replace(html.length() - 2, 1, "span");
+		}
+		else
+		{
+			static const QRegularExpression pBoundary("</p>\\s*<p([^>]*)>",
+				QRegularExpression::CaseInsensitiveOption);
+			static const QRegularExpression pStart("<p([^>]*)>",
+				QRegularExpression::CaseInsensitiveOption);
+			html.replace(pBoundary,QStringLiteral("</span><br /><span\\1>"));
+			QRegularExpressionMatch startMatch = pStart.match(html);
+			if (startMatch.hasMatch())
+				html.replace(startMatch.capturedStart(),startMatch.capturedLength(),
+					QStringLiteral("<span%1>").arg(startMatch.captured(1)));
+			html.replace(QStringLiteral("</p>"),QStringLiteral("</span>"),Qt::CaseInsensitive);
+		}
 	}
 
 	return html;

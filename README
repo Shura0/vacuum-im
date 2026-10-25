@@ -35,6 +35,7 @@ Main Features
   * Ability to set different status icons for individual contacts, and groups of contacts are connected through transport
   * Support for avatars with the ability to specify a contact an arbitrary image as an avatar
   * Ability to add annotation to contact
+  * Legacy OMEMO 0.3 end-to-end encryption for one-to-one chats
 
 
 Portable Version

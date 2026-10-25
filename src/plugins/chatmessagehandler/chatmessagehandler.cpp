@@ -47,13 +47,24 @@
 
 static bool isSameMessage(const Message &AMessage, const Message &AOther)
 {
-	// Same origin stanza id is an exact match. Only archives preserve it, but when
-	// both sides have one it settles the question immediately.
-	if (!AMessage.id().isEmpty() && !AOther.id().isEmpty())
-		return AMessage.id()==AOther.id();
+	// Same origin stanza id is an exact match. This also covers messages that
+	// were corrected after delivery (bridges often edit their notifications to
+	// append attachment URLs): the archive copy and the live copy differ in
+	// text and may get re-identified, but an equal id settles it immediately.
+	if (!AMessage.id().isEmpty() && !AOther.id().isEmpty() && AMessage.id()==AOther.id())
+		return true;
 
-	// An archive copy differs from the live copy only by network/clock skew, so
-	// require the same direction, the same body and a close timestamp.
+	// Without a matching id, encrypted messages often have no readable body
+	// (or the same generic fallback body).  Do not collapse them by text: this
+	// used to drop OMEMO messages from history as if they were duplicates.
+	static const QString omemoNs = QStringLiteral("eu.siacs.conversations.axolotl");
+	if (!AMessage.stanza().firstElement(QStringLiteral("encrypted"),omemoNs).isNull()
+		|| !AOther.stanza().firstElement(QStringLiteral("encrypted"),omemoNs).isNull())
+		return false;
+
+	// Plain copies of the same message coming from different archive engines
+	// may carry different (or missing) ids, so compare by content: an archive
+	// copy differs from the live copy only by network/clock skew.
 	return AMessage.data(MDR_MESSAGE_DIRECTION)==AOther.data(MDR_MESSAGE_DIRECTION)
 		&& AMessage.body()==AOther.body()
 		&& qAbs(AMessage.dateTime().secsTo(AOther.dateTime()))<HISTORY_DUBLICATE_DELTA;
@@ -91,6 +102,8 @@ ChatMessageHandler::ChatMessageHandler()
 	FAccountManager = NULL;
 	FXmppUriQueries = NULL;
 	FRecentContacts = NULL;
+	FEndToEndEncryption = NULL;
+	FPluginManager = NULL;
 
 	FCatchUpTimer.setSingleShot(true);
 	connect(&FCatchUpTimer,SIGNAL(timeout()),SLOT(onCatchUpTimerTimeout()));
@@ -117,6 +130,7 @@ void ChatMessageHandler::pluginInfo(IPluginInfo *APluginInfo)
 bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 {
 	Q_UNUSED(AInitOrder);
+	FPluginManager = APluginManager;
 
 	IPlugin *plugin = APluginManager->pluginInterface("IMessageWidgets").value(0,NULL);
 	if (plugin)
@@ -246,6 +260,14 @@ bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AI
 	if (plugin)
 	{
 		FRecentContacts = qobject_cast<IRecentContacts *>(plugin->instance());
+	}
+
+	plugin = APluginManager->pluginInterface("IEndToEndEncryption").value(0,NULL);
+	if (plugin)
+	{
+		FEndToEndEncryption = qobject_cast<IEndToEndEncryption *>(plugin->instance());
+		if (FEndToEndEncryption)
+			connect(FEndToEndEncryption->instance(),SIGNAL(destroyed(QObject *)),SLOT(onEndToEndEncryptionDestroyed(QObject *)));
 	}
 
 	connect(Shortcuts::instance(),SIGNAL(shortcutActivated(const QString &, QWidget *)),SLOT(onShortcutActivated(const QString &, QWidget *)));
@@ -589,6 +611,14 @@ void ChatMessageHandler::updateWindow(IMessageChatWindow *AWindow)
 	AWindow->updateWindow(tabIcon,name,tr("%1 - Chat").arg(name),QString());
 }
 
+void ChatMessageHandler::onEndToEndEncryptionDestroyed(QObject *AObject)
+{
+	Q_UNUSED(AObject);
+	// The encryption plugin is gone (usually at shutdown): stop calling into it.
+	// Do not dereference the sender - its derived part is already destroyed.
+	FEndToEndEncryption = NULL;
+}
+
 void ChatMessageHandler::removeNotifiedMessages(IMessageChatWindow *AWindow)
 {
 	if (FNotifiedMessages.contains(AWindow))
@@ -607,11 +637,15 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 
 		QList<Message> pending = FPendingMessages.take(AWindow);
 		IArchiveCollectionBody history = FHistoryMessages.take(AWindow);
+		LOG_STRM_INFO(AWindow->streamJid(),QString("Chat history display, with=%1, messages=%2")
+			.arg(AWindow->contactJid().bare()).arg(history.messages.count()));
 		std::stable_sort(history.messages.begin(),history.messages.end(),qGreater<Message>());
 
 		// Remove copies of the same message that different archive engines and
 		// the live stream may both deliver.
 		collapseSameMessages(history.messages);
+		LOG_STRM_INFO(AWindow->streamJid(),QString("Chat history collapsed, with=%1, messages=%2")
+			.arg(AWindow->contactJid().bare()).arg(history.messages.count()));
 
 		// Remove extra history messages
 		if (history.messages.count() > HISTORY_MESSAGES)
@@ -625,24 +659,13 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 				it = history.notes.erase(it);
 		}
 
-		// Remove duplicate history messages
-		int messageItEnd = 0;
-		while (messageItEnd<pending.count() && messageItEnd<history.messages.count())
-		{
-			const Message &hmessage = history.messages.at(messageItEnd);
-			const Message &pmessage = pending.at(pending.count()-messageItEnd-1);
-			if (isSameMessage(hmessage,pmessage))
-				messageItEnd++;
-			else
-				break;
-		}
-
-		// Show history messages
+		// Show all archive messages. Live messages that arrived while the
+		// request was in flight are re-added below after the archive.
 		int messageIt = history.messages.count()-1;
 		QMultiMap<QDateTime,QString>::const_iterator noteIt = history.notes.constBegin();
-		while (messageIt>=messageItEnd || noteIt!=history.notes.constEnd())
+		while (messageIt>=0 || noteIt!=history.notes.constEnd())
 		{
-			if (messageIt>=messageItEnd && (noteIt==history.notes.constEnd() || history.messages.at(messageIt).dateTime()<noteIt.key()))
+			if (messageIt>=0 && (noteIt==history.notes.constEnd() || history.messages.at(messageIt).dateTime()<noteIt.key()))
 			{
 				showStyledMessage(AWindow,history.messages.at(messageIt));
 				messageIt--;
@@ -652,6 +675,24 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 				showStyledStatus(AWindow,noteIt.value(),true,noteIt.key());
 				++noteIt;
 			}
+		}
+
+		// A live message can arrive while the archive request is in flight. It
+		// was already shown once, but clearContent() removes it; re-add every
+		// pending message that is not present in the archive result.
+		foreach(const Message &pmessage, pending)
+		{
+			bool duplicate = false;
+			foreach(const Message &hmessage, history.messages)
+			{
+				if (isSameMessage(hmessage,pmessage))
+				{
+					duplicate = true;
+					break;
+				}
+			}
+			if (!duplicate)
+				showStyledMessage(AWindow,pmessage);
 		}
 
 		// Show pending content
@@ -852,33 +893,65 @@ void ChatMessageHandler::showStyledStatus(IMessageChatWindow *AWindow, const QSt
 
 void ChatMessageHandler::showStyledMessage(IMessageChatWindow *AWindow, const Message &AMessage)
 {
+	Message message = AMessage;
+	const int direction = message.data(MDR_MESSAGE_DIRECTION).toInt();
+	const bool wasEncrypted = !message.stanza().firstElement(QStringLiteral("encrypted"),
+		QStringLiteral("eu.siacs.conversations.axolotl")).isNull();
+	const QString originalBody = message.body();
+	if (FEndToEndEncryption == NULL && FPluginManager != NULL)
+	{
+		IPlugin *plugin = FPluginManager->pluginInterface("IEndToEndEncryption").value(0,NULL);
+		if (plugin != NULL)
+		{
+			FEndToEndEncryption = qobject_cast<IEndToEndEncryption *>(plugin->instance());
+			if (FEndToEndEncryption != NULL)
+				connect(FEndToEndEncryption->instance(),SIGNAL(destroyed(QObject *)),SLOT(onEndToEndEncryptionDestroyed(QObject *)));
+		}
+	}
+	if (FEndToEndEncryption != NULL)
+		FEndToEndEncryption->decryptMessage(AWindow->streamJid(),message,direction);
+
+	// The normal message pipeline may already have decrypted the stanza. The
+	// history hook must never make such a message disappear if a cache lookup
+	// or a failed decode leaves the body empty.
+	if (message.body().isEmpty() && !originalBody.isEmpty())
+		message.setBody(originalBody);
+	const int bodyAfter = message.body().length();
+
 	IMessageStyleContentOptions options;
 	options.kind = IMessageStyleContentOptions::KindMessage;
 
-	options.time = AMessage.dateTime();
-	options.messageId = AMessage.id();
+	options.time = message.dateTime();
+	options.messageId = message.id();
 	if (options.time.secsTo(FWindowStatus.value(AWindow).createTime)>HISTORY_TIME_DELTA)
 		options.type |= IMessageStyleContentOptions::TypeHistory;
 
-	if (AMessage.data(MDR_MESSAGE_DIRECTION).toInt() == IMessageProcessor::DirectionOut)
+	if (direction == IMessageProcessor::DirectionOut)
 	{
 		options.direction = IMessageStyleContentOptions::DirectionOut;
-		fillContentOptions(AMessage.from(),AMessage.to(),options);
+		fillContentOptions(message.from(),message.to(),options);
 	}
 	else
 	{
 		options.direction = IMessageStyleContentOptions::DirectionIn;
-		fillContentOptions(AMessage.to(),AMessage.from(),options);
+		fillContentOptions(message.to(),message.from(),options);
 	}
 
 	showDateSeparator(AWindow,options.time);
-	AWindow->viewWidget()->appendMessage(AMessage,options);
+	if (message.body().isEmpty() && wasEncrypted)
+		message.setBody(tr("[This message is OMEMO encrypted]"));
+
+	// Note: deliberately no "message did not render -> append a raw copy"
+	// fallback here.  Style handlers are allowed to transform the rendered
+	// content (e.g. imageviewer replaces image URLs with thumbnails), so text
+	// disappearing from toPlainText() must not produce a second copy.
+	AWindow->viewWidget()->appendMessage(message,options);
 
 	WindowStatus &wstatus = FWindowStatus[AWindow];
-	if (!wstatus.lastMessageTime.isValid() || AMessage.dateTime()>wstatus.lastMessageTime)
-		wstatus.lastMessageTime = AMessage.dateTime();
+	if (!wstatus.lastMessageTime.isValid() || message.dateTime()>wstatus.lastMessageTime)
+		wstatus.lastMessageTime = message.dateTime();
 
-	wstatus.lastMessages.append(AMessage);
+	wstatus.lastMessages.append(message);
 	while (wstatus.lastMessages.count() > HISTORY_DUPLICATE_MESSAGES)
 		wstatus.lastMessages.removeFirst();
 }

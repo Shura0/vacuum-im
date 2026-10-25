@@ -19,3 +19,14 @@ if (NOT SYSTEM_QXTGLOBALSHORTCUT_FOUND)
 endif (NOT SYSTEM_QXTGLOBALSHORTCUT_FOUND)
 
 add_subdirectory(idle)
+
+# libomemo-c is only needed by the omemo plugin.  The plugin option is a
+# normal CMake cache variable, so -DPLUGIN_omemo=OFF skips both the library
+# and the plugin even though this directory is processed first.
+if(NOT DEFINED PLUGIN_omemo)
+	set(PLUGIN_omemo ON)
+endif()
+if(PLUGIN_omemo)
+	add_subdirectory(protobuf-c)
+	add_subdirectory(libomemo-c)
+endif()
