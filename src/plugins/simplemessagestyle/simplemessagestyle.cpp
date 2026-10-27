@@ -7,6 +7,7 @@
 #include <QDomDocument>
 #include <QTextBlock>
 #include <QScrollBar>
+#include <interfaces/imessagedocumentcontext.h>
 #include <utils/options.h>
 #include <utils/pluginhelper.h>
 #include <definitions/messageviewurlhandlerorders.h>
@@ -237,6 +238,17 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 			int removeSize = 0;
 			while(wstatus.content.count() > maxMessages)
 				removeSize += wstatus.content.takeFirst().size;
+
+			// MessageWidgets owns the boundary metadata for feature plugins.
+			// Invalidate contexts for the whole messages being trimmed before the
+			// QTextDocument adjusts their QTextCursor positions.
+			if (FMessageWidgets)
+			{
+				IMessageDocumentContextManager *contextManager =
+					qobject_cast<IMessageDocumentContextManager *>(FMessageWidgets->instance());
+				if (contextManager)
+					contextManager->removeMessageContextsInRange(view->document(), wstatus.contentStartPosition, removeSize);
+			}
 
 			cursor.setPosition(wstatus.contentStartPosition);
 			cursor.setPosition(wstatus.contentStartPosition+removeSize,QTextCursor::KeepAnchor);

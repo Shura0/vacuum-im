@@ -16,6 +16,7 @@ SimpleMessageStyleEngine::SimpleMessageStyleEngine(): FNetworkAccessManager(NULL
 {
 	FUrlProcessor = NULL;
 	FMessageStyleManager = NULL;
+	FMessageWidgets = NULL;
 	FNetworkAccessManager = NULL;
 }
 
@@ -31,6 +32,7 @@ void SimpleMessageStyleEngine::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->version = "1.0";
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
+	APluginInfo->dependences.append(QUuid(MESSAGEWIDGETS_UUID));
 }
 
 bool SimpleMessageStyleEngine::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -54,7 +56,6 @@ bool SimpleMessageStyleEngine::initConnections(IPluginManager *APluginManager, i
 	{
 		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
 	}
-
 	return true;
 }
 

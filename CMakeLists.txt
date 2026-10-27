@@ -19,6 +19,7 @@ find_package (Qt6Svg)
 find_package (Qt6Widgets REQUIRED)
 find_package (Qt6Network REQUIRED)
 find_package (Qt6Xml REQUIRED)
+find_package (Qt6Concurrent REQUIRED)
 find_package (Qt6LinguistTools REQUIRED)
 
 add_custom_target(updatets)

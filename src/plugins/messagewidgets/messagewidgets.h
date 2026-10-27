@@ -6,6 +6,7 @@
 #include <QObjectCleanupHandler>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessagewidgets.h>
+#include <interfaces/imessagedocumentcontext.h>
 #include <interfaces/ioptionsmanager.h>
 #include <interfaces/imainwindow.h>
 #include "address.h"
@@ -25,12 +26,13 @@ class MessageWidgets :
 	public QObject,
 	public IPlugin,
 	public IMessageWidgets,
+	public IMessageDocumentContextManager,
 	public IOptionsDialogHolder,
 	public IMessageViewUrlHandler,
 	public IMessageEditContentsHandler
 {
 	Q_OBJECT;
-	Q_INTERFACES(IPlugin IMessageWidgets IOptionsDialogHolder IMessageViewUrlHandler IMessageEditContentsHandler);
+	Q_INTERFACES(IPlugin IMessageWidgets IMessageDocumentContextManager IOptionsDialogHolder IMessageViewUrlHandler IMessageEditContentsHandler);
 	Q_PLUGIN_METADATA(IID "org.vacuum-im.plugins.MessageWidgets");
 public:
 	MessageWidgets();
@@ -92,6 +94,12 @@ public:
 	virtual QMultiMap<int, IMessageStyleHandler *> styleHandlers() const;
 	virtual void insertStyleHandler(int AOrder, IMessageStyleHandler *AHandler);
 	virtual void removeStyleHandler(int AOrder, IMessageStyleHandler *AHandler);
+	//IMessageDocumentContextManager
+	virtual bool beginMessageContext(QTextDocument *ADocument, MessageDocumentContext &AContext);
+	virtual bool isMessageContextValid(const MessageDocumentContext &AContext) const;
+	virtual int nextMessagePosition(const MessageDocumentContext &AContext) const;
+	virtual void resetMessageContexts(QTextDocument *ADocument);
+	virtual void removeMessageContextsInRange(QTextDocument *ADocument, int APosition, int ALength);
 signals:
 	void addressCreated(IMessageAddress *AAddress);
 	void infoWidgetCreated(IMessageInfoWidget *AInfoWidget);
@@ -133,7 +141,21 @@ protected slots:
 	void onOptionsOpened();
 	void onOptionsClosed();
 	void onOptionsChanged(const OptionsNode &ANode);
+	void onMessageDocumentDestroyed();
 private:
+	struct MessageMarker
+	{
+		quint64 id = 0;
+		QTextCursor cursor;
+		bool atStart = false;
+	};
+	struct DocumentMessageContexts
+	{
+		QPointer<QTextDocument> document;
+		quint64 generation = 1;
+		QList<MessageMarker> markers;
+	};
+	int documentContextIndex(QTextDocument *ADocument) const;
 	IMainWindow *FMainWindow;
 	IOptionsManager *FOptionsManager;
 private:
@@ -149,6 +171,8 @@ private:
 	QMultiMap<int,IMessageEditSendHandler *> FEditSendHandlers;
 	QMultiMap<int,IMessageEditContentsHandler *> FEditContentsHandlers;
 	QMultiMap<int,IMessageStyleHandler *> FStyleHandlers;
+	QList<DocumentMessageContexts> FDocumentMessageContexts;
+	quint64 FNextMessageContextId;
 };
 
 #endif // MESSAGEWIDGETS_H

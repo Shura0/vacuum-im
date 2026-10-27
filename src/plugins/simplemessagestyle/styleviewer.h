@@ -5,7 +5,7 @@
 #include <QObject>
 #include <utils/animatedtextbrowser.h>
 
-class StyleViewer: 
+class StyleViewer:
 	public AnimatedTextBrowser
 {
 	Q_OBJECT;
@@ -16,8 +16,8 @@ public:
 	QSize minimumSizeHint() const;
 protected:
 	void mousePressEvent(QMouseEvent *AEvent) override;
-public slots:
-	void onLinkActivated(const QUrl &AUrl);
+	void keyPressEvent(QKeyEvent *AEvent) override;
+	bool viewportEvent(QEvent *AEvent) override;
 };
 
 #endif // STYLEVIEWER_H

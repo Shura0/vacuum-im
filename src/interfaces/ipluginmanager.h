@@ -45,6 +45,7 @@ public:
 	virtual bool isShutingDown() const =0;
 	virtual QString homePath() const =0;
 	virtual void setHomePath(const QString &APath) =0;
+	virtual QString cachePath() const = 0;
 	virtual void setLocale(QLocale::Language ALanguage, QLocale::Country ACountry) =0;
 	virtual IPlugin *pluginInstance(const QUuid &AUuid) const =0;
 	virtual QList<IPlugin *> pluginInterface(const QString &AInterface = QString()) const =0;

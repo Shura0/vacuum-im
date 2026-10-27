@@ -2,10 +2,12 @@
 
 #include <QTextFrame>
 #include <QTextTable>
+#include <QTextBrowser>
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QTextDocumentFragment>
 #include <QRegularExpression>
+#include <interfaces/imessagedocumentcontext.h>
 #include <utils/textmanager.h>
 #include <utils/pluginhelper.h>
 
@@ -62,6 +64,10 @@ void ViewWidget::setMessageStyle(IMessageStyle *AStyle, const IMessageStyleOptio
 	{
 		if (FMessageStyle)
 		{
+			// Invalidate pending feature-plugin operations before the old style
+			// widget is destroyed/replaced.
+			resetMessageDocumentContexts(FStyleWidget);
+
 			disconnect(FMessageStyle->instance(),SIGNAL(urlClicked(QWidget *, const QUrl &)),
 				this,SLOT(onMessageStyleUrlClicked(QWidget *, const QUrl &)));
 			disconnect(FStyleWidget,SIGNAL(customContextMenuRequested(const QPoint &)),
@@ -265,8 +271,21 @@ void ViewWidget::onMessageStyleOptionsChanged(QWidget *AWidget, const IMessageSt
 	if (AWidget == FStyleWidget)
 	{
 		FStyleOptions = AOptions;
+		if (AClean)
+			resetMessageDocumentContexts(AWidget);
 		emit messageStyleOptionsChanged(AOptions,AClean);
 	}
+}
+
+void ViewWidget::resetMessageDocumentContexts(QWidget *AStyleWidget)
+{
+	if (!FMessageWidgets || !AStyleWidget)
+		return;
+
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(AStyleWidget);
+	IMessageDocumentContextManager *manager = qobject_cast<IMessageDocumentContextManager *>(FMessageWidgets->instance());
+	if (browser && manager)
+		manager->resetMessageContexts(browser->document());
 }
 
 void ViewWidget::onMessageStyleContentAppended(QWidget *AWidget, const QString &AHtml, const IMessageStyleContentOptions &AOptions)
