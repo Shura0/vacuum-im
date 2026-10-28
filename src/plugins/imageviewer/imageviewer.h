@@ -13,6 +13,7 @@
 #include <QByteArray>
 #include <QUrl>
 
+#include <interfaces/iimagemediaprovider.h>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imessagedocumentcontext.h>
@@ -48,13 +49,14 @@ public:
     virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
     virtual bool initObjects();
     virtual bool initSettings();
-    virtual bool startPlugin() { return true; }
+    virtual bool startPlugin();
     // IMessageStyleHandler
     virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml, QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
     virtual QString messageStyleContentSlot(int AOrder, QWidget *AWidget, const QString &ASlotName, bool ASlotInTemplate, const IMessageStyleContentOptions &AOptions);
     // IOptionsDialogHolder
     virtual QMultiMap<int, IOptionsDialogWidget *> optionsDialogWidgets(const QString &ANodeId, QWidget *AParent);
 private:
+    void ensureMediaConsumerActive();
     struct Gallery
     {
         // Amount of the image links of the message
@@ -116,6 +118,8 @@ private:
     IMessageWidgets *FMessageWidgets;
     IMessageDocumentContextManager *FMessageContextManager;
     IOptionsManager *FOptionsManager;
+    // Optional end-to-end provider (OMEMO): its urls are decrypted here
+    IImageMediaProvider *FMediaProvider;
     CacheManager *FCacheManager;
     NetworkManager *FNetworkManager;
 };

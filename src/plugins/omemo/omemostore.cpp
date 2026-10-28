@@ -341,7 +341,7 @@ bool OmemoStore::save()
 QByteArray OmemoStore::serialize() const
 {
 	QJsonObject root;
-	root.insert(QStringLiteral("version"),1);
+	root.insert(QStringLiteral("version"),2);
 
 	QJsonObject device;
 	device.insert(QStringLiteral("id"),(double)FData.deviceId);
@@ -408,6 +408,26 @@ QByteArray OmemoStore::serialize() const
 		messageCache.insert(it.key(),encode(it.value()));
 	root.insert(QStringLiteral("messageCache"),messageCache);
 
+	// Introduced in version 2. Attachment keys and thumbnails are as secret as
+	// the message plaintext, so they live inside the same encrypted blob.
+	QJsonObject attachments;
+	for (QHash<QString, AttachmentKeys>::const_iterator it=FData.attachments.constBegin();
+		it!=FData.attachments.constEnd(); ++it)
+	{
+		QJsonObject object;
+		object.insert(QStringLiteral("iv"),encode(it.value().iv));
+		object.insert(QStringLiteral("key"),encode(it.value().key));
+		object.insert(QStringLiteral("added"),(double)it.value().added);
+		attachments.insert(it.key(),object);
+	}
+	root.insert(QStringLiteral("attachments"),attachments);
+
+	QJsonObject attachmentThumbs;
+	for (QHash<QString, QString>::const_iterator it=FData.attachmentThumbs.constBegin();
+		it!=FData.attachmentThumbs.constEnd(); ++it)
+		attachmentThumbs.insert(it.key(),it.value());
+	root.insert(QStringLiteral("attachmentThumbs"),attachmentThumbs);
+
 	return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
 
@@ -422,7 +442,10 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 	}
 
 	QJsonObject root = document.object();
-	if (root.value(QStringLiteral("version")).toInt() != 1)
+	// Version 1: the original format.  Version 2 adds the XEP-0454 attachment
+	// key material; older files simply load without it.
+	const int version = root.value(QStringLiteral("version")).toInt();
+	if (version != 1 && version != 2)
 	{
 		FLastError = QStringLiteral("unsupported OMEMO store version");
 		return false;
@@ -497,6 +520,28 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 		const QByteArray plain = decode(it.value().toString());
 		if (!it.key().isEmpty() && !plain.isEmpty())
 			data.messageCache.insert(it.key(),plain);
+	}
+
+	if (version >= 2)
+	{
+		const QJsonObject attachments = root.value(QStringLiteral("attachments")).toObject();
+		for (QJsonObject::const_iterator it=attachments.constBegin(); it!=attachments.constEnd(); ++it)
+		{
+			const QJsonObject object = it.value().toObject();
+			AttachmentKeys keys;
+			keys.iv = decode(object.value(QStringLiteral("iv")).toString());
+			keys.key = decode(object.value(QStringLiteral("key")).toString());
+			keys.added = (qint64)object.value(QStringLiteral("added")).toDouble();
+			if (!it.key().isEmpty() && !keys.key.isEmpty())
+				data.attachments.insert(it.key(),keys);
+		}
+
+		const QJsonObject attachmentThumbs = root.value(QStringLiteral("attachmentThumbs")).toObject();
+		for (QJsonObject::const_iterator it=attachmentThumbs.constBegin(); it!=attachmentThumbs.constEnd(); ++it)
+		{
+			if (!it.key().isEmpty())
+				data.attachmentThumbs.insert(it.key(),it.value().toString());
+		}
 	}
 
 	FData = data;

@@ -118,6 +118,7 @@ QString decodedHtmlAttribute(const QString &AValue)
 
 ImageViewer::ImageViewer()
 	: FPluginManager(nullptr), FMessageWidgets(nullptr), FMessageContextManager(nullptr), FOptionsManager(nullptr),
+	  FMediaProvider(nullptr),
 	  FCacheManager(new CacheManager(this)), FNetworkManager(new NetworkManager(this))
 {
 }
@@ -201,6 +202,36 @@ bool ImageViewer::initSettings()
 		FOptionsManager->insertOptionsDialogHolder(this);
 
 	return true;
+}
+
+bool ImageViewer::startPlugin()
+{
+	// An end-to-end media provider (e.g. OMEMO) is consulted before this
+	// plugin downloads anything: encrypted media is decrypted by the provider
+	// exactly once and shown in the ordinary galleries. Whether the previews
+	// are taken from the provider is re-evaluated on every message insert
+	// (ensureMediaConsumerActive) so the settings changes take effect with-
+	// out a wait for a restart.
+	QList<IPlugin *> providers = FPluginManager != nullptr
+		? FPluginManager->pluginInterface("IImageMediaProvider") : QList<IPlugin *>();
+	for (IPlugin *providerPlugin : providers)
+	{
+		IImageMediaProvider *provider = qobject_cast<IImageMediaProvider *>(providerPlugin->instance());
+		if (provider == nullptr)
+			continue;
+		FMediaProvider = provider;
+		LOG_INFO("ImageViewer: media provider found");
+		break;
+	}
+	return true;
+}
+
+void ImageViewer::ensureMediaConsumerActive()
+{
+	if (FMediaProvider == nullptr)
+		return;
+	const bool active = FCacheManager->isAvailable() && isAutoLoadEnabled();
+	FMediaProvider->setMediaConsumerActive(active);
 }
 
 QMultiMap<int, IOptionsDialogWidget *> ImageViewer::optionsDialogWidgets(const QString &ANodeId, QWidget *AParent)
@@ -698,6 +729,28 @@ void ImageViewer::schedulePreviewJob(const PendingInsert &AInsert, const QByteAr
 
 void ImageViewer::startNetworkOrCacheDownload(const QString &AUrlStr, const QUrl &AUrl, const PendingInsert &AInsert)
 {
+	// An end-to-end media provider (OMEMO) may own the url: its attachment
+	// keys decrypt the file locally, the ordinary download can never
+	// produce a valid image for it and would leak the fetch to the server.
+	// Note: requestMediaPath answers later (possibly), the callback keeps
+	// working on this thread.
+	if (FMediaProvider != nullptr && FMediaProvider->canHandleMediaUrl(AUrl))
+	{
+		LOG_INFO(QString("ImageViewer: delegating media to provider for %1").arg(AUrlStr));
+		FMediaProvider->requestMediaPath(AUrl, [this, AInsert, AUrl](const QString &AFilePath)
+			{
+				// The link of the failed images is left as it is, until the
+				// next render of the message retries.
+				if (AFilePath.isEmpty() || !AInsert.doc)
+					return;
+				const QByteArray data = FCacheManager->readImage(AFilePath);
+				if (data.isEmpty() || !FCacheManager->validateImageData(data))
+					return;
+				scheduleEmbed(AInsert, AUrl, data);
+			});
+		return;
+	}
+
 	if (FNetworkManager->isHostBlocked(AUrl))
 	{
 		// The link of the message is left as it is.
@@ -775,6 +828,11 @@ bool ImageViewer::messageStyleContentInsert(int AOrder, QWidget *AWidget, const 
 		AModifiedHtml = AHtml;
 		return true;
 	}
+
+	// The provider activation is re-evaluated before any message is
+	// processed so that its state is fresh for the passes of the other
+	// handlers of this insert broadcast.
+	ensureMediaConsumerActive();
 
 	// MessageWidgets owns message boundaries and their lifetime. Register every
 	// message before the auto-load check, including messages without image URLs.

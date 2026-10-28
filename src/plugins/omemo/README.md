@@ -1,8 +1,9 @@
 # OMEMO plugin
 
 Legacy OMEMO 0.3 (XEP-0384 v0.3, `eu.siacs.conversations.axolotl`) for
-one-to-one chats.  OMEMO 2, group chats, files and calls are intentionally
-not implemented yet.
+one-to-one chats, including the receiving side of encrypted files (XEP-0454).
+sending files, OMEMO 2, group chats and calls are intentionally not
+implemented yet.
 
 ## Behaviour
 
@@ -44,6 +45,46 @@ not implemented yet.
   store by stanza id.  This keeps chat history and the separate History
   dialog readable later even after the ratchet has advanced; the archive
   viewer also uses the same decryption hook.
+- **Receiving encrypted files and images** (XEP-0454): a message body of the
+  form `aesgcm://<https-url>#<iv+key>` — optionally followed by a data: URI
+  thumbnail — is recognized wherever OMEMO plaintexts appear.  Before the
+  message is stored or displayed the body is sanitized: the url becomes a
+  plain `https://` link without the key fragment and the thumbnail line is
+  removed, so the AES-256-GCM key never reaches the plaintext archive.  The
+  key material is kept in the encrypted OMEMO store and the decrypted file
+  is cached under `<filesPath>/omemo/files/<account-uuid>/`.  In the chat
+  window the attachment shows as an ordinary link until the file arrives
+  (shortly after receiving the message), then it is replaced by an
+  **inline image** (only when the Image Viewer plugin does not take care of
+  the previews, see below) and the original link stays clickable.  Downloads follow the same
+  safety rules as the Image Viewer plugin: size limit, redirect and
+  stall/time limits, and blocking of requests to loopback/private/reserved
+  addresses (SSRF protection of the same strength as image previews).
+  Non-image files are stored as `<sha256>.bin`; clicking the attachment
+  link (or the inline image) opens the **decrypted local file** with the
+  system opener for every file type; the still-encrypted remote file is
+  never passed to the browser.  If the file is not decrypted yet, the click
+  starts the download and the click can be repeated afterwards.  Non-image
+  attachments are additionally displayed under their own file name with
+  the size (`document.pdf (2.3 MB)`), when cached or replacing the link
+  text when the download completes.  In
+  the message-area context menu of a chat window two extra items appear for
+  a registered attachment link: **Open** and **Save as...** (a pending
+  "Save as..." remembers the chosen target and saves the file automatically
+  when the download completes).  The History dialog currently shows only
+  the link.
+
+- **Integration with the Image Viewer**: when the Image Viewer plugin is
+  enabled, the OMEMO plugin acts as its encrypted media provider
+  (`IImageMediaProvider`).  The viewer consults it for every image link
+  before downloading anything itself, so an encrypted attachment is
+  fetched and decrypted exactly once and then shown in the ordinary image
+  viewer galleries with downsized previews — exactly like a normal
+  `https://` image.  While the viewer takes care of the previews the OMEMO
+  plugin does not insert its own inline images.  If the viewer is disabled
+  or its autoload option (`Automatically load images from message URLs`)
+  is off, OMEMO images fall back to the inline behaviour described above.
+  Non-image attachments are not affected by the integration.
 
 ## Storage
 
@@ -53,6 +94,10 @@ Per-account state is stored in
 ```
 "VOMEMO1" | salt[16] | nonce[12] | tag[16] | AES-256-GCM(JSON)
 ```
+
+Store format version 2 (the XEP-0454 attachment keys and thumbnails were
+added there); version 1 files are loaded transparently and are rewritten in
+the new format on the next save.
 
 The key is derived with HKDF-SHA256 from the profile key
 (`Options::cryptKey()`), using the random per-file salt.  The file is written
@@ -71,7 +116,8 @@ atomically with `0600` permissions.  Keys are never written to
 ## Known limitations
 
 - Only legacy 0.3; OMEMO 2 peers are not supported.
-- No MUC, file transfer or calls.
+- No MUC, calls; **sending** OMEMO-encrypted files (XEP-0363 upload + XEP-0454
+  url generation) is not implemented yet, only receiving.
 - Identity changes on an existing device are rejected by the Signal trust
   callback and need manual session cleanup (not exposed in the UI yet).
 - Profile password changes are not migrated yet; the OMEMO file is encrypted

@@ -19,6 +19,7 @@
 #define AG_MWIWAM_CHATMHANDLER_ADDRESSES                        500
 
 //MessageWidgets - ViewWidgetContextMenu
+#define AG_MWVWCM_OMEMO                                        250
 #define AG_MWVWCM_MESSAGEWIDGETS_URL                            300
 #define AG_MWVWCM_MESSAGEWIDGETS_COPY                           500
 #define AG_MWVWCM_MESSAGEWIDGETS_QUOTE                          500

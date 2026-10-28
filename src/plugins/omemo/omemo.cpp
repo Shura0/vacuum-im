@@ -1,9 +1,11 @@
 #include "omemo.h"
 
+#include <definitions/actiongroups.h>
 #include <definitions/menuicons.h>
 #include <definitions/messagemarks.h>
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
+#include <definitions/messageviewurlhandlerorders.h>
 #include <definitions/namespaces.h>
 #include <definitions/messagedataroles.h>
 #include <definitions/resources.h>
@@ -13,10 +15,15 @@
 #include <utils/logger.h>
 #include <utils/message.h>
 #include <utils/options.h>
+#include <utils/textmanager.h>
 
 #include <QColor>
+#include <QDesktopServices>
+#include <QFileDialog>
 #include <QFile>
 #include <QFontMetricsF>
+#include <QRegularExpression>
+#include <QUrl>
 #include <QPainter>
 #include <QPixmap>
 #include <QPointer>
@@ -32,8 +39,15 @@
 #include "omemodevicesdialog.h"
 #include "omemostore.h"
 
+#include <QDateTime>
+
 #define SHC_OMEMO_ENCRYPTED "/message/encrypted[@xmlns='" OMEMO_NS "']"
 #define SHC_OMEMO_MESSAGE   "/message"
+
+// Message anchors whose href is a sanitized XEP-0454 attachment url.
+static const QRegularExpression AnchorsRegex(QStringLiteral(
+	R"REGEX(<a\b(?:(?!>).)*?(?<![\w-])href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+))(?:(?!>).)*?>.*?</a\s*>)REGEX"),
+	QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption);
 
 static QIcon statusIcon(const QIcon &AIcon, const QColor &AColor)
 {
@@ -157,6 +171,9 @@ Omemo::Omemo() :
 	FXmppStreamManager(nullptr),
 	FMessageProcessor(nullptr),
 	FMessageWidgets(nullptr),
+	FAttachments(nullptr),
+	FMessageContextManager(nullptr),
+	FMediaConsumerActive(false),
 	FAccountRemoving(false)
 {
 }
@@ -167,6 +184,9 @@ Omemo::~Omemo()
 		FMessageProcessor->removeMessageEditor(MEO_OMEMO_DECRYPT,this);
 	if (FMessageWidgets != nullptr)
 		FMessageWidgets->removeStyleHandler(MSHO_OMEMO,this);
+	if (FMessageWidgets != nullptr)
+		FMessageWidgets->removeViewUrlHandler(MVUHO_OMEMO,this);
+	FMediaRequests.clear();
 	if (FStanzaProcessor != nullptr)
 	{
 		foreach (const StanzaHandles &handles, FStanzaHandles)
@@ -234,7 +254,10 @@ bool Omemo::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 
 	plugin = APluginManager->pluginInterface(QStringLiteral("IMessageWidgets")).value(0,nullptr);
 	if (plugin != nullptr)
+	{
 		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
+		FMessageContextManager = qobject_cast<IMessageDocumentContextManager *>(plugin->instance());
+	}
 
 	// The plugins we unregister from at destruction may already be dead by then
 	// (shutdown order is not guaranteed), so drop the pointers as soon as the
@@ -255,6 +278,10 @@ bool Omemo::initObjects()
 {
 	if (FAccountManager == nullptr)
 		return false;
+
+	FAttachments = new OmemoAttachments(this);
+	connect(FAttachments,&OmemoAttachments::attachmentReady,
+		this,&Omemo::onAttachmentReady);
 
 	connect(FAccountManager->instance(),SIGNAL(accountInserted(IAccount *)),
 		SLOT(onAccountInserted(IAccount *)));
@@ -280,6 +307,7 @@ bool Omemo::initObjects()
 	if (FMessageWidgets != nullptr)
 	{
 		FMessageWidgets->insertStyleHandler(MSHO_OMEMO,this);
+		FMessageWidgets->insertViewUrlHandler(MVUHO_OMEMO,this);
 		connect(FMessageWidgets->instance(),SIGNAL(chatWindowCreated(IMessageChatWindow *)),
 			SLOT(onChatWindowCreated(IMessageChatWindow *)));
 		connect(FMessageWidgets->instance(),SIGNAL(chatWindowDestroyed(IMessageChatWindow *)),
@@ -579,7 +607,7 @@ bool Omemo::decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirect
 			cached = cachedOmemoTimeMessage(account,contact,AMessage.dateTime());
 		if (fromCache || !cached.isEmpty())
 		{
-			const QString plain = QString::fromUtf8(cached);
+			const QString plain = sanitizeOmemoBody(account,QString::fromUtf8(cached),false);
 			if (!plain.isEmpty())
 			{
 				rebuildOmemoMessage(AMessage,plain);
@@ -612,7 +640,7 @@ bool Omemo::decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirect
 			cached = cachedOmemoTimeMessage(account,contact,AMessage.dateTime());
 		if (fromCache || !cached.isEmpty())
 		{
-			const QString plain = QString::fromUtf8(cached);
+			const QString plain = sanitizeOmemoBody(account,QString::fromUtf8(cached),false);
 			if (!plain.isEmpty())
 			{
 				rebuildOmemoMessage(AMessage,plain);
@@ -665,6 +693,14 @@ OmemoAccount *Omemo::accountForStream(const Jid &AStreamJid)
 	return result;
 }
 
+QString Omemo::sanitizeOmemoBody(OmemoAccount *AAccount, const QString &APlain, bool AAutoDownload) const
+{
+	// The attachments sanitizer may not exist before the plugin is fully
+	// initialized; then the plaintext passes through unchanged.
+	return FAttachments != nullptr
+		? FAttachments->sanitizeBody(AAccount,APlain,AAutoDownload) : APlain;
+}
+
 bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APlainOut)
 {
 	QDomElement encrypted = AStanza.firstElement(QStringLiteral("encrypted"),QString::fromLatin1(OMEMO_NS));
@@ -705,13 +741,20 @@ bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APla
 
 	if (decrypted)
 	{
-		account->cacheMessage(messageId,plain);
+		// XEP-0454: rewrite aesgcm:// urls before anything else stores or
+		// shows the plaintext.  This removes the key fragment and the data
+		// URI thumbnail from the message body; the key material goes into the
+		// encrypted store and the file download starts here.
+		QString plainText = sanitizeOmemoBody(account,QString::fromUtf8(plain),true);
+		const QByteArray sanitized = plainText.toUtf8();
+
+		account->cacheMessage(messageId,sanitized);
 		const QString payloadKey = omemoPayloadKey(encrypted);
 		if (!payloadKey.isEmpty())
-			account->cacheMessage(payloadKey,plain);
+			account->cacheMessage(payloadKey,sanitized);
 		if (APlainOut != nullptr)
-			*APlainOut = QString::fromUtf8(plain);
-		replaceBody(AStanza,QString::fromUtf8(plain));
+			*APlainOut = plainText;
+		replaceBody(AStanza,plainText);
 		setMessageStatus(messageId,StatusEncrypted);
 		markStanzaStatus(AStanza,StatusEncrypted);
 		LOG_STRM_DEBUG(AStreamJid,QString("OMEMO message decrypted, from=%1").arg(sender));
@@ -1033,6 +1076,12 @@ void Omemo::onChatWindowCreated(IMessageChatWindow *AWindow)
 	connect(AWindow->infoWidget()->instance(),SIGNAL(contextMenuRequested(Menu *)),
 		this,SLOT(onWindowContextMenuRequested(Menu *)),Qt::UniqueConnection);
 
+	if (AWindow->viewWidget() != nullptr)
+	{
+		connect(AWindow->viewWidget()->instance(),SIGNAL(viewContextMenu(const QPoint &, Menu *)),
+			this,SLOT(onViewContextMenu(const QPoint &, Menu *)),Qt::UniqueConnection);
+	}
+
 	updateLock(AWindow);
 }
 
@@ -1207,6 +1256,139 @@ void Omemo::onWindowContextMenuRequested(Menu *AMenu)
 	AMenu->addAction(action,AG_DEFAULT);
 }
 
+void Omemo::onViewContextMenu(const QPoint &APosition, Menu *AMenu)
+{
+	IMessageViewWidget *widget = qobject_cast<IMessageViewWidget *>(sender());
+	if (widget == nullptr || FAttachments == nullptr || AMenu == nullptr)
+		return;
+
+	// The attachment link under the cursor is detected the same way the
+	// MessageWidgets menu does: first the anchor/image format property, then
+	// the fragment href.
+	QString href = widget->textFormatAt(APosition).property(TMI_IMAGE_LINK_URL).toString();
+	if (href.isEmpty())
+	{
+		QTextDocumentFragment fragment = widget->textFragmentAt(APosition);
+		href = TextManager::getTextFragmentHref(fragment.isEmpty() ? widget->selection() : fragment);
+	}
+	// The href arrives url-decoded through the anchor click pipeline as well;
+	// both encodings are tried.
+	OmemoAccount *account = nullptr;
+	if (!isAttachmentUrl(href,&account))
+	{
+		const QString encoded = QString::fromUtf8(QUrl(href).toEncoded());
+		if (!isAttachmentUrl(encoded,&account))
+			return;
+		href = encoded;
+	}
+
+	Action *openAction = new Action(AMenu);
+	openAction->setText(tr("Open"));
+	openAction->setData(Action::DR_Parametr1,href);
+	connect(openAction,SIGNAL(triggered(bool)),SLOT(onAttachmentOpenActionTriggered(bool)));
+	AMenu->addAction(openAction,AG_MWVWCM_OMEMO,true);
+
+	// A pending "Save as..." is disabled until the decrypted file arrives.
+	Action *saveAction = new Action(AMenu);
+	saveAction->setText(tr("Save as..."));
+	saveAction->setEnabled(!FPendingSaves.contains(href));
+	saveAction->setData(Action::DR_Parametr1,href);
+	connect(saveAction,SIGNAL(triggered(bool)),SLOT(onAttachmentSaveAsActionTriggered(bool)));
+	AMenu->addAction(saveAction,AG_MWVWCM_OMEMO,true);
+}
+
+void Omemo::onAttachmentOpenActionTriggered(bool)
+{
+	Action *action = qobject_cast<Action *>(sender());
+	OmemoAccount *account = nullptr;
+	const QString href = action != nullptr ? action->data(Action::DR_Parametr1).toString() : QString();
+	if (action == nullptr || !isAttachmentUrl(href,&account))
+		return;
+	if (OmemoAttachments::isFileCached(account,href))
+		QDesktopServices::openUrl(QUrl::fromLocalFile(OmemoAttachments::attachmentFilePath(account,href)));
+	else
+		FAttachments->downloadAttachment(account,href);
+}
+
+void Omemo::onAttachmentSaveAsActionTriggered(bool)
+{
+	Action *action = qobject_cast<Action *>(sender());
+	OmemoAccount *account = nullptr;
+	const QString href = action != nullptr ? action->data(Action::DR_Parametr1).toString() : QString();
+	if (action == nullptr || !isAttachmentUrl(href,&account) || FPendingSaves.contains(href))
+		return;
+
+	const QString name = OmemoAttachments::attachmentFileName(href);
+	const QString target = QFileDialog::getSaveFileName(
+		action->parent() != nullptr ? qobject_cast<QWidget *>(action->parent()) : nullptr,
+		tr("Save decrypted file"),name);
+	if (target.isEmpty())
+		return;
+	if (OmemoAttachments::isFileCached(account,href))
+		saveAttachment(account,href,target);
+	else
+	{
+		// The file is still downloading: save it automatically when the
+		// download and decryption complete.
+		FPendingSaves.insert(href,target);
+		FAttachments->downloadAttachment(account,href);
+	}
+}
+
+void Omemo::saveAttachment(OmemoAccount *AAccount, const QString &ACleanUrl, const QString &ATargetPath)
+{
+	const QString localFile = OmemoAttachments::attachmentFilePath(AAccount,ACleanUrl);
+	if (QFile::exists(ATargetPath) && !QFile::remove(ATargetPath))
+	{
+		LOG_WARNING(QString("OMEMO attachment save failed (target busy), target=%1").arg(ATargetPath));
+		return;
+	}
+	if (!QFile::copy(localFile,ATargetPath))
+		LOG_WARNING(QString("OMEMO attachment save failed, target=%1").arg(ATargetPath));
+	else
+		LOG_STRM_INFO(AAccount->streamJid(),QString("OMEMO attachment saved, target=%1, url=%2").arg(ATargetPath,ACleanUrl));
+}
+
+bool Omemo::canHandleMediaUrl(const QUrl &AUrl)
+{
+	OmemoAccount *account = nullptr;
+	return isAttachmentUrl(QString::fromUtf8(AUrl.toEncoded()),&account);
+}
+
+void Omemo::requestMediaPath(const QUrl &AUrl, const std::function<void(const QString &AFilePath)> &AHandler)
+{
+	const QString href = QString::fromUtf8(AUrl.toEncoded());
+	OmemoAccount *account = nullptr;
+	if (AHandler == nullptr || !isAttachmentUrl(href,&account))
+	{
+		if (AHandler != nullptr)
+			AHandler(QString());
+		return;
+	}
+
+	// The answers are always given on the main thread, the download ready
+	// signal comes from the same thread.
+	if (OmemoAttachments::isFileCached(account,href))
+	{
+		const QString path = OmemoAttachments::attachmentFilePath(account,href);
+		QTimer::singleShot(0,this,[AHandler,path]() { AHandler(path); });
+	}
+	else
+	{
+		// The consumer requests are appended for every message embedding the
+		// url; each of them is answered exactly once.
+		FMediaRequests[href].append(AHandler);
+		FAttachments->downloadAttachment(account,href);
+	}
+}void Omemo::setMediaConsumerActive(bool AActive)
+{
+	if (FMediaConsumerActive != AActive)
+	{
+		FMediaConsumerActive = AActive;
+		LOG_INFO(QString("OMEMO media consumer (image previews) is %1").arg(AActive ? QStringLiteral("active") : QStringLiteral("inactive")));
+	}
+}
+
 void Omemo::setMessageStatus(const QString &AMessageId, int AStatus)
 {
 	if (AMessageId.isEmpty())
@@ -1283,8 +1465,342 @@ void Omemo::markOutgoingStatus(const Jid &AStreamJid, Message &AMessage)
 bool Omemo::messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml,
 	QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions)
 {
-	Q_UNUSED(AWidget); Q_UNUSED(AHtml); Q_UNUSED(AModifiedHtml); Q_UNUSED(AOptions);
-	return AOrder == MSHO_OMEMO;
+	if (AOrder != MSHO_OMEMO)
+		return false;
+
+	AModifiedHtml = AHtml;
+	if (FAttachments == nullptr || AWidget == nullptr)
+		return true;
+
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(AWidget);
+	QTextDocument *doc = browser != nullptr ? browser->document() : nullptr;
+	if (doc == nullptr)
+		return true;
+
+	// The anchors of the message are matched against the sanitized
+	// attachment urls the same way the Image Viewer does it.  When the
+	// decrypted file is in the cache the link is replaced by an inline image,
+	// otherwise the download is scheduled and completed lazily.
+	MessageDocumentContext context;
+	bool contextRegistered = false;
+
+	struct AnchorMatch
+	{
+		qsizetype start;
+		QString token;
+		QString href;
+	};
+	QList<AnchorMatch> matches;
+	QRegularExpressionMatchIterator it = AnchorsRegex.globalMatch(AHtml);
+	while (it.hasNext())
+	{
+		const QRegularExpressionMatch match = it.next();
+		const QString rawHref = !match.captured(1).isNull() ? match.captured(1) : (!match.captured(2).isNull() ? match.captured(2) : match.captured(3));
+		const QString href = decodedHtmlAttribute(rawHref).trimmed();
+		OmemoAccount *account = nullptr;
+		if (isAttachmentUrl(href,&account))
+			matches.append({match.capturedStart(0),match.captured(0),href});
+	}
+
+	for (int i = matches.count()-1; i >= 0; --i)	// from the back: positions are stable
+	{
+		const AnchorMatch &anchor = matches.at(i);
+		OmemoAccount *account = nullptr;
+		isAttachmentUrl(anchor.href,&account);
+
+		// The path is computed from the url alone and does not need the file
+		// to exist yet; the extension is decided at the same way when the
+		// download is stored.
+		const QString prospectivePath = OmemoAttachments::attachmentFilePath(account,anchor.href);
+		const bool imageFile = OmemoAttachments::isImageFilePath(prospectivePath);
+
+		if (OmemoAttachments::isFileCached(account,anchor.href))
+		{
+			QString replacement;
+			if (imageFile)
+			{
+				// The image viewer bound to this plugin shows its urls in the
+				// gallery previews, the inline image would be a duplicate.
+				if (FMediaConsumerActive)
+					continue;
+				const QString fileUrl = QUrl::fromLocalFile(prospectivePath).toString();
+				replacement = QStringLiteral("<a href=\"%1\"><img src=\"%2\" alt=\"%3\"></a>")
+					.arg(anchor.href.toHtmlEscaped(),fileUrl.toHtmlEscaped(),
+						OmemoAttachments::attachmentFileName(anchor.href).toHtmlEscaped());
+			}
+			else
+			{
+				// A non-image file shows under its own name with the size;
+				// the anchor keeps pointing at the original url.
+				const QString label = OmemoAttachments::attachmentFileName(anchor.href)
+					+ QLatin1String(" (")
+					+ OmemoAttachments::formatFileSize(QFileInfo(prospectivePath).size())
+					+ QLatin1String(")");
+				replacement = QStringLiteral("<a href=\"%1\">%2</a>")
+					.arg(anchor.href.toHtmlEscaped(),label.toHtmlEscaped());
+			}
+			AModifiedHtml.replace(anchor.start,anchor.token.size(),replacement);
+		}
+		else
+		{
+			if (FMediaConsumerActive && imageFile)
+				continue;	// the image viewer will request the decrypted file itself
+
+			// The file download is deduplicated, the image is inserted into
+			// the document when the download completes.
+			if (!contextRegistered && FMessageContextManager != nullptr)
+				contextRegistered = FMessageContextManager->beginMessageContext(doc,context);
+			FAttachments->downloadAttachment(account,anchor.href);
+			if (contextRegistered)
+				appendPendingAttachmentInsert(doc,context,anchor.href);
+		}
+	}
+
+	return true;
+}
+
+QString Omemo::decodedHtmlAttribute(const QString &AValue)
+{
+	// Same limited unescape the Image Viewer uses for anchor hrefs: the named
+	// references of the xml special characters and the numeric references.
+	QString result;
+	result.reserve(AValue.size());
+	for (int i = 0; i < AValue.size();)
+	{
+		if (AValue.at(i) != QLatin1Char('&') || i + 2 >= AValue.size())
+		{
+			result.append(AValue.at(i));
+			++i;
+			continue;
+		}
+		const int semicolon = AValue.indexOf(QLatin1Char(';'),i + 2);
+		if (semicolon < 0 || semicolon - i > 10)
+		{
+			result.append(AValue.at(i));
+			++i;
+			continue;
+		}
+		const QString ref = AValue.mid(i+1,semicolon - i - 1);
+		QChar character;
+		if (ref == QStringLiteral("amp")) character = QLatin1Char('&');
+		else if (ref == QStringLiteral("lt")) character = QLatin1Char('<');
+		else if (ref == QStringLiteral("gt")) character = QLatin1Char('>');
+		else if (ref == QStringLiteral("quot")) character = QLatin1Char('"');
+		else if (ref == QStringLiteral("apos")) character = QLatin1Char('\'');
+		else character = QChar::Null;
+
+		if (!character.isNull())
+		{
+			result.append(character);
+			i = semicolon + 1;
+			continue;
+		}
+
+		bool valid = false;
+		int code = 0;
+		if (ref.startsWith(QStringLiteral("#x"),Qt::CaseInsensitive))
+			code = ref.mid(2).toInt(&valid,16);
+		else if (ref.startsWith(QLatin1Char('#')))
+			code = ref.mid(1).toInt(&valid,10);
+		if (valid && code > 0 && code <= 0x10FFFF)
+		{
+			result.append(QChar(code));
+			i = semicolon + 1;
+		}
+		else
+		{
+			result.append(AValue.at(i));
+			++i;
+		}
+	}
+	return result;
+}
+
+bool Omemo::isAttachmentUrl(const QString &ACleanUrl, OmemoAccount **AAccount) const
+{
+	if (AAccount != nullptr)
+		*AAccount = nullptr;
+	if (FAttachments == nullptr || ACleanUrl.isEmpty())
+		return false;
+	for (QHash<QUuid, OmemoAccount *>::const_iterator it=FAccounts.constBegin();
+		it!=FAccounts.constEnd(); ++it)
+	{
+		if (FAttachments->isAttachment(it.value(),ACleanUrl))
+		{
+			if (AAccount != nullptr)
+				*AAccount = it.value();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Omemo::findAnchorFragment(QTextDocument *ADocument, const MessageDocumentContext &AContext,
+	const QString &AHref, const IMessageDocumentContextManager *AManager, QTextFragment &AFragment)
+{
+	if (ADocument == nullptr || AContext.document != ADocument || AHref.isEmpty()
+		|| AManager == nullptr || !AManager->isMessageContextValid(AContext))
+		return false;
+
+	const int startPos = AContext.atStart ? 0 : AContext.marker.position() + 1;
+	const int endPos = AManager->nextMessagePosition(AContext);
+	for (QTextBlock block = ADocument->findBlock(startPos); block.isValid(); block = block.next())
+	{
+		if (endPos >= 0 && block.position() >= endPos)
+			break;
+		for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it)
+		{
+			const QTextFragment &fragment = it.fragment();
+			const int fragStart = fragment.position();
+			const int fragEnd = fragStart + fragment.length();
+			if (fragEnd <= startPos || fragStart < startPos)
+				continue;
+			if (endPos >= 0 && fragStart >= endPos)
+				break;
+			if (endPos >= 0 && fragEnd > endPos)
+				continue;
+			const QTextCharFormat format = fragment.charFormat();
+			if (format.isAnchor() && format.anchorHref() == AHref)
+			{
+				AFragment = fragment;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool Omemo::insertAttachmentImage(QTextDocument *ADocument, const MessageDocumentContext &AContext,
+	const QString &ACleanUrl, const QString &ALocalFile, const IMessageDocumentContextManager *AManager)
+{
+	QTextFragment fragment;
+	if (!findAnchorFragment(ADocument,AContext,ACleanUrl,AManager,fragment))
+		return false;
+
+	QTextCursor cursor(ADocument);
+	cursor.setPosition(fragment.position() + fragment.length());
+
+	if (OmemoAttachments::isImageFilePath(ALocalFile))
+	{
+		// Anchored image char format, so links and the context menu work
+		// the same way as for the plain text links.
+		QTextImageFormat format;
+		format.setName(QUrl::fromLocalFile(ALocalFile).toString());
+		format.setToolTip(OmemoAttachments::attachmentFileName(ACleanUrl));
+		format.setAnchor(true);
+		format.setAnchorHref(ACleanUrl);
+		format.setProperty(TMI_IMAGE_LINK_URL,ACleanUrl);
+		cursor.insertImage(format);
+	}
+	else
+	{
+		// A non-image file is shown under its own name: the anchor text (the
+		// sanitized url) is replaced by "name (size)".  The anchor format is
+		// preserved so the link stays clickable.
+		const QString label = OmemoAttachments::attachmentFileName(ACleanUrl)
+			+ QLatin1String(" (") + OmemoAttachments::formatFileSize(QFileInfo(ALocalFile).size())
+			+ QLatin1String(")");
+		cursor.setPosition(fragment.position());
+		cursor.setPosition(fragment.position() + fragment.length(),QTextCursor::KeepAnchor);
+		cursor.insertText(label,fragment.charFormat());
+	}
+	return true;
+}
+
+void Omemo::appendPendingAttachmentInsert(QTextDocument *ADocument,
+	const MessageDocumentContext &AContext, const QString &ACleanUrl)
+{
+	for (int i = FPendingAttachmentInserts.count()-1; i >= 0; --i)
+	{
+		if (FPendingAttachmentInserts.at(i).document.isNull())
+			FPendingAttachmentInserts.removeAt(i);
+		else if (FPendingAttachmentInserts.at(i).url == ACleanUrl
+			&& FPendingAttachmentInserts.at(i).context.document == ADocument)
+			return;
+	}
+
+	AttachmentInsert insert;
+	insert.document = ADocument;
+	insert.context = AContext;
+	insert.url = ACleanUrl;
+	FPendingAttachmentInserts.append(insert);
+}
+
+void Omemo::onAttachmentReady(OmemoAccount *AAccount, const QString &ACleanUrl, bool ASuccess)
+{
+	// Failures are logged where they happen; nothing can be inserted then.
+	if (AAccount != nullptr && FPendingSaves.contains(ACleanUrl))
+	{
+		const QString target = FPendingSaves.take(ACleanUrl);
+		if (ASuccess)
+			saveAttachment(AAccount,ACleanUrl,target);
+	}
+
+	if (!ASuccess)
+	{
+		// The waiting media consumers (image viewer) get the empty path;
+		// copies are scheduled because the lambda outlives the list.
+		const QList<MediaHandler> failed = FMediaRequests.take(ACleanUrl);
+		for (const MediaHandler &item : failed)
+		{
+			const MediaHandler handler = item;
+			QTimer::singleShot(0,this,[handler]() { handler(QString()); });
+		}
+		return;
+	}
+
+	// The waiting media consumers (image viewer galleries); copies of the
+	// handlers are scheduled because the lambda outlives the list.
+	const QList<MediaHandler> handlers = FMediaRequests.take(ACleanUrl);
+	const QString readyPath = OmemoAttachments::attachmentFilePath(AAccount,ACleanUrl);
+	for (const MediaHandler &item : handlers)
+	{
+		const MediaHandler handler = item;
+		QTimer::singleShot(0,this,[handler,readyPath]() { handler(readyPath); });
+	}
+
+	for (int i = FPendingAttachmentInserts.count()-1; i >= 0; --i)
+	{
+		const AttachmentInsert &insert = FPendingAttachmentInserts.at(i);
+		if (insert.document.isNull())
+		{
+			FPendingAttachmentInserts.removeAt(i);
+			continue;
+		}
+		if (insert.url != ACleanUrl)
+			continue;
+
+		const QString localFile = OmemoAttachments::attachmentFilePath(AAccount,insert.url);
+		if (insertAttachmentImage(insert.document,insert.context,insert.url,localFile,FMessageContextManager))
+			FPendingAttachmentInserts.removeAt(i);
+	}
+}
+
+bool Omemo::messageViewUrlOpen(int AOrder, IMessageViewWidget *AWidget, const QUrl &AUrl)
+{
+	Q_UNUSED(AWidget);
+	if (AOrder != MVUHO_OMEMO)
+		return false;
+
+	// Only the sanitized attachment urls of this account are ours.  The href
+	// the viewer emits is stored exactly as the anchor was created.
+	const QString href = QString::fromUtf8(AUrl.toEncoded());
+	OmemoAccount *account = nullptr;
+	if (!isAttachmentUrl(href,&account))
+		return false;
+
+	// The remote file is encrypted and always useless for the browser or the
+	// system opener: never let the default handler see it.
+	if (OmemoAttachments::isFileCached(account,href))
+	{
+		LOG_STRM_INFO(account->streamJid(),QString("OMEMO attachment opened, url=%1").arg(href));
+		return QDesktopServices::openUrl(QUrl::fromLocalFile(OmemoAttachments::attachmentFilePath(account,href)));
+	}
+
+	// Not downloaded yet: fetch and decrypt it, the user can click again.
+	LOG_STRM_INFO(account->streamJid(),QString("OMEMO attachment download requested by click, url=%1").arg(href));
+	FAttachments->downloadAttachment(account,href);
+	return true;
 }
 
 QString Omemo::messageStyleContentSlot(int AOrder, QWidget *AWidget,

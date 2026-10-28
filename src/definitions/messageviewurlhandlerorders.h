@@ -1,6 +1,7 @@
 #ifndef DEF_MESSAGEVIEWURLHANDLERORDERS_H
 #define DEF_MESSAGEVIEWURLHANDLERORDERS_H
 
+#define MVUHO_OMEMO                            150
 #define MVUHO_FILETRANSFER                     300
 #define MVUHO_IMAGEVIEWER                      200
 #define MVUHO_MULTIUSERCHAT                    500

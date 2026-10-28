@@ -40,6 +40,14 @@ public:
 		qint64 removedAt = 0;
 	};
 
+	// XEP-0454 encrypted attachments: sanitized https url -> key material.
+	struct AttachmentKeys
+	{
+		QByteArray iv;
+		QByteArray key;
+		qint64 added = 0;
+	};
+
 	struct Data
 	{
 		quint32 deviceId = 0;
@@ -59,6 +67,9 @@ public:
 		// This keeps local/MAM history readable even when the ratchet has
 		// advanced or the copy was encrypted to an older device.
 		QHash<QString, QByteArray> messageCache;
+		QHash<QString, AttachmentKeys> attachments;
+		// The optional thumbnail from the message, a data: URI string.
+		QHash<QString, QString> attachmentThumbs;
 	};
 
 	explicit OmemoStore(const QString &AFilePath, const QByteArray &AKey = QByteArray());
