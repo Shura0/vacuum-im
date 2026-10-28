@@ -1,8 +1,14 @@
 #include "styleeditoptionsdialog.h"
 
 #include <QTimer>
+#include <QResizeEvent>
+#include <QTextBrowser>
+#include <QTextDocument>
+#include <QTextBlock>
+#include <QTextOption>
 #include <QVBoxLayout>
 #include <definitions/optionvalues.h>
+#include <definitions/messagemarks.h>
 #include <utils/widgetmanager.h>
 #include <utils/message.h>
 #include <utils/options.h>
@@ -43,6 +49,7 @@ StyleEditOptionsDialog::StyleEditOptionsDialog(IMessageStyleManager *AMessageSty
 		ui.frmStyleView->setLayout(new QVBoxLayout);
 		ui.frmStyleView->layout()->setContentsMargins(0,0,0,0);
 		ui.frmStyleView->layout()->addWidget(FStyleView);
+		FStyleView->installEventFilter(this);
 	}
 
 	connect(ui.dbbButtons,SIGNAL(accepted()),SLOT(accept()));
@@ -216,8 +223,33 @@ void StyleEditOptionsDialog::createViewContent()
 		o_options.time = QDateTime::currentDateTime().addSecs(5);
 		FStyle->appendContent(FStyleView,tr("Outgoing consecutive message"),o_options);
 
+		// A reply with the quoted lines, marked by the style with '> ' prefixes
+		o_options.time = QDateTime::currentDateTime().addSecs(10);
+		QString quoteHtml = tr("Reply where a part is quoted")+"<br>";
+		quoteHtml += "&gt; "+tr("Quoted message line 1")+"<br>";
+		quoteHtml += "&gt; "+tr("Quoted message line 2");
+		FStyle->appendContent(FStyleView,quoteHtml,o_options);
+
 		o_options.kind = IMessageStyleContentOptions::KindMeCommand;
 		FStyle->appendContent(FStyleView,tr("speaks of himself in the third person"),o_options);
+
+		o_options.kind = IMessageStyleContentOptions::KindMessage;
+		// Delivery/read marks are normally placed by the style handlers
+		// through the reserved 'marks' template slot; in the standalone
+		// preview they are embedded right after the message body so the
+		// variant CSS classes can be evaluated.
+		o_options.time = QDateTime::currentDateTime().addSecs(15);
+		FStyle->appendContent(FStyleView,tr("Outgoing message waiting to be delivered")
+			+ QString("&nbsp;<span class=\"%1\">&#10003;</span>").arg(MSMC_MARK_PENDING),o_options);
+
+		o_options.time = QDateTime::currentDateTime().addSecs(20);
+		FStyle->appendContent(FStyleView,tr("Outgoing message delivered to the contact")
+			+ QString("&nbsp;<span class=\"%1\">&#10004;</span>").arg(MSMC_MARK_DELIVERED),o_options);
+
+		o_options.time = QDateTime::currentDateTime().addSecs(25);
+		FStyle->appendContent(FStyleView,tr("Outgoing message read by the contact")
+			+ QString("&nbsp;<span class=\"%1\">&#10004;</span><span class=\"%2\">&#10004;</span>")
+				.arg(MSMC_MARK_DELIVERED,MSMC_MARK_DISPLAYED),o_options);
 	}
 }
 
@@ -227,6 +259,86 @@ void StyleEditOptionsDialog::onUpdateStyleView()
 	{
 		FStyle->changeOptions(FStyleView,FStyleEngine->styleSettinsOptions(FStyleSettings),true);
 		createViewContent();
+		// The mark glyphs are aligned by the tab stops, which can only be
+		// applied after the content has landed in the style document.
+		QTimer::singleShot(0,this,SLOT(alignMarkGlyphs()));
 	}
 	FUpdateStarted = false;
+}
+
+bool StyleEditOptionsDialog::eventFilter(QObject *AWatched,QEvent *AEvent)
+{
+	if (AWatched==FStyleView && AEvent->type()==QEvent::Resize)
+		QTimer::singleShot(0,this,SLOT(alignMarkGlyphs()));
+	return QDialog::eventFilter(AWatched,AEvent);
+}
+
+void StyleEditOptionsDialog::alignMarkGlyphs()
+{
+	// Couples the marks appended by createViewContent to the right border of
+	// the view, exactly like MessageReceipts::applyReceiptMark does for the
+	// real chat view: a tab character before the glyph and a right tab stop
+	// set on the message block.
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(FStyleView);
+	QTextDocument *document = browser!=NULL ? browser->document() : NULL;
+	if (document==NULL)
+		return;
+
+	qreal usableWidth = browser->viewport()->width() - 2*document->documentMargin();
+	QFontMetricsF metrics(browser->font());
+	foreach (const QChar &glyph, QList<QChar>()<<QChar(0x2713)<<QChar(0x2714))
+	{
+		QTextCursor cursor(document);
+		while (true)
+		{
+			cursor = document->find(QString(glyph),cursor);
+			if (cursor.isNull() || cursor.selectionStart()==0)
+				break;
+			int glyphPos = cursor.selectionStart();
+			QTextBlock glyphBlock = document->findBlock(glyphPos);
+			QString blockText = glyphBlock.text();
+			QChar prevChar = blockText.mid(glyphPos-1-glyphBlock.position(),1).at(0);
+			if (blockText.isEmpty())
+				break;
+			if (prevChar!=QChar(0x0009) && prevChar!=QChar(0x2713) && prevChar!=QChar(0x2714))
+			{
+				QTextCursor tabCursor(document);
+				tabCursor.setPosition(glyphPos);
+				tabCursor.insertText(QChar(0x0009));
+			}
+
+			QString glyphText = glyph;
+			qreal markerWidth = metrics.horizontalAdvance(glyphText) + 8;
+			if (usableWidth <= markerWidth)
+				break;
+
+			QTextCursor blockCursor(document);
+			blockCursor.setPosition(glyphPos);
+			QTextBlockFormat blockFormat = blockCursor.block().blockFormat();
+			QList<QTextOption::Tab> tabs = blockFormat.tabPositions();
+			int rightTab = -1;
+			for (int i=0; i<tabs.count(); i++)
+			{
+				if (tabs.at(i).type == QTextOption::RightTab)
+				{
+					rightTab = i;
+					break;
+				}
+			}
+			QTextOption::Tab tab;
+			tab.type = QTextOption::RightTab;
+			tab.position = usableWidth - markerWidth;
+			if (rightTab>=0)
+				tabs[rightTab] = tab;
+			else
+				tabs.append(tab);
+			blockFormat.setTabPositions(tabs);
+			blockCursor.setBlockFormat(blockFormat);
+
+			// Continue the search after the aligned glyph; a repeated glyph of
+			// the other kind placed right after it is pushed to the border too.
+			cursor = QTextCursor(document);
+			cursor.setPosition(glyphPos+1);
+		}
+	}
 }

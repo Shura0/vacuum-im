@@ -16,13 +16,15 @@ public:
 	StyleEditOptionsDialog(IMessageStyleManager *AMessageStyleManager, const OptionsNode &AStyleNode, QWidget *AParent = NULL);
 	~StyleEditOptionsDialog();
 	virtual QWidget *instance() { return this; }
-public slots: 
+public slots:
 	virtual void accept();
 protected:
 	void createViewContent();
+	bool eventFilter(QObject *AWatched,QEvent *AEvent) override;
 protected slots:
 	void startStyleViewUpdate();
 	void onUpdateStyleView();
+	void alignMarkGlyphs();
 private:
 	Ui::StyleEditOptionsDialogClass ui;
 private:
