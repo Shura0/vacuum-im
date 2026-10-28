@@ -449,6 +449,13 @@ bool SimpleMessageStyle::isConsecutive(const IMessageStyleContentOptions &AOptio
 	if (AOptions.senderId.isEmpty())
 		return false;
 
+	// History entries are read "per message" by the user, so the Special
+	// variant keeps a timestamp on every such message instead of merging it
+	// into the block of consecutive ones.
+	if (AOptions.type & IMessageStyleContentOptions::TypeHistory
+		&& AStatus.options.value(MSO_VARIANT).toString() == "Special")
+		return false;
+
 	if (AStatus.lastKind != AOptions.kind)
 		return false;
 	if (AStatus.lastId != AOptions.senderId)
