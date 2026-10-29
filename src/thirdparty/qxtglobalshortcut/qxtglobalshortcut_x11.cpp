@@ -35,6 +35,8 @@
 #include <xcb/xcb.h>
 #include <X11/Xlib.h>
 
+#include "qxtglobalshortcut_wayland.h"
+
 static Display *qxtX11Display()
 {
 	if (auto *x11 = qGuiApp->nativeInterface<QNativeInterface::QX11Application>())
@@ -180,6 +182,9 @@ bool QxtGlobalShortcutPrivate::nativeEventFilter(const QByteArray & eventType,
 
 quint32 QxtGlobalShortcutPrivate::nativeModifiers(Qt::KeyboardModifiers modifiers)
 {
+	if (QxtWaylandShortcut::isActive())
+		return QxtWaylandShortcut::nativeModifiers(modifiers);
+
 	// ShiftMask, LockMask, ControlMask, Mod1Mask, Mod2Mask, Mod3Mask, Mod4Mask, and Mod5Mask
 	quint32 native = 0;
 	if (modifiers & Qt::ShiftModifier)
@@ -200,6 +205,9 @@ quint32 QxtGlobalShortcutPrivate::nativeModifiers(Qt::KeyboardModifiers modifier
 
 quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
 {
+	if (QxtWaylandShortcut::isActive())
+		return QxtWaylandShortcut::nativeKeycode(key);
+
 	QxtX11Data x11;
 	if (!x11.isValid())
 		return 0;
@@ -213,12 +221,18 @@ quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
 
 bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods)
 {
+	if (QxtWaylandShortcut::isActive())
+		return QxtWaylandShortcut::registerShortcut(nativeKey, nativeMods);
+
 	QxtX11Data x11;
 	return x11.isValid() && x11.grabKey(nativeKey, nativeMods, x11.rootWindow());
 }
 
 bool QxtGlobalShortcutPrivate::unregisterShortcut(quint32 nativeKey, quint32 nativeMods)
 {
+	if (QxtWaylandShortcut::isActive())
+		return QxtWaylandShortcut::unregisterShortcut(nativeKey, nativeMods);
+
 	QxtX11Data x11;
 	return x11.isValid() && x11.ungrabKey(nativeKey, nativeMods, x11.rootWindow());
 }
