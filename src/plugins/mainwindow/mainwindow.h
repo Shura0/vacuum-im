@@ -41,6 +41,7 @@ signals:
 	void toolBarChangerInserted(int AOrderId, ToolBarChanger *AChanger);
 	void toolBarChangerRemoved(ToolBarChanger *AChanger);
 	void centralWidgetVisibleChanged(bool AVisible);
+	void mainWindowFirstShown();
 public:
 	void saveWindowGeometryAndState();
 	void loadWindowGeometryAndState();
@@ -57,6 +58,7 @@ protected:
 protected slots:
 	void onUpdateCentralWidgetVisible();
 	void onCurrentCentralPageChanged();
+	void onFocusCentralChat();
 	void onCentralPageAddedOrRemoved(IMainCentralPage *APage);
 	void onSplitterMoved(int APos, int AIndex);
 private:
@@ -69,6 +71,7 @@ private:
 	MenuBarChanger *FMainMenuBar;
 private:
 	bool FGeometryLoaded;
+	bool FFirstShowDone = false;
 	bool FAligned;
 	bool FCentralVisible;
 	int FLeftWidgetWidth;

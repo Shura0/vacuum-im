@@ -236,8 +236,9 @@ quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
     }
 }
 
-bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods)
+bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique)
 {
+    Q_UNUSED(AActionUnique);
     return RegisterHotKey(0, nativeMods ^ nativeKey, nativeMods, nativeKey);
 }
 

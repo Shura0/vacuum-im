@@ -9,6 +9,7 @@
 #include <definitions/menuicons.h>
 #include <definitions/optionvalues.h>
 #include <definitions/mainwindowwidgets.h>
+#include <interfaces/imessagewidgets.h>
 #include <utils/widgetmanager.h>
 #include <utils/options.h>
 
@@ -108,10 +109,13 @@ void MainWindow::showWindow(bool AMinimized)
 {
 	if (!Options::isNull())
 	{
+		const bool wasOpened = !isVisible() || isMinimized();
 		if (!AMinimized)
 			WidgetManager::showActivateRaiseWindow(this);
 		else if (!isVisible())
 			showMinimized();
+		if (!AMinimized && wasOpened)
+			QTimer::singleShot(0,this,SLOT(onFocusCentralChat()));
 
 		if (!FGeometryLoaded)
 		{
@@ -356,6 +360,11 @@ void MainWindow::setCentralWidgetVisible(bool AVisible)
 void MainWindow::showEvent(QShowEvent *AEvent)
 {
 	QMainWindow::showEvent(AEvent);
+	if (!FFirstShowDone)
+	{
+		FFirstShowDone = true;
+		emit mainWindowFirstShown();
+	}
 	if (isCentralWidgetVisible())
 	{
 		QList<int> splitterSizes = FSplitter->sizes();
@@ -416,6 +425,23 @@ void MainWindow::onUpdateCentralWidgetVisible()
 void MainWindow::onCurrentCentralPageChanged()
 {
 	updateWindow();
+}
+
+void MainWindow::onFocusCentralChat()
+{
+	if (!isCentralWidgetVisible())
+		return;
+	IMainCentralPage *page = FCentralWidget->currentCentralPage();
+	IMessageTabWindow *tabWindow = page!=NULL ? qobject_cast<IMessageTabWindow *>(page->instance()) : NULL;
+	IMessageTabPage *tabPage = tabWindow!=NULL ? tabWindow->currentTabPage() : NULL;
+	IMessageChatWindow *chatWindow = tabPage!=NULL ? qobject_cast<IMessageChatWindow *>(tabPage->instance()) : NULL;
+	IMessageEditWidget *editWidget = chatWindow!=NULL ? chatWindow->editWidget() : NULL;
+	if (editWidget==NULL)
+		return;
+	if (editWidget->isEditEnabled() && editWidget->textEdit()!=NULL)
+		editWidget->textEdit()->setFocus();
+	else if (chatWindow->viewWidget()!=NULL && chatWindow->viewWidget()->styleWidget()!=NULL)
+		chatWindow->viewWidget()->styleWidget()->setFocus();
 }
 
 void MainWindow::onCentralPageAddedOrRemoved(IMainCentralPage *APage)

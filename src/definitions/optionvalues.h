@@ -98,6 +98,8 @@
 #define OPV_MESSAGES_CLEANCHATTIMEOUT                   "messages.clean-chat-timeout"
 #define OPV_MESSAGES_COMBINEWITHROSTER                  "messages.combine-with-roster"
 #define OPV_MESSAGES_TABWINDOWS_ROOT                    "messages.tab-windows"
+#define OPV_MESSAGES_LASTCHAT_STREAM                    "messages.last-chat.stream"
+#define OPV_MESSAGES_LASTCHAT_CONTACT                   "messages.last-chat.contact"
 #define OPV_MESSAGES_TABWINDOWS_ENABLE                  "messages.tab-windows.enable"
 #define OPV_MESSAGES_TABWINDOWS_DEFAULT                 "messages.tab-windows.default"
 #define OPV_MESSAGES_TABWINDOW_ITEM                     "messages.tab-windows.window"

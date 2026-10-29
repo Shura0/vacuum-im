@@ -35,6 +35,7 @@
 #include <QAbstractEventDispatcher>
 #include <QKeySequence>
 #include <QHash>
+#include <QString>
 
 #ifndef Q_OS_MAC
 #if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
@@ -58,6 +59,7 @@ public:
     bool enabled;
     Qt::Key key;
     Qt::KeyboardModifiers mods;
+    QString actionName;
 
     bool setShortcut(const QKeySequence& shortcut);
     bool unsetShortcut();
@@ -79,7 +81,7 @@ private:
     static quint32 nativeKeycode(Qt::Key keycode);
     static quint32 nativeModifiers(Qt::KeyboardModifiers modifiers);
 
-    static bool registerShortcut(quint32 nativeKey, quint32 nativeMods);
+    static bool registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique);
     static bool unregisterShortcut(quint32 nativeKey, quint32 nativeMods);
 
     static QHash<QPair<quint32, quint32>, QxtGlobalShortcut*> shortcuts;

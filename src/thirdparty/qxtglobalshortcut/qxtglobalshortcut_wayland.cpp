@@ -112,6 +112,7 @@ QHash<QString, QPair<quint32,quint32> > s_actionToKey;
 bool s_metaTypesInited = false;
 QString s_componentPath;
 bool s_receiverConnected = false;
+bool s_legacySwept = false;
 
 QDBusMessage createCall(const QString &AMethod)
 {
@@ -123,8 +124,22 @@ QKeySequence keySequence(quint32 ANativeKey, quint32 ANativeMods)
 	return QKeySequence(Qt::Key(ANativeKey) | Qt::KeyboardModifiers(ANativeMods));
 }
 
-QString actionUnique(quint32 ANativeKey, quint32 ANativeMods)
+QString actionUnique(quint32 ANativeKey, quint32 ANativeMods, const QString &AStableName)
 {
+	// The stable name (the shortcut id, e.g. "global.show-roster") keeps
+	// the D-Bus action identity independent from the assigned key: a key
+	// change reuses the same action, an application restart re-registers
+	// the same action, no dead actions pile up in the daemon config.
+	if (!AStableName.isEmpty())
+	{
+		QString compact;
+		compact.reserve(AStableName.size());
+		foreach (const QChar &ch, AStableName)
+			compact.append(ch.isLetterOrNumber() ? ch.toLower() : QChar('_'));
+		return compact;
+	}
+	// legacy fallback for the direct QxtGlobalShortcut users: the action
+	// name derived from the key
 	QString name = QStringLiteral("shortcut_") + keySequence(ANativeKey, ANativeMods).toString(QKeySequence::PortableText);
 	QString compact;
 	compact.reserve(name.size());
@@ -180,6 +195,47 @@ QList<QKeySequence> demarshallSequences(const QDBusMessage &AMessage)
 }
 
 /**
+ * One time cleanup of the legacy actions. The actions used to be named
+ * after their keys ("shortcut" + the key text): every key change abandoned
+ * the old action in the daemon and nothing removed the actions of a quit
+ * application, so they piled up in the daemon config and kept their keys
+ * busy for every other application and for the next start of this one.
+ * The stable action names replaced them, remove the leftovers once.
+ */
+void sweepLegacyActions()
+{
+	if (s_legacySwept)
+		return;
+	s_legacySwept = true;
+
+	QDBusConnection bus = QDBusConnection::sessionBus();
+
+	QDBusMessage component = bus.call(createCall(QStringLiteral("getComponent")) << kComponentUnique);
+	if (component.type() != QDBusMessage::ReplyMessage || component.arguments().isEmpty())
+		return;
+	const QString componentPath = component.arguments().first().value<QDBusObjectPath>().path();
+	if (componentPath.isEmpty())
+		return;
+
+	QDBusMessage names = QDBusMessage::createMethodCall(kService, componentPath, kComponentIface, QStringLiteral("shortcutNames"));
+	QDBusMessage namesReply = bus.call(names);
+	if (namesReply.type() != QDBusMessage::ReplyMessage || namesReply.arguments().isEmpty())
+		return;
+
+	foreach (const QString &name, namesReply.arguments().first().toStringList())
+	{
+		if (name.startsWith(QStringLiteral("shortcut")))
+		{
+			QDBusMessage unreg = createCall(QStringLiteral("unregister"));
+			unreg << kComponentUnique << name;
+			unreg.setAutoStartService(false);
+			bus.call(unreg);
+			qWarning() << "QxtGlobalShortcut: removed a stale key derived global shortcut action" << name;
+		}
+	}
+}
+
+/**
  * Announce the action to the daemon and grab the keys. Returns the message
  * of the keys assignment which carries the assigned keys for the caller to
  * inspect.
@@ -191,6 +247,16 @@ QDBusMessage registerWithDaemon(quint32 ANativeKey, quint32 ANativeMods, const Q
 
 	QDBusConnection bus = QDBusConnection::sessionBus();
 
+	// Drop a possible leftover of a previous run registered under the same
+	// action name first: the daemon keeps the actions of disconnected
+	// clients with their keys assigned, and registering against such a
+	// leftover can be refused - the keys would stay busy. Harmless for a
+	// brand new action name.
+	QDBusMessage drop = createCall(QStringLiteral("unregister"));
+	drop << kComponentUnique << AActionUnique;
+	drop.setAutoStartService(false);
+	bus.call(drop);
+
 	// Tell the daemon about the action before assigning keys to it.
 	QDBusMessage registerReply = bus.call(createCall(QStringLiteral("doRegister")) << actionId(AActionUnique, friendly));
 	if (registerReply.type() != QDBusMessage::ReplyMessage)
@@ -198,11 +264,13 @@ QDBusMessage registerWithDaemon(quint32 ANativeKey, quint32 ANativeMods, const Q
 
 	// Assign the keys and also register the same keys as the default
 	// assignment, so the "Reset to defaults" button in the global shortcuts
-	// settings brings this key back.
+	// settings brings this key back. NoAutoloading: the keys are always
+	// assigned explicitly from the application options, the daemon must
+	// not silently restore a stale saved assignment.
 	QVariantList arguments;
 	arguments.append(QVariant(actionId(AActionUnique, friendly)));
 	arguments.append(QVariant::fromValue(QList<QKeySequence>() << sequence));
-	arguments.append(QVariant(uint(SetPresent)));
+	arguments.append(QVariant(uint(SetPresent | NoAutoloading)));
 	QDBusMessage assign = createCall(QStringLiteral("setShortcutKeys"));
 	assign.setArguments(arguments);
 	QDBusMessage assignReply = bus.call(assign);
@@ -289,19 +357,24 @@ quint32 nativeModifiers(Qt::KeyboardModifiers modifiers)
 	return quint32(modifiers.toInt());
 }
 
-bool registerShortcut(quint32 ANativeKey, quint32 ANativeMods)
+bool registerShortcut(quint32 ANativeKey, quint32 ANativeMods, const QString &AActionUnique)
 {
 	if (ANativeKey == 0)
 		return false;
 
 	initMetaTypes();
+	sweepLegacyActions();
 
 	const QPair<quint32,quint32> key(ANativeKey, ANativeMods);
-	if (s_keyToAction.contains(key))
+	const QString unique = actionUnique(ANativeKey, ANativeMods, AActionUnique);
+	// the same action with the same key is already registered in this
+	// process (a repeated call without an intermediate unregister); a
+	// different action with the same key falls through and the daemon
+	// decides about the conflict
+	if (s_keyToAction.contains(key) && s_keyToAction.value(key) == unique)
 		return true;
 
 	const QKeySequence sequence = keySequence(ANativeKey, ANativeMods);
-	const QString unique = actionUnique(ANativeKey, ANativeMods);
 
 	const QDBusMessage assignReply = registerWithDaemon(ANativeKey, ANativeMods, unique);
 	if (assignReply.type() != QDBusMessage::ReplyMessage)
@@ -350,11 +423,13 @@ bool unregisterShortcut(quint32 ANativeKey, quint32 ANativeMods)
 		return true;
 	s_actionToKey.remove(unique);
 
-	// The action was announced as present, drop it completely.
+	// The action was announced as present, drop it completely. The call is
+	// synchronous: an asynchronous one could be lost during the application
+	// shutdown, leaving a busy key behind in the daemon.
 	QDBusMessage unreg = createCall(QStringLiteral("unregister"));
 	unreg << kComponentUnique << unique;
 	unreg.setAutoStartService(false);
-	QDBusConnection::sessionBus().asyncCall(unreg);
+	QDBusConnection::sessionBus().call(unreg);
 	return true;
 }
 

@@ -219,10 +219,10 @@ quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
 	return XKeysymToKeycode(x11.display(), keysym);
 }
 
-bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods)
+bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique)
 {
 	if (QxtWaylandShortcut::isActive())
-		return QxtWaylandShortcut::registerShortcut(nativeKey, nativeMods);
+		return QxtWaylandShortcut::registerShortcut(nativeKey, nativeMods, AActionUnique);
 
 	QxtX11Data x11;
 	return x11.isValid() && x11.grabKey(nativeKey, nativeMods, x11.rootWindow());

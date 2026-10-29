@@ -80,7 +80,7 @@ bool QxtGlobalShortcutPrivate::setShortcut(const QKeySequence& shortcut)
     mods = shortcut.isEmpty() ? Qt::KeyboardModifiers(0) : Qt::KeyboardModifiers(combined & allMods.toInt());
     const quint32 nativeKey = nativeKeycode(key);
     const quint32 nativeMods = nativeModifiers(mods);
-    const bool res = registerShortcut(nativeKey, nativeMods);
+    const bool res = registerShortcut(nativeKey, nativeMods, actionName);
     if (res)
         shortcuts.insert(qMakePair(nativeKey, nativeMods), &qxt_p());
     else
@@ -191,6 +191,17 @@ bool QxtGlobalShortcut::setShortcut(const QKeySequence& shortcut)
     if (qxt_d().key != 0)
         qxt_d().unsetShortcut();
     return qxt_d().setShortcut(shortcut);
+}
+
+void QxtGlobalShortcut::setActionName(const QString &AName)
+{
+    QXT_D(QxtGlobalShortcut);
+    d.actionName = AName;
+}
+
+QString QxtGlobalShortcut::actionName() const
+{
+    return qxt_d().actionName;
 }
 
 /*!

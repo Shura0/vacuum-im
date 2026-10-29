@@ -68,6 +68,7 @@ protected slots:
 	void onGlobalShortcutActivated();
 	void onWidgetDestroyed(QObject *AObject);
 	void onObjectDestroyed(QObject *AObject);
+	void onApplicationAboutToQuit();
 private:
 	Shortcuts();
 	~Shortcuts();

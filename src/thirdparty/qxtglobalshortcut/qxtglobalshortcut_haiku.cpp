@@ -31,5 +31,5 @@
 bool QxtGlobalShortcutPrivate::nativeEventFilter(const QByteArray & eventType, void *message, qintptr *result){return false;}
 quint32 QxtGlobalShortcutPrivate::nativeModifiers(Qt::KeyboardModifiers modifiers){return false;}
 quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key){return 0;}
-bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods){return false;}
+bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique){Q_UNUSED(AActionUnique);return false;}
 bool QxtGlobalShortcutPrivate::unregisterShortcut(quint32 nativeKey, quint32 nativeMods){return false;}

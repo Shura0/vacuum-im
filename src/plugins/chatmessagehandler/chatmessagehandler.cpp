@@ -88,6 +88,7 @@ static const QList<int> ChatHandlerRosterKinds = QList<int>() << RIK_CONTACT << 
 ChatMessageHandler::ChatMessageHandler()
 {
 	FAvatars = NULL;
+	FMainWindowPlugin = NULL;
 	FMessageWidgets = NULL;
 	FMessageProcessor = NULL;
 	FMessageStyleManager = NULL;
@@ -144,6 +145,12 @@ bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AI
 		FMessageProcessor = qobject_cast<IMessageProcessor *>(plugin->instance());
 		if (FMessageProcessor)
 			connect(FMessageProcessor->instance(),SIGNAL(activeStreamRemoved(const Jid &)),SLOT(onActiveStreamRemoved(const Jid &)));
+	}
+
+	plugin = APluginManager->pluginInterface("IMainWindowPlugin").value(0,NULL);
+	if (plugin)
+	{
+		FMainWindowPlugin = qobject_cast<IMainWindowPlugin *>(plugin->instance());
 	}
 
 	plugin = APluginManager->pluginInterface("IMessageStyleManager").value(0,NULL);
@@ -278,6 +285,8 @@ bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AI
 bool ChatMessageHandler::initObjects()
 {
 	Shortcuts::declareShortcut(SCT_ROSTERVIEW_SHOWCHATDIALOG, tr("Open chat dialog"), tr("Return","Open chat dialog"), Shortcuts::WidgetShortcut);
+	if (FMainWindowPlugin)
+		connect(FMainWindowPlugin->mainWindow()->instance(),SIGNAL(mainWindowFirstShown()),SLOT(onMainWindowFirstShown()));
 
 	if (FNotifications)
 	{
@@ -502,8 +511,29 @@ IMessageChatWindow *ChatMessageHandler::showWindow(const Jid &AStreamJid, const 
 {
 	IMessageChatWindow *window = getWindow(AStreamJid, AContactJid);
 	if (window)
+	{
+		Options::node(OPV_MESSAGES_LASTCHAT_STREAM).setValue(AStreamJid.full());
+		Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).setValue(AContactJid.full());
 		window->showTabPage();
+	}
 	return window;
+}
+
+// the chat which was open last time is shown in the main window on its first
+// show after the application start, the window is not created by the start
+// itself so that the main window is not shown by it
+void ChatMessageHandler::onMainWindowFirstShown()
+{
+	const Jid streamJid = Options::node(OPV_MESSAGES_LASTCHAT_STREAM).value().toString();
+	const Jid contactJid = Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).value().toString();
+	if (streamJid.isValid() && contactJid.isValid())
+	{
+		QTimer::singleShot(0, this, [this, streamJid, contactJid]() {
+			IMessageChatWindow *window = getWindow(streamJid, contactJid);
+			if (window && !window->instance()->isWindow())
+				window->showTabPage();
+		});
+	}
 }
 
 IMessageChatWindow *ChatMessageHandler::getWindow(const Jid &AStreamJid, const Jid &AContactJid)
@@ -1279,10 +1309,15 @@ void ChatMessageHandler::onShortcutActivated(const QString &AId, QWidget *AWidge
 	if (FRostersView && AWidget==FRostersView->instance())
 	{
 		QList<IRosterIndex *> indexes = FRostersView->selectedRosterIndexes();
-		if (AId==SCT_ROSTERVIEW_SHOWCHATDIALOG && indexes.count()==1 && isSelectionAccepted(indexes))
+		if (AId==SCT_ROSTERVIEW_SHOWCHATDIALOG && indexes.count()==1)
 		{
+			// a recent contact (offline ones included) is not a roster contact
+			// kind, the click path resolves it to the contact the same way
 			IRosterIndex *index = indexes.first();
-			showWindow(index->data(RDR_STREAM_JID).toString(),index->data(RDR_FULL_JID).toString());
+			if (index->kind()==RIK_RECENT_ITEM && index->data(RDR_RECENT_TYPE).toString()==REIT_CONTACT)
+				showWindow(index->data(RDR_STREAM_JID).toString(),index->data(RDR_RECENT_REFERENCE).toString());
+			else if (isSelectionAccepted(indexes))
+				showWindow(index->data(RDR_STREAM_JID).toString(),index->data(RDR_FULL_JID).toString());
 		}
 	}
 }
