@@ -189,7 +189,7 @@ bool NormalMessageHandler::initObjects()
 		notifyType.icon = IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_NORMALMHANDLER_MESSAGE);
 		notifyType.title = tr("When receiving new single message");
 		notifyType.kindMask = INotification::RosterNotify|INotification::PopupWindow|INotification::TrayNotify|INotification::TrayAction|INotification::SoundPlay|INotification::AlertWidget|INotification::TabPageNotify|INotification::ShowMinimized|INotification::AutoActivate;
-		notifyType.kindDefs = notifyType.kindMask & ~(INotification::AutoActivate);
+		notifyType.kindDefs = notifyType.kindMask & ~(INotification::ShowMinimized|INotification::AutoActivate);
 		FNotifications->registerNotificationType(NNT_NORMAL_MESSAGE,notifyType);
 	}
 	if (FMessageProcessor)

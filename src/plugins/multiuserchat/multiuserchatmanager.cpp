@@ -175,7 +175,7 @@ bool MultiUserChatManager::initObjects()
 		privateType.icon = IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_MUC_PRIVATE_MESSAGE);
 		privateType.title = tr("When receiving a new private message in conference");
 		privateType.kindMask = INotification::RosterNotify|INotification::TrayNotify|INotification::TrayAction|INotification::PopupWindow|INotification::SoundPlay|INotification::AlertWidget|INotification::TabPageNotify|INotification::ShowMinimized|INotification::AutoActivate;
-		privateType.kindDefs = privateType.kindMask & ~(INotification::AutoActivate);
+		privateType.kindDefs = privateType.kindMask & ~(INotification::ShowMinimized|INotification::AutoActivate);
 		FNotifications->registerNotificationType(NNT_MUC_MESSAGE_PRIVATE,privateType);
 
 		INotificationType groupchatType;
@@ -191,7 +191,7 @@ bool MultiUserChatManager::initObjects()
 		mentionType.icon = IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_MUC_MESSAGE);
 		mentionType.title = tr("When referring to you at the conference");
 		mentionType.kindMask = INotification::RosterNotify|INotification::TrayNotify|INotification::PopupWindow|INotification::SoundPlay|INotification::AlertWidget|INotification::TabPageNotify|INotification::ShowMinimized|INotification::AutoActivate;
-		mentionType.kindDefs = mentionType.kindMask & ~(INotification::AutoActivate);
+		mentionType.kindDefs = mentionType.kindMask & ~(INotification::ShowMinimized|INotification::AutoActivate);
 		FNotifications->registerNotificationType(NNT_MUC_MESSAGE_MENTION,mentionType);
 	}
 
