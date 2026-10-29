@@ -1,6 +1,7 @@
 #include <QEnterEvent>
 #include "notifywidget.h"
 
+#include <QApplication>
 #include <QTimer>
 #include <QScrollBar>
 #include <QGuiApplication>
@@ -39,11 +40,41 @@ QScreen *NotifyWidget::FDesktop = QGuiApplication::primaryScreen();
 IMainWindow *NotifyWidget::FMainWindow = NULL;
 QNetworkAccessManager *NotifyWidget::FNetworkManager = NULL;
 
+/**
+ * Qt6 Wayland refuses to map Qt::ToolTip windows without a transient parent,
+ * they are closed immediately after the creation ("Failed to create popup.
+ * Ensure popup has a transientParent set"). Use the visible main window or
+ * any other visible application window as the parent on Wayland.
+ */
+QWidget *NotifyWidget::popupParentWindow()
+{
+	if (QGuiApplication::platformName() != QLatin1String("wayland"))
+		return NULL;
+
+	if (NotifyWidget::FMainWindow != NULL)
+	{
+		QWidget *mainWindow = NotifyWidget::FMainWindow->instance();
+		if (mainWindow != NULL && mainWindow->isVisible())
+			return mainWindow;
+	}
+
+	const QList<QWidget*> topLevelWidgets = QApplication::topLevelWidgets();
+	foreach(QWidget *widget, topLevelWidgets)
+	{
+		const Qt::WindowFlags flags = widget->windowFlags();
+		if (widget->isVisible() && widget->isWindow()
+			&& (flags & Qt::WindowType_Mask) != Qt::ToolTip
+			&& (flags & Qt::WindowType_Mask) != Qt::Popup)
+			return widget;
+	}
+	return NULL;
+}
+
 NotifyWidget::NotifyWidget(const INotification &ANotification)
 #if defined(Q_OS_MAC)
 	: QFrame(NULL, Qt::FramelessWindowHint|Qt::WindowSystemMenuHint|Qt::WindowStaysOnTopHint)
 #else
-	: QFrame(NULL, Qt::ToolTip|Qt::WindowStaysOnTopHint|Qt::X11BypassWindowManagerHint)
+	: QFrame(popupParentWindow(), Qt::ToolTip|Qt::WindowStaysOnTopHint|Qt::X11BypassWindowManagerHint)
 #endif
 {
 	REPORT_VIEW;

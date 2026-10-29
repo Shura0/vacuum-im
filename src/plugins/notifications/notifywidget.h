@@ -19,6 +19,9 @@ public:
 	void appear();
 	static void setMainWindow(IMainWindow *AMainWindow);
 	static void setNetworkManager(QNetworkAccessManager *ANetworkManager);
+
+private:
+	static QWidget *popupParentWindow();
 signals:
 	void notifyActivated();
 	void notifyRemoved();
