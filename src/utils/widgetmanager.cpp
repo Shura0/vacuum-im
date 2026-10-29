@@ -338,8 +338,16 @@ void WidgetManager::scrollDocumentByItems(QAbstractScrollArea *AView, bool APrev
 		}
 
 		if (targetPosition >= 0)
+		{
+			// aligning the next message with the top edge may ask for a
+			// scroll position beyond the scrollbar maximum (the document
+			// does not fill the rest of the viewport below that message),
+			// slide as far as possible instead of silently clamping back
+			// to the current position (which looks like a lost key press)
+			if (!APrevious && targetPosition > scrollBar->maximum())
+				targetPosition = scrollBar->maximum();
 			scrollBar->setSliderPosition(targetPosition);
+		}
 		else if (!APrevious)
-			scrollBar->setSliderPosition(scrollBar->maximum());
-	}
+			scrollBar->setSliderPosition(scrollBar->maximum());	}
 }

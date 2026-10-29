@@ -30,7 +30,10 @@ namespace QxtWaylandShortcut {
 	quint32 nativeKeycode(Qt::Key key);
 	quint32 nativeModifiers(Qt::KeyboardModifiers modifiers);
 
-	bool registerShortcut(quint32 nativeKey, quint32 nativeMods);
+	// AActionUnique is the stable action identity (the shortcut id sanitized
+	// to [a-z0-9_], see QxtGlobalShortcut::setActionName); when empty the
+	// legacy key derived action name is used.
+	bool registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique = QString());
 	bool unregisterShortcut(quint32 nativeKey, quint32 nativeMods);
 
 	// Indirect entry points for the receiver slots, they are defined in the

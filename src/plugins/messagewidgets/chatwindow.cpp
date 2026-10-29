@@ -3,6 +3,7 @@
 #include <QKeyEvent>
 #include <QScrollBar>
 #include <QCoreApplication>
+#include <QTimer>
 #include <definitions/actiongroups.h>
 #include <definitions/resources.h>
 #include <definitions/menuicons.h>
@@ -147,6 +148,15 @@ void ChatWindow::showTabPage()
 		WidgetManager::showActivateRaiseWindow(this);
 	else
 		emit tabPageShow();
+	// deferred: the caller (e.g. a roster click) may still move the focus
+	// to its own widget while the event is being handled; a disabled editor
+	// (e.g. vim NORMAL mode) cannot take the focus, the view takes it then
+	QTimer::singleShot(0, this, [this]() {
+		if (FEditWidget->isEditEnabled())
+			FEditWidget->textEdit()->setFocus();
+		else
+			FViewWidget->styleWidget()->setFocus();
+	});
 }
 
 void ChatWindow::showMinimizedTabPage()

@@ -106,6 +106,21 @@ Outputs land in `build/plugins/*.so` and `build/` (loader). Plugins install to
   marshalling/demarshalling pair for `QKeySequence` (wire format `(ai)`) is
   implemented in the backend and must be global-scope (ADL), not hidden in an
   anonymous namespace.
+- Wayland global shortcut identity: kglobalaccel keeps the actions of
+  disconnected clients with their keys assigned, so a quit application used
+  to leave its keys busy. `Shortcuts::setGlobalShortcut` therefore assigns
+  every shortcut a stable D-Bus action identity via
+  `QxtGlobalShortcut::setActionName()` (the shortcut id, e.g.
+  `global_show_roster`) - the daemon action no longer derives from the key.
+  The backend unregisters the action name before registering (ghost clear),
+  passes `NoAutoloading` (keys always come from the app options), sweeps the
+  legacy key-derived `shortcut*` actions once per process, unregisters
+  synchronously, and `Shortcuts` removes all global shortcuts on
+  `aboutToQuit`. Plugins must apply the saved keys on
+  `Options::optionsOpened()` - the profile is opened by the options manager's
+  own `startPlugin()` and the plugin start order (QHash) is arbitrary;
+  reading them in `startPlugin()` races (vimplugin does it in
+  `onOptionsOpened()`, like shortcutmanager).
 
 - Current branch: **`qt6`** — the in-progress Qt 5 → Qt 6 migration, 9 commits
   ahead of / 2 behind `master`. Contains `src/utils/qtcompat.h` and per-file

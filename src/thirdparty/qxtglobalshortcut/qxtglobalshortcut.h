@@ -51,6 +51,15 @@ public:
     QKeySequence shortcut() const;
     bool setShortcut(const QKeySequence& shortcut);
 
+    // Wayland (kglobalaccel) backend only: the stable D-Bus action identity
+    // of the shortcut. Shortcuts assigns the shortcut id, so the daemon
+    // action survives key changes and application restarts instead of
+    // piling up dead key derived actions that keep their keys busy.
+    // Must be set before the first setShortcut() call; when empty the
+    // action name is derived from the key (legacy behavior).
+    void setActionName(const QString &AName);
+    QString actionName() const;
+
     bool isEnabled() const;
 
 public Q_SLOTS:

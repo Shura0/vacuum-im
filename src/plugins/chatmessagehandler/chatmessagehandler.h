@@ -15,6 +15,7 @@
 #include <interfaces/ioptionsmanager.h>
 #include <interfaces/istatusicons.h>
 #include <interfaces/irostersview.h>
+#include <interfaces/imainwindow.h>
 #include <interfaces/irostersmodel.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/ipresencemanager.h>
@@ -98,6 +99,7 @@ protected slots:
 	// Emitted when the end-to-end encryption plugin is being destroyed
 	void onEndToEndEncryptionDestroyed(QObject *AObject);
 	void onWindowActivated();
+	void onMainWindowFirstShown();
 	void onWindowClosed();
 	void onWindowDestroyed();
 	void onWindowAddressChanged();
@@ -135,6 +137,7 @@ private:
 	IPresenceManager *FPresenceManager;
 	IMessageArchiver *FMessageArchiver;
 	IRostersView *FRostersView;
+	IMainWindowPlugin *FMainWindowPlugin;
 	IRostersModel *FRostersModel;
 	IStatusIcons *FStatusIcons;
 	IStatusChanger *FStatusChanger;

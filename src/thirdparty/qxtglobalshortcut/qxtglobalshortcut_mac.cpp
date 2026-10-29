@@ -223,8 +223,9 @@ quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
     return 0;
 }
 
-bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods)
+bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods, const QString &AActionUnique)
 {
+    Q_UNUSED(AActionUnique);
     if (!qxt_mac_handler_installed)
     {
         EventTypeSpec t;

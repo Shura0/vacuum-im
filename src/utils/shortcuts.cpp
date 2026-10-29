@@ -34,6 +34,7 @@ struct Shortcuts::ShortcutsData
 Shortcuts::Shortcuts()
 {
 	d = new ShortcutsData;
+	connect(qApp, SIGNAL(aboutToQuit()), SLOT(onApplicationAboutToQuit()));
 }
 
 Shortcuts::~Shortcuts()
@@ -200,6 +201,10 @@ void Shortcuts::setGlobalShortcut(const QString &AId, bool AEnabled)
 	if (AEnabled && shortcut==NULL)
 	{
 		shortcut = new QxtGlobalShortcut(instance());
+		// the stable D-Bus action identity on the kglobalaccel platform:
+		// the daemon action is bound to the shortcut id instead of the
+		// key, see QxtGlobalShortcut::setActionName()
+		shortcut->setActionName(AId);
 		q->globalShortcutsId.insert(shortcut,AId);
 		connect(shortcut,&QxtGlobalShortcut::activated,instance(),&Shortcuts::onGlobalShortcutActivated);
 		updateGlobal(shortcut);
@@ -302,6 +307,17 @@ void Shortcuts::onGlobalShortcutActivated()
 	QxtGlobalShortcut *shortcut = qobject_cast<QxtGlobalShortcut *>(sender());
 	if (shortcut)
 		emit instance()->shortcutActivated(d->globalShortcutsId.value(shortcut),NULL);
+}
+
+void Shortcuts::onApplicationAboutToQuit()
+{
+	// Remove the global shortcuts while the session D-Bus connection is
+	// still alive: the kglobalaccel daemon keeps the actions of a
+	// disconnected client with their keys assigned, the keys would stay
+	// busy for every other application after the quit.
+	QList<QxtGlobalShortcut *> shortcutList = d->globalShortcutsId.keys();
+	foreach (QxtGlobalShortcut *shortcut, shortcutList)
+		setGlobalShortcut(d->globalShortcutsId.value(shortcut), false);
 }
 
 void Shortcuts::onWidgetDestroyed(QObject *AObject)
