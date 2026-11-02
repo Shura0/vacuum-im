@@ -46,6 +46,7 @@ Notifications::Notifications()
 	FNetworkAccessManager = NULL;
 
 	FNotifyId = 0;
+	FNativeNotifyId = 0;
 	FSound = NULL;
 }
 
@@ -79,6 +80,7 @@ bool Notifications::initConnections(IPluginManager *APluginManager, int &AInitOr
 			connect(FTrayManager->instance(),SIGNAL(notifyActivated(int, QSystemTrayIcon::ActivationReason)),
 				SLOT(onTrayNotifyActivated(int, QSystemTrayIcon::ActivationReason)));
 			connect(FTrayManager->instance(),SIGNAL(notifyRemoved(int)),SLOT(onTrayNotifyRemoved(int)));
+			connect(FTrayManager->instance(),SIGNAL(messageClicked()),SLOT(onTrayMessageClicked()));
 		}
 	}
 
@@ -332,6 +334,7 @@ int Notifications::appendNotification(const INotification &ANotification)
 				QString caption = record.notification.data.value(NDR_POPUP_CAPTION).toString();
 				QString text = record.notification.data.value(NDR_POPUP_TEXT).toString();
 				int timeout = Options::node(OPV_NOTIFICATIONS_POPUPTIMEOUT).value().toInt()*1000;
+				FNativeNotifyId = notifyId;
 				FTrayManager->showMessage(QString("%1 - %2").arg(title,caption),text,QSystemTrayIcon::Information,timeout);
 			}
 			else
@@ -467,6 +470,8 @@ void Notifications::removeNotification(int ANotifyId)
 	{
 		LOG_INFO(QString("Removing notification, id=%1").arg(ANotifyId));
 		NotifyRecord record = FNotifyRecords.take(ANotifyId);
+		if (ANotifyId == FNativeNotifyId)
+			FNativeNotifyId = 0;
 		if (FRostersViewPlugin && record.rosterId!=0)
 		{
 			FRostersViewPlugin->rostersView()->removeNotify(record.rosterId);
@@ -758,6 +763,19 @@ void Notifications::onTrayNotifyActivated(int ANotifyId, QSystemTrayIcon::Activa
 {
 	if (AReason == QSystemTrayIcon::Trigger)
 		activateNotification(notifyIdByTrayId(ANotifyId));
+}
+
+void Notifications::onTrayMessageClicked()
+{
+	// Native (desktop) popups are shown through QSystemTrayIcon::showMessage(),
+	// which does not report which message was clicked. Activate the notification
+	// that produced the last shown popup (or the last pending tray notification
+	// if that one is already gone).
+	int notifyId = FNotifyRecords.contains(FNativeNotifyId) ? FNativeNotifyId :
+		(!FTrayNotifies.isEmpty() ? FTrayNotifies.last() : 0);
+	LOG_INFO(QString("Notification popup activated, native-id=%1, notify-id=%2").arg(FNativeNotifyId).arg(notifyId));
+	if (notifyId > 0)
+		activateNotification(notifyId);
 }
 
 void Notifications::onTrayNotifyRemoved(int ANotifyId)

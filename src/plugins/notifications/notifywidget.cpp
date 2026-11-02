@@ -82,7 +82,11 @@ NotifyWidget::NotifyWidget(const INotification &ANotification)
 	setFocusPolicy(Qt::NoFocus);
 	setAttribute(Qt::WA_DeleteOnClose,true);
 	setAttribute(Qt::WA_ShowWithoutActivating,true);
-	setAttribute(Qt::WA_TransparentForMouseEvents,true);
+
+	// The popup must receive mouse clicks to activate the notification. Only
+	// the non-interactive message text is made click-through, action buttons
+	// inside the popup keep working.
+	ui.ntbText->setAttribute(Qt::WA_TransparentForMouseEvents,true);
 
 	QPalette windowPalette = palette();
 	windowPalette.setColor(QPalette::Window, windowPalette.color(QPalette::Base));
@@ -247,8 +251,10 @@ void NotifyWidget::resizeEvent(QResizeEvent *AEvent)
 
 void NotifyWidget::mouseReleaseEvent(QMouseEvent *AEvent)
 {
-	QWidget::mouseReleaseEvent(AEvent);
-	if (geometry().contains(AEvent->globalPosition().toPoint()))
+	QFrame::mouseReleaseEvent(AEvent);
+	// The widget can be a child of the main window on Wayland, so geometry()
+	// is relative to its parent. The event position is already local to us.
+	if (rect().contains(AEvent->position().toPoint()))
 	{
 		if (AEvent->button() == Qt::LeftButton)
 			emit notifyActivated();

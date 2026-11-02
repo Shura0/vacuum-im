@@ -108,6 +108,7 @@ protected slots:
 	void onRosterNotifyRemoved(int ANotifyId);
 	void onTrayNotifyActivated(int ANotifyId, QSystemTrayIcon::ActivationReason AReason);
 	void onTrayNotifyRemoved(int ANotifyId);
+	void onTrayMessageClicked();
 	void onWindowNotifyActivated();
 	void onWindowNotifyRemoved();
 	void onWindowNotifyDestroyed();
@@ -134,6 +135,7 @@ private:
 	QList<int> FTrayNotifies;
 private:
 	int FNotifyId;
+	int FNativeNotifyId;
 	QSoundEffect *FSound;
 	QList<int> FDelayedRemovals;
 	QList<int> FDelayedActivations;
