@@ -3,6 +3,7 @@
 
 #include <QMap>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/itraymanager.h>
@@ -51,9 +52,12 @@ signals:
 	void messageShown(const QString &ATitle, const QString &AMessage,QSystemTrayIcon::MessageIcon AIcon, int ATimeout);
 protected:
 	void updateTray();
+	bool isNativeNotificationsAvailable() const;
 protected slots:
 	void onTrayIconActivated(QSystemTrayIcon::ActivationReason AReason);
 	void onBlinkTimerTimeout();
+	void onNativeNotificationActionInvoked(uint AId, const QString &AAction);
+	void onNativeNotificationClosed(uint AId, uint AReason);
 private:
 	IPluginManager *FPluginManager;
 private:
@@ -69,6 +73,7 @@ private:
 	QString FToolTip;
 	QList<int> FNotifyOrder;
 	QMap<int, ITrayNotify> FNotifyItems;
+	QSet<uint> FNativeNotificationIds;
 };
 
 #endif // TRAYMANAGER_H

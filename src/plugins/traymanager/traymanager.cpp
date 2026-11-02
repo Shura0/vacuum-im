@@ -2,6 +2,13 @@
 
 #include <QRandomGenerator>
 #include <QApplication>
+#include <QCoreApplication>
+#ifdef Q_OS_LINUX
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusInterface>
+#include <QDBusReply>
+#endif
 #include <definitions/resources.h>
 #include <definitions/menuicons.h>
 #include <definitions/actiongroups.h>
@@ -30,6 +37,19 @@ TrayManager::TrayManager()
 
 	connect(&FSystemIcon,SIGNAL(messageClicked()), SIGNAL(messageClicked()));
 	connect(&FSystemIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)), SLOT(onTrayIconActivated(QSystemTrayIcon::ActivationReason)));
+
+#ifdef Q_OS_LINUX
+	QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.Notifications"),
+		QStringLiteral("/org/freedesktop/Notifications"),
+		QStringLiteral("org.freedesktop.Notifications"),
+		QStringLiteral("ActionInvoked"),
+		this,SLOT(onNativeNotificationActionInvoked(uint,QString)));
+	QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.Notifications"),
+		QStringLiteral("/org/freedesktop/Notifications"),
+		QStringLiteral("org.freedesktop.Notifications"),
+		QStringLiteral("NotificationClosed"),
+		this,SLOT(onNativeNotificationClosed(uint,uint)));
+#endif
 }
 
 TrayManager::~TrayManager()
@@ -166,15 +186,75 @@ void TrayManager::removeNotify(int ANotifyId)
 	}
 }
 
+bool TrayManager::isNativeNotificationsAvailable() const
+{
+#ifdef Q_OS_LINUX
+	if (QDBusConnection::sessionBus().isConnected())
+	{
+		QDBusConnectionInterface *bus = QDBusConnection::sessionBus().interface();
+		return bus!=NULL && bus->isServiceRegistered(QStringLiteral("org.freedesktop.Notifications")).value();
+	}
+#endif
+	return false;
+}
+
 bool TrayManager::isMessagesSupported() const
 {
-	return FSystemIcon.supportsMessages();
+	return isNativeNotificationsAvailable() || FSystemIcon.supportsMessages();
 }
 
 void TrayManager::showMessage(const QString &ATitle, const QString &AMessage, QSystemTrayIcon::MessageIcon AIcon, int ATimeout)
 {
+#ifdef Q_OS_LINUX
+	if (isNativeNotificationsAvailable())
+	{
+		QDBusInterface notificationService(QStringLiteral("org.freedesktop.Notifications"),
+			QStringLiteral("/org/freedesktop/Notifications"),
+			QStringLiteral("org.freedesktop.Notifications"),
+			QDBusConnection::sessionBus());
+		if (notificationService.isValid())
+		{
+			// Qt's QSystemTrayIcon only adds the "default" action for critical
+			// messages, so a normal popup cannot be activated by a click. Talk
+			// to the notification service directly and always provide it.
+			QStringList actions;
+			actions << QStringLiteral("default") << tr("Open");
+
+			QVariantMap hints;
+			hints.insert(QStringLiteral("urgency"), AIcon==QSystemTrayIcon::Critical ? 2 : (AIcon==QSystemTrayIcon::Warning ? 1 : 0));
+
+			QDBusReply<uint> reply = notificationService.call(QStringLiteral("Notify"),
+				QCoreApplication::applicationName(), 0u, FSystemIcon.icon().name(),
+				ATitle, AMessage, actions, hints, ATimeout);
+			if (reply.isValid())
+			{
+				FNativeNotificationIds.insert(reply.value());
+				LOG_INFO(QString("Native notification shown, id=%1").arg(reply.value()));
+				emit messageShown(ATitle,AMessage,AIcon,ATimeout);
+				return;
+			}
+			LOG_WARNING(QString("Failed to show native notification: %1").arg(reply.error().message()));
+		}
+	}
+#endif
 	FSystemIcon.showMessage(ATitle,AMessage,AIcon,ATimeout);
 	emit messageShown(ATitle,AMessage,AIcon,ATimeout);
+}
+
+void TrayManager::onNativeNotificationActionInvoked(uint AId, const QString &AAction)
+{
+	if (FNativeNotificationIds.remove(AId))
+	{
+		LOG_INFO(QString("Native notification action invoked, id=%1, action=%2").arg(AId).arg(AAction));
+		if (AAction == QLatin1String("default"))
+			emit messageClicked();
+	}
+}
+
+void TrayManager::onNativeNotificationClosed(uint AId, uint AReason)
+{
+	Q_UNUSED(AReason);
+	FNativeNotificationIds.remove(AId);
 }
 
 void TrayManager::updateTray()
