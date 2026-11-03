@@ -16,6 +16,7 @@ LEGEND
   [+] OMEMO: clicking an aesgcm attachment link or image opens the decrypted local file with the system opener (the url is opened locally for the messages shown in the chat windows)
   [+] OMEMO: decrypted non-image attachments are shown under their own file name with the size, and the chat context menu offers Open and Save as... for them
   [+] OMEMO: when the Image Viewer plugin is enabled, encrypted images are fetched once, decrypted through the IImageMediaProvider interop and shown in ordinary image viewer galleries
+  [*] MessageArchiver: outgoing messages are archived at SHO_MO_ARCHIVER (200), before the end-to-end plugins (OMEMO) encrypt the stanza, so the local file history is stored decrypted like the incoming one; the wire and the server MAM archive still carry the encrypted stanza
   [+] OMEMO: decrypted message plaintext is cached in the encrypted store and the History dialog decrypts OMEMO messages
   [!] Added new plugin for muting notifications of individual contacts
   [!] Added new plugin for spell checking

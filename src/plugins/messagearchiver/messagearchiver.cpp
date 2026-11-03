@@ -2557,9 +2557,14 @@ void MessageArchiver::onXmppStreamOpened(IXmppStream *AXmppStream)
 		FSHIMessageIn.insert(shandle.streamJid,FStanzaProcessor->insertStanzaHandle(shandle));
 
 		shandle.direction = IStanzaHandle::DirectionOut;
+		// The outgoing messages are archived before the end-to-end plugins
+		// add their encryption (OMEMO at SHO_MO_OMEMO_ENCRYPT), so the local
+		// history is stored decrypted exactly like the incoming one. The
+		// stanza itself keeps being encrypted later, this does not affect
+		// what goes to the wire or the server archive.
+		shandle.order = SHO_MO_ARCHIVER;
 		FSHIMessageOut.insert(shandle.streamJid,FStanzaProcessor->insertStanzaHandle(shandle));
 
-		shandle.order = SHO_MO_ARCHIVER;
 		FSHIMessageBlocks.insert(shandle.streamJid,FStanzaProcessor->insertStanzaHandle(shandle));
 	}
 
