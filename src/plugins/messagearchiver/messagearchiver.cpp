@@ -22,6 +22,7 @@
 #include <definitions/sessionnegotiatororders.h>
 #include <definitions/shortcutgrouporders.h>
 #include <definitions/statisticsparams.h>
+#include <interfaces/ifilemessagearchive.h>
 #include <utils/widgetmanager.h>
 #include <utils/xmpperror.h>
 #include <utils/shortcuts.h>
@@ -76,6 +77,7 @@ MessageArchiver::MessageArchiver()
 	FSessionNegotiation = NULL;
 	FRosterManager = NULL;
 	FMultiChatManager = NULL;
+	FEndToEndEncryption = NULL;
 }
 
 MessageArchiver::~MessageArchiver()
@@ -224,6 +226,15 @@ bool MessageArchiver::initConnections(IPluginManager *APluginManager, int &AInit
 		SLOT(onSelfHeadersLoaded(const QString &, const QList<IArchiveHeader> &)));
 	connect(this,SIGNAL(collectionLoaded(const QString &, const IArchiveCollection &)),
 		SLOT(onSelfCollectionLoaded(const QString &, const IArchiveCollection &)));
+
+	IPlugin *e2ePlugin = APluginManager->pluginInterface("IEndToEndEncryption").value(0,NULL);
+	if (e2ePlugin)
+	{
+		FEndToEndEncryption = qobject_cast<IEndToEndEncryption *>(e2ePlugin->instance());
+		if (FEndToEndEncryption)
+			connect(FEndToEndEncryption->instance(),SIGNAL(destroyed(QObject *)),
+				SLOT(onEndToEndEncryptionDestroyed(QObject *)));
+	}
 
 	connect(Options::instance(),SIGNAL(optionsChanged(const OptionsNode &)),SLOT(onOptionsChanged(const OptionsNode &)));
 	connect(Shortcuts::instance(),SIGNAL(shortcutActivated(const QString &, QWidget *)),SLOT(onShortcutActivated(const QString &, QWidget *)));
@@ -1153,6 +1164,8 @@ QString MessageArchiver::loadCollection(const Jid &AStreamJid, const IArchiveHea
 		if (!id.isEmpty())
 		{
 			CollectionRequest request;
+			request.streamJid = AStreamJid;
+			request.engine = engine;
 			QString localId = QUuid::createUuid().toString();
 			FRequestId2LocalId.insert(id,localId);
 			FCollectionRequests.insert(localId,request);
@@ -1913,6 +1926,14 @@ void MessageArchiver::processCollectionRequest(const QString &ALocalId, Collecti
 	{
 		LOG_DEBUG(QString("Collection successfully loaded, id=%1").arg(ALocalId));
 		emit collectionLoaded(ALocalId,ARequest.collection);
+
+		// Messages delivered by an archive engine other than the local file
+		// archive do not pass through the stanza pipeline, so the normal
+		// archiving path is never executed for them (for example, MAM results
+		// received while the contact was offline). Save them into the local
+		// history here, so it stays complete and decryptable after restart.
+		if (ARequest.engine!=NULL && !qobject_cast<IFileMessageArchive *>(ARequest.engine->instance()))
+			saveCollectionMessages(ARequest.streamJid,ARequest.collection);
 	}
 	else
 	{
@@ -1920,6 +1941,67 @@ void MessageArchiver::processCollectionRequest(const QString &ALocalId, Collecti
 		emit requestFailed(ALocalId,ARequest.lastError);
 	}
 	FCollectionRequests.remove(ALocalId);
+}
+
+void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection)
+{
+	if (ACollection.body.messages.isEmpty() || !ACollection.header.with.isValid())
+		return;
+
+	// A copy of the same message may already be in the file archive: the live
+	// messages are saved on handle, and their storage keeps the stanza id.
+	// Skip such messages, because every history load would otherwise add one
+	// more copy of the recent messages into the collection files.
+	QSet<QString> savedIds;
+	IArchiveEngine *engine = findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving);
+	IFileMessageArchive *fileArchive = engine!=NULL ? qobject_cast<IFileMessageArchive *>(engine->instance()) : NULL;
+	if (fileArchive)
+	{
+		QSet<QString> fileIds = fileArchive->loadFileMessageIds(AStreamJid,ACollection.header.with);
+		if (!fileIds.isEmpty())
+		{
+			foreach(const Message &message, ACollection.body.messages)
+			{
+				if (!message.id().isEmpty() && fileIds.contains(message.id()))
+					savedIds.insert(message.id());
+			}
+		}
+	}
+
+	int savedCount = 0;
+	foreach(const Message &message, ACollection.body.messages)
+	{
+		if (!message.id().isEmpty() && savedIds.contains(message.id()))
+			continue;
+
+		bool directionIn = message.data(MDR_MESSAGE_DIRECTION).isNull()
+			? ACollection.header.with.pBare()==message.fromJid().pBare()
+			: message.data(MDR_MESSAGE_DIRECTION).toInt()==IMessageProcessor::DirectionIn;
+
+		// The engine copies keep their wire bodies: the incoming OMEMO
+		// messages are encrypted and the outgoing ones carry the unreadable
+		// fallback body. Restore the plaintext the same way the history
+		// viewers do, and do not store the copies that can not be decrypted.
+		Message plain = message;
+		if (FEndToEndEncryption)
+			FEndToEndEncryption->decryptMessage(AStreamJid,plain,directionIn);
+		if (!plain.stanza().firstElement("encrypted",QStringLiteral("eu.siacs.conversations.axolotl")).isNull()
+			|| plain.body().isEmpty())
+		{
+			if (!plain.stanza().firstElement("encrypted",QStringLiteral("eu.siacs.conversations.axolotl")).isNull())
+				LOG_STRM_WARNING(AStreamJid,QString("Failed to decrypt fetched history message, with=%1").arg(ACollection.header.with.full()));
+			continue;
+		}
+		if (processMessage(AStreamJid,plain,directionIn))
+		{
+			savedIds.insert(message.id());
+			savedCount++;
+		}
+	}
+
+	if (savedCount > 0)
+		LOG_STRM_INFO(AStreamJid,QString("Fetched history saved to local archive, with=%1, messages=%2")
+			.arg(ACollection.header.with.bare()).arg(savedCount));
 }
 
 void MessageArchiver::processRemoveRequest(const QString &ALocalId, RemoveRequest &ARequest)
@@ -2483,6 +2565,14 @@ void MessageArchiver::onEngineCollectionsRemoved(const QString &AId, const IArch
 			processRemoveRequest(localId,request);
 		}
 	}
+}
+
+void MessageArchiver::onEndToEndEncryptionDestroyed(QObject *AObject)
+{
+	Q_UNUSED(AObject);
+	// The encryption plugin is gone (usually at shutdown): stop calling into
+	// it and never dereference its derived part.
+	FEndToEndEncryption = NULL;
 }
 
 void MessageArchiver::onSelfRequestFailed(const QString &AId, const XmppError &AError)

@@ -3,6 +3,7 @@
 
 #include <interfaces/imessagearchiver.h>
 #include <QObject>
+#include <QSet>
 
 #define FILEMESSAGEARCHIVE_UUID "{2F1E540F-60D3-490f-8BE9-0EEA693B8B83}"
 
@@ -24,6 +25,8 @@ public:
 	virtual QList<IArchiveHeader> loadFileHeaders(const Jid &AStreamJid, const IArchiveRequest &ARequest) const =0;
 	virtual IArchiveHeader saveFileCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection) =0;
 	virtual bool removeFileCollection(const Jid &AStreamJid, const IArchiveHeader &AHeader) =0;
+	// The stanza ids of all messages stored in the item's collection files.
+	virtual QSet<QString> loadFileMessageIds(const Jid &AStreamJid, const Jid &AItemJid) const =0;
 	// Database
 	virtual bool isDatabaseReady(const Jid &AStreamJid) const =0;
 	virtual QString databaseArchiveFile(const Jid &AStreamJid) const =0;
@@ -40,6 +43,6 @@ protected:
 	virtual void fileCollectionRemoved(const Jid &AStreamJid, const IArchiveHeader &AHeader) =0;
 };
 
-Q_DECLARE_INTERFACE(IFileMessageArchive,"Vacuum.Plugin.IFileMessageArchive/1.2");
+Q_DECLARE_INTERFACE(IFileMessageArchive,"Vacuum.Plugin.IFileMessageArchive/1.3");
 
 #endif // IFILEMESSAGEARCHIVE_H

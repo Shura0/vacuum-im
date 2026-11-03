@@ -17,6 +17,7 @@ LEGEND
   [+] OMEMO: decrypted non-image attachments are shown under their own file name with the size, and the chat context menu offers Open and Save as... for them
   [+] OMEMO: when the Image Viewer plugin is enabled, encrypted images are fetched once, decrypted through the IImageMediaProvider interop and shown in ordinary image viewer galleries
   [*] MessageArchiver: outgoing messages are archived at SHO_MO_ARCHIVER (200), before the end-to-end plugins (OMEMO) encrypt the stanza, so the local file history is stored decrypted like the incoming one; the wire and the server MAM archive still carry the encrypted stanza
+  [+] MessageArchiver: messages loaded from history engines other than the local file archive (MAM results fetched while the contact was offline) are saved into the local file archive too: each message is decrypted like the history viewers do, undecryptable OMEMO copies are skipped, and copies of messages already stored are dropped by the stanza id
   [+] OMEMO: decrypted message plaintext is cached in the encrypted store and the History dialog decrypts OMEMO messages
   [!] Added new plugin for muting notifications of individual contacts
   [!] Added new plugin for spell checking
