@@ -741,6 +741,43 @@ bool FileMessageArchive::removeFileCollection(const Jid &AStreamJid, const IArch
 	return false;
 }
 
+QSet<QString> FileMessageArchive::loadFileMessageIds(const Jid &AStreamJid, const Jid &AItemJid) const
+{
+	QSet<QString> ids;
+	if (AStreamJid.isValid() && AItemJid.isValid())
+	{
+		QMutexLocker locker(&FMutex);
+		// An open writer flushes every written message into its file, so the
+		// live-archived copies are also covered by this file scan.  The item's
+		// collections are stored in the per-resource subdirectories, so the
+		// scan has to descend there.
+		QDirIterator dirIt(collectionDirPath(AStreamJid,AItemJid),QDir::Files,QDirIterator::Subdirectories);
+		while (dirIt.hasNext())
+		{
+			QFile file(dirIt.next());
+			if (file.open(QFile::ReadOnly))
+			{
+				QXmlStreamReader reader(&file);
+				while (!reader.atEnd())
+				{
+					if (reader.readNextStartElement())
+					{
+						QString name = reader.name().toString();
+						if ((name=="from" || name=="to"))
+						{
+							QString id = reader.attributes().value("id").toString();
+							if (!id.isEmpty())
+								ids.insert(id);
+						}
+					}
+				}
+				file.close();
+			}
+		}
+	}
+	return ids;
+}
+
 bool FileMessageArchive::isDatabaseReady(const Jid &AStreamJid) const
 {
 	QDateTime lastSync = DateTime(databaseProperty(AStreamJid,FADP_LAST_SYNC_TIME)).toLocal();

@@ -62,6 +62,7 @@ public:
 	virtual QList<IArchiveHeader> loadFileHeaders(const Jid &AStreamJid, const IArchiveRequest &ARequest) const;
 	virtual IArchiveHeader saveFileCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection);
 	virtual bool removeFileCollection(const Jid &AStreamJid, const IArchiveHeader &AHeader);
+	virtual QSet<QString> loadFileMessageIds(const Jid &AStreamJid, const Jid &AItemJid) const;
 	// Database
 	virtual bool isDatabaseReady(const Jid &AStreamJid) const;
 	virtual QString databaseArchiveFile(const Jid &AStreamJid) const;

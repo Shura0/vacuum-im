@@ -22,6 +22,7 @@
 #include <interfaces/idataforms.h>
 #include <interfaces/isessionnegotiation.h>
 #include <interfaces/irostermanager.h>
+#include <interfaces/iendtoendencryption.h>
 #include "chatwindowmenu.h"
 #include "archiveviewwindow.h"
 #include "archivereplicator.h"
@@ -57,6 +58,8 @@ struct HeadersRequest {
 };
 
 struct CollectionRequest {
+	Jid streamJid;
+	IArchiveEngine *engine;
 	XmppError lastError;
 	IArchiveCollection collection;
 };
@@ -189,12 +192,15 @@ protected:
 	bool isSelectionAccepted(const QList<IRosterIndex *> &ASelected) const;
 	Menu *createContextMenu(const QStringList &AStreams, const QStringList &AContacts, QWidget *AParent) const;
 	void notifyInChatWindow(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessage) const;
+private:
+	void saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection);
 protected slots:
 	void onEngineCapabilitiesChanged(const Jid &AStreamJid);
 	void onEngineRequestFailed(const QString &AId, const XmppError &AError);
 	void onEngineHeadersLoaded(const QString &AId, const QList<IArchiveHeader> &AHeaders);
 	void onEngineCollectionLoaded(const QString &AId, const IArchiveCollection &ACollection);
 	void onEngineCollectionsRemoved(const QString &AId, const IArchiveRequest &ARequest);
+	void onEndToEndEncryptionDestroyed(QObject *AObject);
 	void onSelfRequestFailed(const QString &AId, const XmppError &AError);
 	void onSelfHeadersLoaded(const QString &AId, const QList<IArchiveHeader> &AHeaders);
 	void onSelfCollectionLoaded(const QString &AId, const IArchiveCollection &ACollection);
@@ -235,6 +241,7 @@ private:
 	IMessageWidgets *FMessageWidgets;
 	ISessionNegotiation *FSessionNegotiation;
 	IMultiUserChatManager *FMultiChatManager;
+	IEndToEndEncryption *FEndToEndEncryption;
 private:
 	QMap<Jid,int> FSHIPrefs;
 	QMap<Jid,int> FSHIMessageIn;

@@ -132,9 +132,11 @@ bool MamArchive::initObjects()
 
 bool MamArchive::archiveMessageEdit(int AOrder, const Jid &AStreamJid, Message &AMessage, bool ADirectionIn)
 {
-	Q_UNUSED(AOrder); Q_UNUSED(AMessage); Q_UNUSED(ADirectionIn);
-	// Dropping the message tells MessageArchiver to not save it locally.
-	return isServerMamActive(AStreamJid) && !isArchiveDuplicationEnabled(AStreamJid);
+	Q_UNUSED(AOrder); Q_UNUSED(ADirectionIn);
+	// The server archive makes the ordinary direct archiving redundant, so
+	// the message is dropped... unless it is the deliberately forced save
+	// of the messages fetched from the server archive itself.
+	return !AMessage.data(MDR_ARCHIVE_FORCED).toBool() && isServerMamActive(AStreamJid) && !isArchiveDuplicationEnabled(AStreamJid);
 }
 
 bool MamArchive::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStanza, bool &AAccept)
