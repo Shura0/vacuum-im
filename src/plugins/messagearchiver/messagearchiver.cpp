@@ -1061,21 +1061,41 @@ QString MessageArchiver::removeArchiveSessionPrefs(const Jid &AStreamJid, const 
 
 bool MessageArchiver::saveMessage(const Jid &AStreamJid, const Jid &AItemJid, const Message &AMessage)
 {
-	if (!isArchiveAutoSave(AStreamJid) || isArchiveDuplicationEnabled(AStreamJid))
+	bool saved = false;
+	QString reason;
+	const bool autoSave = isArchiveAutoSave(AStreamJid);
+	const bool duplication = isArchiveDuplicationEnabled(AStreamJid);
+	const bool archivingAllowed = isArchivingAllowed(AStreamJid,AItemJid,AMessage.threadId());
+	IArchiveEngine *engine = archivingAllowed ? findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving) : NULL;
+	if (!autoSave || duplication)
 	{
-		if (isArchivingAllowed(AStreamJid,AItemJid,AMessage.threadId()))
+		if (engine)
 		{
-			IArchiveEngine *engine = findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving);
-			if (engine)
-			{
-				Message message = AMessage;
-				bool directionIn = AItemJid==message.from() || AStreamJid==message.to();
-				if (prepareMessage(AStreamJid,message,directionIn))
-					return engine->saveMessage(AStreamJid,message,directionIn);
-			}
+			Message message = AMessage;
+			bool directionIn = AItemJid==message.from() || AStreamJid==message.to();
+			if (prepareMessage(AStreamJid,message,directionIn))
+				saved = engine->saveMessage(AStreamJid,message,directionIn);
 		}
 	}
-	return false;
+
+	if (!saved)
+	{
+		if (autoSave && !duplication)
+			reason = "Server auto archiving is enabled";
+		else if (!archivingAllowed)
+			reason = QString("Item archiving prefs forbid saving, save=%1").arg(archiveItemPrefs(AStreamJid,AItemJid,AMessage.threadId()).save);
+		else if (engine == NULL)
+			reason = "Direct archiving engine is not available";
+		else if (AMessage.body().isEmpty())
+			reason = "Body is empty";
+		else if (AMessage.type()!=Message::Chat && AMessage.type()!=Message::GroupChat)
+			reason = QString("Message type is not chat, type=%1").arg(AMessage.type());
+		else
+			reason = "An archive handler or the writer did not accept the message";
+		LOG_STRM_WARNING(AStreamJid,QString("Failed to save message into the local archive, with=%1, type=%2, body=%3, id=%4: %5")
+			.arg(AItemJid.bare()).arg(AMessage.type()).arg(AMessage.body().length()).arg(AMessage.id(),reason));
+	}
+	return saved;
 }
 
 bool MessageArchiver::saveNote(const Jid &AStreamJid, const Jid &AItemJid, const QString &ANote, const QString &AThreadId)
@@ -1946,7 +1966,12 @@ void MessageArchiver::processCollectionRequest(const QString &ALocalId, Collecti
 void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection)
 {
 	if (ACollection.body.messages.isEmpty() || !ACollection.header.with.isValid())
+	{
+		LOG_STRM_WARNING(AStreamJid,QString("Fetched history save skipped: %1, with=%2")
+			.arg(!ACollection.header.with.isValid() ? "Header contact is not valid" : "Collection is empty")
+			.arg(ACollection.header.with.pFull()));
 		return;
+	}
 
 	// A copy of the same message may already be in the file archive: the live
 	// messages are saved on handle, and their storage keeps the stanza id.
@@ -1969,10 +1994,17 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 	}
 
 	int savedCount = 0;
+	int skipDuplicate = 0;
+	int skipDecrypt = 0;
+	int skipBody = 0;
+	int skipEngine = 0;
 	foreach(const Message &message, ACollection.body.messages)
 	{
 		if (!message.id().isEmpty() && savedIds.contains(message.id()))
+		{
+			skipDuplicate++;
 			continue;
+		}
 
 		bool directionIn = message.data(MDR_MESSAGE_DIRECTION).isNull()
 			? ACollection.header.with.pBare()==message.fromJid().pBare()
@@ -1989,19 +2021,35 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 			|| plain.body().isEmpty())
 		{
 			if (!plain.stanza().firstElement("encrypted",QStringLiteral("eu.siacs.conversations.axolotl")).isNull())
-				LOG_STRM_WARNING(AStreamJid,QString("Failed to decrypt fetched history message, with=%1").arg(ACollection.header.with.full()));
+			{
+				LOG_STRM_WARNING(AStreamJid,QString("Failed to decrypt fetched history message, with=%1, id=%2, body=%3")
+					.arg(ACollection.header.with.full()).arg(message.id()).arg(plain.body().length()));
+				skipDecrypt++;
+			}
+			else
+			{
+				skipBody++;
+			}
 			continue;
 		}
+		// The forced flag lifts the MamArchive veto ("the server archive
+		// already keeps the messages"), otherwise these copies would be
+		// dropped the same way as the live messages.
+		plain.setData(MDR_ARCHIVE_FORCED,true);
 		if (processMessage(AStreamJid,plain,directionIn))
 		{
 			savedIds.insert(message.id());
 			savedCount++;
 		}
+		else
+		{
+			skipEngine++;
+		}
 	}
 
-	if (savedCount > 0)
-		LOG_STRM_INFO(AStreamJid,QString("Fetched history saved to local archive, with=%1, messages=%2")
-			.arg(ACollection.header.with.bare()).arg(savedCount));
+	LOG_STRM_INFO(AStreamJid,QString("Fetched history save to local archive finished, with=%1, total=%2, saved=%3, duplicates=%4, decrypt-failed=%5, empty-body=%6, engine-refused=%7")
+		.arg(ACollection.header.with.bare()).arg(ACollection.body.messages.count()).arg(savedCount)
+		.arg(skipDuplicate).arg(skipDecrypt).arg(skipBody).arg(skipEngine));
 }
 
 void MessageArchiver::processRemoveRequest(const QString &ALocalId, RemoveRequest &ARequest)
