@@ -121,6 +121,7 @@ protected slots:
 	void onChangeWindowAddressAction();
 	void onActiveStreamRemoved(const Jid &AStreamJid);
 	void onShortcutActivated(const QString &AId, QWidget *AWidget);
+	void onMessageChatWindowCreated(IMessageChatWindow *AWindow);
 	void onArchivePrefsOpened(const Jid &AStreamJid);
 	void onArchivePrefsClosed(const Jid &AStreamJid);
 	void onCatchUpTimerTimeout();
