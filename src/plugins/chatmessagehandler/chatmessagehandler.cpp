@@ -137,6 +137,9 @@ bool ChatMessageHandler::initConnections(IPluginManager *APluginManager, int &AI
 	if (plugin)
 	{
 		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
+		if (FMessageWidgets)
+			connect(FMessageWidgets->instance(),SIGNAL(chatWindowCreated(IMessageChatWindow *)),
+				SLOT(onMessageChatWindowCreated(IMessageChatWindow *)));
 	}
 
 	plugin = APluginManager->pluginInterface("IMessageProcessor").value(0,NULL);
@@ -539,49 +542,16 @@ void ChatMessageHandler::onMainWindowFirstShown()
 IMessageChatWindow *ChatMessageHandler::getWindow(const Jid &AStreamJid, const Jid &AContactJid)
 {
 	IMessageChatWindow *window = NULL;
-	if (FMessageProcessor && FMessageProcessor->isActiveStream(AStreamJid) && AContactJid.isValid())
+	if (FMessageProcessor && AStreamJid.isValid() && AContactJid.isValid())
 	{
+		// The windows are independent of the connection state: an offline
+		// window shows the local file-archive history, only sending a message
+		// requires the stream to be connected.
 		window = findWindow(AStreamJid,AContactJid);
 		if (!window)
 		{
 			window = FMessageWidgets->getChatWindow(AStreamJid,AContactJid);
-			if (window)
-			{
-				LOG_STRM_INFO(AStreamJid,QString("Chat window created, with=%1").arg(AContactJid.bare()));
-
-				window->address()->setAutoAddresses(true);
-				window->infoWidget()->setAddressMenuVisible(true);
-				window->infoWidget()->addressMenu()->menuAction()->setToolTip(tr("Contact resource"));
-				window->setTabPageNotifier(FMessageWidgets->newTabPageNotifier(window));
-
-				connect(window->instance(),SIGNAL(tabPageActivated()),SLOT(onWindowActivated()));
-				connect(window->instance(),SIGNAL(tabPageClosed()),SLOT(onWindowClosed()));
-				connect(window->instance(),SIGNAL(tabPageDestroyed()),SLOT(onWindowDestroyed()));
-				connect(window->address()->instance(),SIGNAL(addressChanged(const Jid &, const Jid &)),SLOT(onWindowAddressChanged()));
-				connect(window->address()->instance(),SIGNAL(availAddressesChanged()),SLOT(onWindowAvailAddressesChanged()));
-				connect(window->infoWidget()->instance(),SIGNAL(addressMenuRequested(Menu *)),SLOT(onWindowAddressMenuRequested(Menu *)));
-				connect(window->infoWidget()->instance(),SIGNAL(contextMenuRequested(Menu *)),SLOT(onWindowContextMenuRequested(Menu *)));
-				connect(window->infoWidget()->instance(),SIGNAL(toolTipsRequested(QMap<int,QString> &)),SLOT(onWindowToolTipsRequested(QMap<int,QString> &)));
-				connect(window->viewWidget()->instance(),SIGNAL(contentAppended(const QString &, const IMessageStyleContentOptions &)),
-					SLOT(onWindowContentAppended(const QString &, const IMessageStyleContentOptions &)));
-				connect(window->viewWidget()->instance(),SIGNAL(messageStyleOptionsChanged(const IMessageStyleOptions &, bool)),
-					SLOT(onWindowMessageStyleOptionsChanged(const IMessageStyleOptions &, bool)));
-				connect(window->tabPageNotifier()->instance(),SIGNAL(activeNotifyChanged(int)),this,SLOT(onWindowNotifierActiveNotifyChanged(int)));
-
-				FWindows.append(window);
-				FWindowStatus[window].createTime = QDateTime::currentDateTime();
-
-				Action *clearAction = new Action(window->instance());
-				clearAction->setText(tr("Clear Chat Window"));
-				clearAction->setIcon(RSR_STORAGE_MENUICONS,MNI_CHATMHANDLER_CLEAR_CHAT);
-				connect(clearAction,SIGNAL(triggered(bool)),SLOT(onClearWindowAction(bool)));
-				window->toolBarWidget()->toolBarChanger()->insertAction(clearAction, TBG_MWTBW_CLEAR_WINDOW);
-
-				updateWindow(window);
-				setMessageStyle(window);
-				requestHistory(window);
-			}
-			else
+			if (!window)
 			{
 				LOG_STRM_ERROR(AStreamJid,QString("Failed to create chat window, with=%1: Instance is not created").arg(AContactJid.bare()));
 			}
@@ -591,15 +561,55 @@ IMessageChatWindow *ChatMessageHandler::getWindow(const Jid &AStreamJid, const J
 	{
 		REPORT_ERROR("Failed to create chat window: IMessageProcessor is NULL");
 	}
-	else if (!FMessageProcessor->isActiveStream(AStreamJid))
+	else if (!AStreamJid.isValid())
 	{
-		REPORT_ERROR("Failed to create chat window: Stream is not active");
+		REPORT_ERROR("Failed to create chat window: Stream Jid is not valid");
 	}
 	else if (!AContactJid.isValid())
 	{
 		REPORT_ERROR("Failed to create chat window: Contact is not valid");
 	}
 	return window;
+}
+
+void ChatMessageHandler::onMessageChatWindowCreated(IMessageChatWindow *AWindow)
+{
+	// The signal fires during FMessageWidgets->getChatWindow, so every window
+	// gets wired up no matter which way it was opened (roster click, shortcut,
+	// last chat restore, XMPP URI, vim ":chat" command or an incoming message).
+	LOG_STRM_INFO(AWindow->streamJid(),QString("Chat window created, with=%1").arg(AWindow->contactJid().bare()));
+
+	AWindow->address()->setAutoAddresses(true);
+	AWindow->infoWidget()->setAddressMenuVisible(true);
+	AWindow->infoWidget()->addressMenu()->menuAction()->setToolTip(tr("Contact resource"));
+	AWindow->setTabPageNotifier(FMessageWidgets->newTabPageNotifier(AWindow));
+
+	connect(AWindow->instance(),SIGNAL(tabPageActivated()),SLOT(onWindowActivated()));
+	connect(AWindow->instance(),SIGNAL(tabPageClosed()),SLOT(onWindowClosed()));
+	connect(AWindow->instance(),SIGNAL(tabPageDestroyed()),SLOT(onWindowDestroyed()));
+	connect(AWindow->address()->instance(),SIGNAL(addressChanged(const Jid &, const Jid &)),SLOT(onWindowAddressChanged()));
+	connect(AWindow->address()->instance(),SIGNAL(availAddressesChanged()),SLOT(onWindowAvailAddressesChanged()));
+	connect(AWindow->infoWidget()->instance(),SIGNAL(addressMenuRequested(Menu *)),SLOT(onWindowAddressMenuRequested(Menu *)));
+	connect(AWindow->infoWidget()->instance(),SIGNAL(contextMenuRequested(Menu *)),SLOT(onWindowContextMenuRequested(Menu *)));
+	connect(AWindow->infoWidget()->instance(),SIGNAL(toolTipsRequested(QMap<int,QString> &)),SLOT(onWindowToolTipsRequested(QMap<int,QString> &)));
+	connect(AWindow->viewWidget()->instance(),SIGNAL(contentAppended(const QString &, const IMessageStyleContentOptions &)),
+		SLOT(onWindowContentAppended(const QString &, const IMessageStyleContentOptions &)));
+	connect(AWindow->viewWidget()->instance(),SIGNAL(messageStyleOptionsChanged(const IMessageStyleOptions &, bool)),
+		SLOT(onWindowMessageStyleOptionsChanged(const IMessageStyleOptions &, bool)));
+	connect(AWindow->tabPageNotifier()->instance(),SIGNAL(activeNotifyChanged(int)),this,SLOT(onWindowNotifierActiveNotifyChanged(int)));
+
+	FWindows.append(AWindow);
+	FWindowStatus[AWindow].createTime = QDateTime::currentDateTime();
+
+	Action *clearAction = new Action(AWindow->instance());
+	clearAction->setText(tr("Clear Chat Window"));
+	clearAction->setIcon(RSR_STORAGE_MENUICONS,MNI_CHATMHANDLER_CLEAR_CHAT);
+	connect(clearAction,SIGNAL(triggered(bool)),SLOT(onClearWindowAction(bool)));
+	AWindow->toolBarWidget()->toolBarChanger()->insertAction(clearAction, TBG_MWTBW_CLEAR_WINDOW);
+
+	updateWindow(AWindow);
+	setMessageStyle(AWindow);
+	requestHistory(AWindow);
 }
 
 IMessageChatWindow *ChatMessageHandler::findWindow(const Jid &AStreamJid, const Jid &AContactJid) const
