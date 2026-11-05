@@ -9,6 +9,8 @@
 #define NS_STANZA_SESSION                       "urn:xmpp:ssn"
 #define NS_CAPTCHA_FORMS                        "urn:xmpp:captcha"
 #define NS_BITS_OF_BINARY                       "urn:xmpp:bob"
+#define NS_HTTP_UPLOAD                          "urn:xmpp:http:upload:0"
+#define NS_HTTP_UPLOAD_LEGACY                   "urn:xmpp:http:upload"
 
 #define NS_JABBER_CLIENT                        "jabber:client"
 #define NS_JABBER_STREAMS                       "http://etherx.jabber.org/streams"

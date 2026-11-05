@@ -5,6 +5,7 @@
 #define NNT_CHAT_MESSAGE              "ChatMessage"
 #define NNT_NORMAL_MESSAGE            "NormalMessage"
 #define NNT_FILETRANSFER              "FileTransfer"
+#define NNT_HTTPUPLOAD                "HttpUpload"
 #define NNT_MUC_MESSAGE_INVITE        "MucMessageInvite"
 #define NNT_MUC_MESSAGE_GROUPCHAT     "MucMessageGroupchat"
 #define NNT_MUC_MESSAGE_PRIVATE       "MucMessagePrivate"

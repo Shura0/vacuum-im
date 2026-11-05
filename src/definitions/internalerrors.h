@@ -46,6 +46,17 @@
 #define IERR_FILETRANSFER_TRANSFER_NOT_STARTED               "filetransfer-transfer-not-started"
 #define IERR_FILETRANSFER_TRANSFER_TERMINATED                "filetransfer-transfer-terminated"
 
+// HttpUpload
+#define IERR_HTTPUPLOAD_SERVICE_NOT_FOUND                    "httpupload-service-not-found"
+#define IERR_HTTPUPLOAD_FILE_IO_ERROR                        "httpupload-file-io-error"
+#define IERR_HTTPUPLOAD_FILE_TOO_LARGE                       "httpupload-file-too-large"
+#define IERR_HTTPUPLOAD_SLOT_REQUEST_FAILED                  "httpupload-slot-request-failed"
+#define IERR_HTTPUPLOAD_INVALID_RESPONSE                     "httpupload-invalid-response"
+#define IERR_HTTPUPLOAD_NETWORK_ERROR                        "httpupload-network-error"
+#define IERR_HTTPUPLOAD_HTTP_ERROR                           "httpupload-http-error"
+#define IERR_HTTPUPLOAD_ABORTED                              "httpupload-aborted"
+#define IERR_HTTPUPLOAD_STREAM_CLOSED                        "httpupload-stream-closed"
+
 // InBandStreams
 #define IERR_INBAND_STREAM_DESTROYED                         "inband-stream-destroyed"
 #define IERR_INBAND_STREAM_INVALID_DATA                      "inband-stream-invalid-data"

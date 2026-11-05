@@ -54,6 +54,7 @@ FileTransfer::FileTransfer()
 	FDataManager = NULL;
 	FDataPublisher = NULL;
 	FMessageWidgets = NULL;
+	FHttpUploads = NULL;
 	FOptionsManager = NULL;
 	FRostersViewPlugin = NULL;
 	FMessageProcessor = NULL;
@@ -165,6 +166,14 @@ bool FileTransfer::initConnections(IPluginManager *APluginManager, int &AInitOrd
 	if (plugin)
 	{
 		FMessageProcessor = qobject_cast<IMessageProcessor *>(plugin->instance());
+	}
+
+	plugin = APluginManager->pluginInterface("IHttpUploadsManager").value(0,NULL);
+	if (plugin)
+	{
+		FHttpUploads = qobject_cast<IHttpUploadsManager *>(plugin->instance());
+		if (FHttpUploads)
+			connect(FHttpUploads->instance(),SIGNAL(servicesChanged(const Jid &)),SLOT(onHttpServicesChanged(const Jid &)));
 	}
 
 	plugin = APluginManager->pluginInterface("IXmppUriQueries").value(0,NULL);
@@ -303,10 +312,12 @@ bool FileTransfer::rosterDragEnter(const QDragEnterEvent *AEvent)
 
 bool FileTransfer::rosterDragMove(const QDragMoveEvent *AEvent, IRosterIndex *AHover)
 {
-	if (AHover->data(RDR_KIND).toInt()==RIK_MUC_ITEM && FDataPublisher!=NULL && FMessageProcessor!=NULL)
+	Jid streamJid = AHover->data(RDR_STREAM_JID).toString();
+	bool httpSupported = FHttpUploads!=NULL && FHttpUploads->isSupported(streamJid);
+	if (AHover->data(RDR_KIND).toInt()==RIK_MUC_ITEM && (FDataPublisher!=NULL || httpSupported) && FMessageProcessor!=NULL)
 		return AHover->data(RDR_SHOW).toInt()!=IPresence::Offline && AHover->data(RDR_SHOW).toInt()!=IPresence::Error;
 	else if (AHover->data(RDR_KIND).toInt()!=RIK_STREAM_ROOT && AEvent->mimeData()->urls().count()==1)
-		return isSupported(AHover->data(RDR_STREAM_JID).toString(),AHover->data(RDR_FULL_JID).toString());
+		return httpSupported || isSupported(streamJid,AHover->data(RDR_FULL_JID).toString());
 	return false;
 }
 
@@ -364,11 +375,13 @@ bool FileTransfer::messageViewDragEnter(IMessageViewWidget *AWidget, const QDrag
 			if (!QFileInfo(url.toLocalFile()).isFile())
 				return false;
 
-		IMultiUserChatWindow *mucWindow = qobject_cast<IMultiUserChatWindow *>(AWidget->messageWindow()->instance());
+		IMessageWindow *window = AWidget->messageWindow();
+		bool httpSupported = FHttpUploads!=NULL && FHttpUploads->isSupported(window->streamJid());
+		IMultiUserChatWindow *mucWindow = qobject_cast<IMultiUserChatWindow *>(window->instance());
 		if (mucWindow != NULL)
-			return mucWindow->multiUserChat()->isOpen();
+			return mucWindow->multiUserChat()->isOpen() && (httpSupported || FDataPublisher!=NULL);
 		else if (AEvent->mimeData()->urls().count() == 1)
-			return isSupported(AWidget->messageWindow()->streamJid(),AWidget->messageWindow()->contactJid());
+			return httpSupported || isSupported(window->streamJid(),window->contactJid());
 	}
 	return false;
 }
@@ -760,6 +773,22 @@ bool FileTransfer::isSupported(const Jid &AStreamJid, const Jid &AContactJid) co
 	return FDiscovery==NULL || FDiscovery->discoInfo(AStreamJid,AContactJid).features.contains(NS_SI_FILETRANSFER);
 }
 
+bool FileTransfer::httpUploadFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType, const QString &AFileName)
+{
+	if (FHttpUploads==NULL || !FHttpUploads->isSupported(AStreamJid))
+		return false;
+	return FHttpUploads->uploadFile(AStreamJid,AContactJid,AMessageType,AFileName);
+}
+
+int FileTransfer::messageTypeForWindow(IMessageWindow *AWindow) const
+{
+	if (qobject_cast<IMessageChatWindow *>(AWindow->instance()) != NULL)
+		return Message::Chat;
+	if (qobject_cast<IMultiUserChatWindow *>(AWindow->instance()) != NULL)
+		return Message::GroupChat;
+	return Message::Normal;
+}
+
 IFileStream *FileTransfer::sendFile(const Jid &AStreamJid, const Jid &AContactJid, const QString &AFileName, const QString &AFileDesc)
 {
 	if (isSupported(AStreamJid,AContactJid))
@@ -1064,9 +1093,10 @@ void FileTransfer::updateToolBarAction(IMessageToolBarWidget *AWidget)
 			AWidget->toolBarChanger()->insertAction(fileAction,TBG_MWTBW_FILETRANSFER);
 			FToolBarActions.insert(AWidget,fileAction);
 		}
-		fileAction->setEnabled(isSupported(chatWindow->streamJid(),chatWindow->contactJid()));
+		bool httpSupported = FHttpUploads!=NULL && FHttpUploads->isSupported(chatWindow->streamJid());
+		fileAction->setEnabled(httpSupported || isSupported(chatWindow->streamJid(),chatWindow->contactJid()));
 	}
-	else if (FDataPublisher!=NULL && FMessageProcessor!=NULL && mucWindow!=NULL)
+	else if (FMessageProcessor!=NULL && mucWindow!=NULL && (FDataPublisher!=NULL || FHttpUploads!=NULL))
 	{
 		if (fileAction == NULL)
 		{
@@ -1078,7 +1108,8 @@ void FileTransfer::updateToolBarAction(IMessageToolBarWidget *AWidget)
 			AWidget->toolBarChanger()->insertAction(fileAction,TBG_MWTBW_FILETRANSFER);
 			FToolBarActions.insert(AWidget,fileAction);
 		}
-		fileAction->setEnabled(FDataPublisher!=NULL && mucWindow->multiUserChat()->isOpen());
+		bool httpSupported = FHttpUploads!=NULL && FHttpUploads->isSupported(mucWindow->streamJid());
+		fileAction->setEnabled(mucWindow->multiUserChat()->isOpen() && (httpSupported || FDataPublisher!=NULL));
 	}
 }
 
@@ -1242,23 +1273,29 @@ void FileTransfer::onSendFileByAction(bool)
 	if (action)
 	{
 		IMessageToolBarWidget *widget = FToolBarActions.key(action);
+		IMessageWindow *window = widget!=NULL ? widget->messageWindow() : NULL;
 
 		Jid streamJid = action->data(ADR_STREAM_JID).toString();
 		Jid contactJid = action->data(ADR_CONTACT_JID).toString();
 		QString file = action->data(ADR_FILE_NAME).toString();
 
+		if (!streamJid.isValid() && window!=NULL)
+			streamJid = window->streamJid();
+		if (!contactJid.isValid() && window!=NULL)
+			contactJid = window->contactJid();
+
 		if (file.isEmpty())
 		{
-			QWidget *parent = widget!=NULL ? widget->messageWindow()->instance() : NULL;
+			QWidget *parent = window!=NULL ? window->instance() : NULL;
 			file = QFileDialog::getOpenFileName(parent,tr("Select File"));
 		}
 
-		if (!file.isEmpty())
+		if (!file.isEmpty() && streamJid.isValid() && contactJid.isValid())
 		{
-			if (streamJid.isValid() && contactJid.isValid())
-				sendFile(streamJid,contactJid,file);
-			else if (widget != NULL)
-				sendFile(widget->messageWindow()->streamJid(),widget->messageWindow()->contactJid(),file);
+			int messageType = window!=NULL ? messageTypeForWindow(window) : Message::Chat;
+			if (httpUploadFile(streamJid,contactJid,messageType,file))
+				return;
+			sendFile(streamJid,contactJid,file);
 		}
 	}
 }
@@ -1266,7 +1303,7 @@ void FileTransfer::onSendFileByAction(bool)
 void FileTransfer::onPublishFilesByAction(bool)
 {
 	Action *action = qobject_cast<Action *>(sender());
-	if (action!=NULL && FDataPublisher!=NULL && FMessageProcessor!=NULL)
+	if (action!=NULL && FMessageProcessor!=NULL)
 	{
 		IMessageToolBarWidget *widget = FToolBarActions.key(action);
 
@@ -1277,7 +1314,16 @@ void FileTransfer::onPublishFilesByAction(bool)
 		if (files.isEmpty())
 		{
 			QWidget *parent = widget!=NULL ? widget->messageWindow()->instance() : NULL;
-			files = QFileDialog::getOpenFileNames(parent,tr("Select Files"));
+			if (FDataPublisher!=NULL)
+			{
+				files = QFileDialog::getOpenFileNames(parent,tr("Select Files"));
+			}
+			else
+			{
+				QString fileName = QFileDialog::getOpenFileName(parent,tr("Select File"));
+				if (!fileName.isEmpty())
+					files.append(fileName);
+			}
 		}
 
 		IMessageChatWindow *chatWindow = NULL;
@@ -1292,6 +1338,25 @@ void FileTransfer::onPublishFilesByAction(bool)
 			chatWindow = FMessageWidgets!=NULL ? FMessageWidgets->findChatWindow(streamJid,contactJid) : NULL;
 			mucWindow = FMultiChatManager!=NULL ? FMultiChatManager->findMultiChatWindow(streamJid,contactJid) : NULL;
 		}
+
+		Jid targetStreamJid;
+		Jid targetContactJid;
+		int targetMessageType = Message::Chat;
+		if (chatWindow != NULL)
+		{
+			targetStreamJid = chatWindow->streamJid();
+			targetContactJid = chatWindow->contactJid();
+			targetMessageType = Message::Chat;
+		}
+		else if (mucWindow!=NULL && mucWindow->multiUserChat()->isOpen())
+		{
+			targetStreamJid = mucWindow->streamJid();
+			targetContactJid = mucWindow->contactJid();
+			targetMessageType = Message::GroupChat;
+		}
+
+		if (files.count()==1 && targetStreamJid.isValid() && httpUploadFile(targetStreamJid,targetContactJid,targetMessageType,files.first()))
+			return;
 
 		Jid ownerJid;
 		Message message;
@@ -1308,7 +1373,7 @@ void FileTransfer::onPublishFilesByAction(bool)
 			ownerJid = mucWindow->multiUserChat()->mainUser()->userJid();
 		}
 
-		if (ownerJid.isValid())
+		if (FDataPublisher!=NULL && ownerJid.isValid())
 		{
 			int registered = 0;
 			foreach(const QString &file, files)
@@ -1415,6 +1480,13 @@ void FileTransfer::onMultiUserChatStateChanged(int AState)
 		foreach(IMessageToolBarWidget *widget, findToolBarWidgets(multiChat->roomJid()))
 			updateToolBarAction(widget);
 	}
+}
+
+void FileTransfer::onHttpServicesChanged(const Jid &AStreamJid)
+{
+	foreach(IMessageToolBarWidget *widget, FToolBarActions.keys())
+		if (!AStreamJid.isValid() || widget->messageWindow()->streamJid()==AStreamJid)
+			updateToolBarAction(widget);
 }
 
 void FileTransfer::onDiscoInfoReceived(const IDiscoInfo &AInfo)
