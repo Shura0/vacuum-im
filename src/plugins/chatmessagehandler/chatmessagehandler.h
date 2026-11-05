@@ -82,6 +82,8 @@ protected:
 	IMessageChatWindow *showWindow(const Jid &AStreamJid, const Jid &AContactJid);
 	IMessageChatWindow *getWindow(const Jid &AStreamJid, const Jid &AContactJid);
 	IMessageChatWindow *findWindow(const Jid &AStreamJid, const Jid &AContactJid) const;
+	void saveLastChatWindow(IMessageChatWindow *AWindow);
+	void clearLastChatWindow(const Jid &AStreamJid, const Jid &AContactJid, bool AIgnoreShutdown = false);
 	void updateWindow(IMessageChatWindow *AWindow);
 	void removeNotifiedMessages(IMessageChatWindow *AWindow);
 	void showHistory(IMessageChatWindow *AWindow);

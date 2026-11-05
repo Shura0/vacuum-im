@@ -4,6 +4,7 @@
 
 #include <QMouseEvent>
 #include <QApplication>
+#include <QPointer>
 #include <definitions/actiongroups.h>
 #include <definitions/toolbargroups.h>
 #include <definitions/resources.h>
@@ -515,11 +516,39 @@ IMessageChatWindow *ChatMessageHandler::showWindow(const Jid &AStreamJid, const 
 	IMessageChatWindow *window = getWindow(AStreamJid, AContactJid);
 	if (window)
 	{
-		Options::node(OPV_MESSAGES_LASTCHAT_STREAM).setValue(AStreamJid.full());
-		Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).setValue(AContactJid.full());
+		saveLastChatWindow(window);
 		window->showTabPage();
 	}
 	return window;
+}
+
+void ChatMessageHandler::saveLastChatWindow(IMessageChatWindow *AWindow)
+{
+	if (AWindow!=NULL && AWindow->streamJid().isValid() && AWindow->contactJid().isValid())
+	{
+		Options::node(OPV_MESSAGES_LASTCHAT_STREAM).setValue(AWindow->streamJid().full());
+		// Store the bare contact: the resource seen at shutdown is usually
+		// stale after a restart, and the chat window addresses resources
+		// automatically.
+		Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).setValue(AWindow->contactJid().bare());
+	}
+}
+
+void ChatMessageHandler::clearLastChatWindow(const Jid &AStreamJid, const Jid &AContactJid, bool AIgnoreShutdown)
+{
+	// Do not lose the restore target while the application is shutting down:
+	// closing all windows at exit must not clear the chat to restore next time.
+	// A window explicitly closed by the user before quit still clears it.
+	if (!AIgnoreShutdown && FPluginManager!=NULL && FPluginManager->isShutingDown())
+		return;
+
+	const Jid streamJid = Options::node(OPV_MESSAGES_LASTCHAT_STREAM).value().toString();
+	const Jid contactJid = Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).value().toString();
+	if (streamJid==AStreamJid && contactJid==AContactJid.bare())
+	{
+		Options::node(OPV_MESSAGES_LASTCHAT_STREAM).setValue(QString());
+		Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).setValue(QString());
+	}
 }
 
 // the chat which was open last time is shown in the main window on its first
@@ -528,13 +557,18 @@ IMessageChatWindow *ChatMessageHandler::showWindow(const Jid &AStreamJid, const 
 void ChatMessageHandler::onMainWindowFirstShown()
 {
 	const Jid streamJid = Options::node(OPV_MESSAGES_LASTCHAT_STREAM).value().toString();
-	const Jid contactJid = Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).value().toString();
+	const Jid contactJid = Jid(Options::node(OPV_MESSAGES_LASTCHAT_CONTACT).value().toString()).bare();
 	if (streamJid.isValid() && contactJid.isValid())
 	{
 		QTimer::singleShot(0, this, [this, streamJid, contactJid]() {
 			IMessageChatWindow *window = getWindow(streamJid, contactJid);
-			if (window && !window->instance()->isWindow())
+			if (window != NULL)
+			{
+				// getWindow() creates a top-level ChatWindow which is only
+				// attached to the tab window by assignTabPage(); checking
+				// isWindow() here would skip the restore of every new window.
 				window->showTabPage();
+			}
 		});
 	}
 }
@@ -1043,6 +1077,7 @@ void ChatMessageHandler::onWindowActivated()
 	if (window)
 	{
 		LOG_STRM_DEBUG(window->streamJid(),QString("Chat window activated, with=%1").arg(window->contactJid().bare()));
+		saveLastChatWindow(window);
 		if (FDestroyTimers.contains(window))
 			delete FDestroyTimers.take(window);
 		removeNotifiedMessages(window);
@@ -1055,6 +1090,20 @@ void ChatMessageHandler::onWindowClosed()
 	if (window)
 	{
 		LOG_STRM_DEBUG(window->streamJid(),QString("Chat window closed, with=%1").arg(window->contactJid().bare()));
+
+		// Forget the restore target only if this chat was not reopened by the
+		// tab activation that follows the close (another tab may become active
+		// first and save its own target).
+		const Jid streamJid = window->streamJid();
+		const Jid contactJid = window->contactJid();
+		const bool userClose = FPluginManager==NULL || !FPluginManager->isShutingDown();
+		QPointer<QObject> guard = window->instance();
+		QTimer::singleShot(0,this,[this,streamJid,contactJid,guard,window,userClose]() {
+			if (!guard.isNull() && window->isVisibleTabPage())
+				return;
+			clearLastChatWindow(streamJid,contactJid,userClose);
+		});
+
 		int destroyTimeout = Options::node(OPV_MESSAGES_CLEANCHATTIMEOUT).value().toInt();
 		if (destroyTimeout>0 && !FNotifiedMessages.contains(window))
 		{
@@ -1076,6 +1125,11 @@ void ChatMessageHandler::onWindowDestroyed()
 	if (FWindows.contains(window))
 	{
 		LOG_STRM_INFO(window->streamJid(),QString("Chat window destroyed, with=%1").arg(window->contactJid().bare()));
+		const Jid streamJid = window->streamJid();
+		const Jid contactJid = window->contactJid();
+		QTimer::singleShot(0,this,[this,streamJid,contactJid]() {
+			clearLastChatWindow(streamJid,contactJid);
+		});
 		removeNotifiedMessages(window);
 
 		if (FDestroyTimers.contains(window))
