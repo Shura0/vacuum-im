@@ -61,6 +61,8 @@
 #define   SCT_MESSAGEWINDOWS_SENDNORMALMESSAGE                     "message-windows.send-normal-message"
 //FileTransfer
 #define   SCT_MESSAGEWINDOWS_SENDFILE                              "message-windows.sendfile"
+//HttpUpload
+#define   SCT_MESSAGEWINDOWS_UPLOADFILE                            "message-windows.uploadfile"
 //MessageArchiver
 #define   SCT_MESSAGEWINDOWS_SHOWHISTORY                           "message-windows.show-history"
 //vCard

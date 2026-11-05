@@ -8,6 +8,7 @@
 #include <QDragLeaveEvent>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ifiletransfer.h>
+#include <interfaces/ihttpupload.h>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>
 #include <interfaces/idatastreamspublisher.h>
@@ -102,6 +103,8 @@ signals:
 protected:
 	void notifyStream(IFileStream *AStream);
 	bool autoStartStream(IFileStream *AStream) const;
+	bool httpUploadFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType, const QString &AFileName);
+	int messageTypeForWindow(IMessageWindow *AWindow) const;
 	void updateToolBarAction(IMessageToolBarWidget *AWidget);
 	QList<IMessageToolBarWidget *> findToolBarWidgets(const Jid &AContactJid) const;
 	StreamDialog *getStreamDialog(IFileStream *ASession);
@@ -112,6 +115,7 @@ protected:
 protected:
 	bool eventFilter(QObject *AObject, QEvent *AEvent);
 protected slots:
+	void onHttpServicesChanged(const Jid &AStreamJid);
 	void onStreamStateChanged();
 	void onStreamDestroyed();
 	void onStreamDialogDestroyed();
@@ -144,6 +148,7 @@ private:
 	IFileStreamsManager *FFileManager;
 	IDataStreamsPublisher *FDataPublisher;
 	IMessageWidgets *FMessageWidgets;
+	IHttpUploadsManager *FHttpUploads;
 	IOptionsManager *FOptionsManager;
 	IRostersViewPlugin *FRostersViewPlugin;
 	IMessageProcessor *FMessageProcessor;

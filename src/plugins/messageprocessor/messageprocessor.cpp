@@ -133,13 +133,14 @@ bool MessageProcessor::writeMessageToText(int AOrder, Message &AMessage, QTextDo
 			changed = true;
 		}
 
+		QString body = AMessage.body(ALang).trimmed();
 		for (QDomElement oobElem = AMessage.stanza().firstElement("x",NS_JABBER_X_OOB); !oobElem.isNull(); oobElem=oobElem.nextSiblingElement("x"))
 		{
 			if (oobElem.namespaceURI() == NS_JABBER_X_OOB)
 			{
 				QString desc = oobElem.firstChildElement("desc").text().trimmed();
 				QUrl url = QUrl::fromUserInput(oobElem.firstChildElement("url").text());
-				if (!url.isEmpty() && url.toString() != html)
+				if (!url.isEmpty() && url.toString() != body && url.toString(QUrl::FullyEncoded) != body)
 				{
 					QTextCharFormat linkFormat;
 					linkFormat.setAnchor(true);
