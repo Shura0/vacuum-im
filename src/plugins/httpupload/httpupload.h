@@ -4,9 +4,11 @@
 #include <QMap>
 #include <QList>
 #include <QPointer>
+#include <QSharedPointer>
 #include <QNetworkAccessManager>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ihttpupload.h>
+#include <interfaces/ifileuploadencryption.h>
 #include <interfaces/istanzaprocessor.h>
 #include <interfaces/iservicediscovery.h>
 #include <interfaces/iurlprocessor.h>
@@ -17,6 +19,7 @@
 
 class Action;
 class HttpUploadTask;
+class QTemporaryDir;
 
 class HttpUploadsManager :
 	public QObject,
@@ -72,12 +75,16 @@ protected:
 	};
 	struct UploadContext
 	{
-		UploadContext() : messageType(0), view(NULL) {}
+		UploadContext() : messageType(0), view(NULL), encrypted(false) {}
 		Jid streamJid;
 		Jid contactJid;
 		int messageType;
 		IMessageViewWidget *view;
 		QPointer<QObject> viewGuard;
+		bool encrypted;
+		QString sourceFileName;
+		QString encryptionFragment;
+		QSharedPointer<QTemporaryDir> tempDir;
 	};
 protected:
 	qint64 parseMaxFileSize(const IDiscoInfo &AInfo, const QString &AServiceNS) const;
@@ -91,7 +98,7 @@ protected:
 	void updateToolBarActions(const Jid &AStreamJid = Jid::null);
 	void showStatus(IMessageViewWidget *AView, const QString &AHtml) const;
 	void sendUploadedFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
-		const QUrl &AUrl, const QString &AFileName) const;
+		const QUrl &AUrl, const QString &AFileName, const QString &AEncryptionFragment = QString()) const;
 	void notifyUploadFailed(const Jid &AStreamJid, const QString &AFileName, const XmppError &AError) const;
 protected slots:
 	void onDiscoOpened(const Jid &AStreamJid);
@@ -112,6 +119,7 @@ private:
 	IStanzaProcessor *FStanzaProcessor;
 	IServiceDiscovery *FDiscovery;
 	IUrlProcessor *FUrlProcessor;
+	IFileUploadEncryption *FFileEncryption;
 	IMessageWidgets *FMessageWidgets;
 	IMessageProcessor *FMessageProcessor;
 	INotifications *FNotifications;

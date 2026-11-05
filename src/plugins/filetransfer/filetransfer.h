@@ -8,6 +8,7 @@
 #include <QDragLeaveEvent>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ifiletransfer.h>
+#include <interfaces/ifileuploadencryption.h>
 #include <interfaces/ihttpupload.h>
 #include <interfaces/ifilestreamsmanager.h>
 #include <interfaces/idatastreamsmanager.h>
@@ -149,6 +150,7 @@ private:
 	IDataStreamsPublisher *FDataPublisher;
 	IMessageWidgets *FMessageWidgets;
 	IHttpUploadsManager *FHttpUploads;
+	IFileUploadEncryption *FFileEncryption;
 	IOptionsManager *FOptionsManager;
 	IRostersViewPlugin *FRostersViewPlugin;
 	IMessageProcessor *FMessageProcessor;

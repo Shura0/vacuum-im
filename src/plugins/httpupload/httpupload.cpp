@@ -6,9 +6,11 @@
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMimeData>
+#include <QTemporaryDir>
 #include <QUrl>
 #include <definitions/namespaces.h>
 #include <definitions/resources.h>
@@ -42,6 +44,7 @@ HttpUploadsManager::HttpUploadsManager()
 	FStanzaProcessor = NULL;
 	FDiscovery = NULL;
 	FUrlProcessor = NULL;
+	FFileEncryption = NULL;
 	FMessageWidgets = NULL;
 	FMessageProcessor = NULL;
 	FNotifications = NULL;
@@ -106,6 +109,10 @@ bool HttpUploadsManager::initConnections(IPluginManager *APluginManager, int &AI
 	{
 		FNetworkManager = new QNetworkAccessManager(this);
 	}
+
+	plugin = APluginManager->pluginInterface("IFileUploadEncryption").value(0,NULL);
+	if (plugin)
+		FFileEncryption = qobject_cast<IFileUploadEncryption *>(plugin->instance());
 
 	plugin = APluginManager->pluginInterface("IMessageWidgets").value(0,NULL);
 	if (plugin)
@@ -339,13 +346,40 @@ bool HttpUploadsManager::startUpload(const Jid &AStreamJid, const Jid &AContactJ
 		}
 	}
 
-	IHttpUpload *upload = createUpload(AStreamJid,AFileName,this);
+	bool encrypted = (AMessageType==Message::Chat || AMessageType==Message::Normal)
+		&& FFileEncryption!=NULL
+		&& FFileEncryption->isFileEncryptionEnabled(AStreamJid,AContactJid);
+
+	QString uploadFileName = AFileName;
+	QString encryptionFragment;
+	QSharedPointer<QTemporaryDir> tempDir;
+	if (encrypted)
+	{
+		tempDir = QSharedPointer<QTemporaryDir>(new QTemporaryDir);
+		if (!tempDir->isValid())
+		{
+			showStatus(AView,tr("Failed to create a temporary directory for file encryption"));
+			return false;
+		}
+
+		uploadFileName = tempDir->filePath(QFileInfo(AFileName).fileName());
+		QString error;
+		if (!FFileEncryption->encryptFile(AStreamJid,AContactJid,AFileName,uploadFileName,encryptionFragment,&error))
+		{
+			showStatus(AView,tr("Failed to encrypt file: %1").arg(error.toHtmlEscaped()));
+			return false;
+		}
+	}
+
+	IHttpUpload *upload = createUpload(AStreamJid,uploadFileName,this);
 	HttpUploadTask *task = upload!=NULL ? qobject_cast<HttpUploadTask *>(upload->instance()) : NULL;
 	if (task == NULL)
 	{
 		showStatus(AView,tr("Failed to create HTTP upload"));
 		return false;
 	}
+	if (encrypted)
+		task->setContentTypeOverride(QStringLiteral("application/octet-stream"));
 
 	UploadContext context;
 	context.streamJid = AStreamJid;
@@ -353,6 +387,10 @@ bool HttpUploadsManager::startUpload(const Jid &AStreamJid, const Jid &AContactJ
 	context.messageType = AMessageType;
 	context.view = AView;
 	context.viewGuard = AView!=NULL ? AView->instance() : NULL;
+	context.encrypted = encrypted;
+	context.sourceFileName = AFileName;
+	context.encryptionFragment = encryptionFragment;
+	context.tempDir = tempDir;
 	FUploadContexts.insert(task,context);
 
 	connect(task,SIGNAL(uploadFinished()),SLOT(onUploadFinished()));
@@ -418,7 +456,7 @@ void HttpUploadsManager::showStatus(IMessageViewWidget *AView, const QString &AH
 }
 
 void HttpUploadsManager::sendUploadedFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
-	const QUrl &AUrl, const QString &AFileName) const
+	const QUrl &AUrl, const QString &AFileName, const QString &AEncryptionFragment) const
 {
 	if (FMessageProcessor == NULL || !AUrl.isValid())
 		return;
@@ -430,12 +468,25 @@ void HttpUploadsManager::sendUploadedFile(const Jid &AStreamJid, const Jid &ACon
 	Message message;
 	message.setType((Message::MessageType)AMessageType);
 	message.setFrom(AStreamJid.full()).setTo(AContactJid.full());
-	message.setBody(urlString);
 
-	QDomElement oob = message.stanza().addElement("x",NS_JABBER_X_OOB);
-	QDomElement urlElem = message.stanza().createElement("url");
-	urlElem.appendChild(message.stanza().createTextNode(urlString));
-	oob.appendChild(urlElem);
+	if (!AEncryptionFragment.isEmpty())
+	{
+		QString urlPart = urlString;
+		if (urlPart.startsWith(QStringLiteral("https://")))
+			urlPart = urlPart.mid(8);
+		else if (urlPart.startsWith(QStringLiteral("http://")))
+			urlPart = urlPart.mid(7);
+		message.setBody(QStringLiteral("aesgcm://") + urlPart + QLatin1Char('#') + AEncryptionFragment);
+	}
+	else
+	{
+		message.setBody(urlString);
+
+		QDomElement oob = message.stanza().addElement("x",NS_JABBER_X_OOB);
+		QDomElement urlElem = message.stanza().createElement("url");
+		urlElem.appendChild(message.stanza().createTextNode(urlString));
+		oob.appendChild(urlElem);
+	}
 
 	if (FMessageProcessor->sendMessage(AStreamJid,message,IMessageProcessor::DirectionOut))
 		LOG_STRM_INFO(AStreamJid,QString("Sent HTTP upload link, to=%1, file=%2")
@@ -528,14 +579,35 @@ void HttpUploadsManager::onUploadFinished()
 
 	if (task->state() == IHttpUpload::Finished)
 	{
-		sendUploadedFile(context.streamJid,context.contactJid,context.messageType,task->getUrl(),task->fileName());
+		if (context.encrypted && task->getUrl().scheme().compare(QStringLiteral("https"),Qt::CaseInsensitive)!=0)
+		{
+			XmppError error(IERR_HTTPUPLOAD_HTTP_ERROR,tr("Encrypted upload requires an HTTPS URL"));
+			if (viewAlive)
+				showStatus(context.view,tr("File upload failed: %1").arg(error.errorMessage().toHtmlEscaped()));
+			else
+				notifyUploadFailed(context.streamJid,context.sourceFileName,error);
+		}
+		else
+		{
+			if (context.encrypted && FFileEncryption!=NULL)
+			{
+				QUrl cleanUrl = task->getUrl();
+				cleanUrl.setFragment(QString());
+				FFileEncryption->registerUploadedFile(context.streamJid,
+					cleanUrl.toString(QUrl::FullyEncoded),context.sourceFileName,context.encryptionFragment);
+			}
+			sendUploadedFile(context.streamJid,context.contactJid,context.messageType,task->getUrl(),
+				context.encrypted ? context.sourceFileName : task->fileName(),
+				context.encrypted ? context.encryptionFragment : QString());
+		}
 	}
 	else
 	{
 		if (viewAlive)
 			showStatus(context.view,tr("File upload failed: %1").arg(task->error().errorMessage().toHtmlEscaped()));
 		else
-			notifyUploadFailed(context.streamJid,task->fileName(),task->error());
+			notifyUploadFailed(context.streamJid,
+				context.encrypted ? context.sourceFileName : task->fileName(),task->error());
 	}
 
 	task->deleteLater();

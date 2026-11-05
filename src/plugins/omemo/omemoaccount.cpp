@@ -85,7 +85,7 @@ bool OmemoAccount::start(bool AInitializeTransport)
 	FPepHandler = FPepManager->insertNodeHandler(QString::fromLatin1(OMEMO_NODE_DEVICELIST),this);
 
 	if (!AInitializeTransport && FAccount->xmppStream() != nullptr
-		&& FAccount->xmppStream()->isConnected())
+		&& FAccount->xmppStream()->isOpen())
 		AInitializeTransport = true;
 
 	if (AInitializeTransport)

@@ -13,6 +13,7 @@ LEGEND
   [!] Added new plugin for HTTP file upload (XEP-0363): discovers the account's upload service, sends the file over HTTP and shares the resulting URL in the message body with a jabber:x:oob fallback
   [!] Added new plugin for end-to-end encryption of 1:1 chats (legacy OMEMO 0.3, XEP-0384)
   [+] OMEMO: per-chat encryption switch and per-message encryption status marks
+  [+] OMEMO: outgoing files are encrypted with XEP-0454 AES-256-GCM before HTTP upload and shared as aesgcm:// links; the key fragment never reaches the plaintext archive
   [+] OMEMO: incoming encrypted files and images are received (XEP-0454 aesgcm urls): the key fragment is stripped from the message body before it is archived, the file is downloaded, decrypted and shown inline in the chat
   [+] OMEMO: clicking an aesgcm attachment link or image opens the decrypted local file with the system opener (the url is opened locally for the messages shown in the chat windows)
   [+] OMEMO: decrypted non-image attachments are shown under their own file name with the size, and the chat context menu offers Open and Save as... for them
