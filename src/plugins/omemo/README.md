@@ -116,8 +116,9 @@ atomically with `0600` permissions.  Keys are never written to
 ## Known limitations
 
 - Only legacy 0.3; OMEMO 2 peers are not supported.
-- No MUC, calls; **sending** OMEMO-encrypted files (XEP-0363 upload + XEP-0454
-  url generation) is not implemented yet, only receiving.
+- No MUC, calls. One-to-one files are encrypted and sent through the HTTP
+  upload service (XEP-0363 + XEP-0454) when OMEMO is enabled for the chat;
+  without an upload service the file cannot be sent through OMEMO.
 - Identity changes on an existing device are rejected by the Signal trust
   callback and need manual session cleanup (not exposed in the UI yet).
 - Profile password changes are not migrated yet; the OMEMO file is encrypted

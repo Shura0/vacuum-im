@@ -566,6 +566,21 @@ bool Omemo::messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessag
 
 	if (ADirection == IMessageProcessor::DirectionOut)
 	{
+		// XEP-0454: the wire body must keep the aesgcm:// key fragment so the
+		// recipient can decrypt the file.  The displayed and archived body
+		// must not, so cache the original for processOutbound() and replace
+		// the message body with the sanitized https url.
+		OmemoAccount *account = accountForStream(AStreamJid);
+		const QString body = AMessage.body();
+		if (account != nullptr && account->isStarted()
+			&& account->isChatEnabled(AMessage.toJid().bare())
+			&& body.contains(QStringLiteral("aesgcm://")))
+		{
+			account->cacheMessage(AMessage.id(),body.toUtf8());
+			const QString sanitized = sanitizeOmemoBody(account,body,true);
+			if (!sanitized.isEmpty() && sanitized != body)
+				replaceBody(AMessage.stanza(),sanitized);
+		}
 		markOutgoingStatus(AStreamJid,AMessage);
 	}
 	else
@@ -671,6 +686,35 @@ bool Omemo::decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirect
 		setMessageStatus(AMessage.id(),status);
 	}
 	return false;
+}
+
+bool Omemo::isFileEncryptionEnabled(const Jid &AStreamJid, const Jid &AContactJid)
+{
+	OmemoAccount *account = accountForStream(AStreamJid);
+	if (account != nullptr && !account->isStarted())
+		account->start(false);
+	return account != nullptr && account->isStarted() && account->isChatEnabled(AContactJid.bare());
+}
+
+bool Omemo::encryptFile(const Jid &AStreamJid, const Jid &AContactJid,
+	const QString &AFileName, const QString &AOutputFileName,
+	QString &AFragment, QString *AError)
+{
+	if (FAttachments == nullptr || !isFileEncryptionEnabled(AStreamJid,AContactJid))
+	{
+		if (AError != nullptr)
+			*AError = tr("OMEMO file encryption is not enabled for this chat");
+		return false;
+	}
+	return FAttachments->encryptFile(AFileName,AOutputFileName,AFragment,AError);
+}
+
+void Omemo::registerUploadedFile(const Jid &AStreamJid, const QString &ACleanUrl,
+	const QString &ASourceFileName, const QString &AFragment)
+{
+	OmemoAccount *account = accountForStream(AStreamJid);
+	if (account != nullptr && FAttachments != nullptr)
+		FAttachments->storeUploadedFile(account,ACleanUrl,ASourceFileName,AFragment);
 }
 
 OmemoAccount *Omemo::accountForStream(const Jid &AStreamJid)
@@ -851,8 +895,11 @@ bool Omemo::processOutbound(const Jid &AStreamJid, Stanza &AStanza)
 		return true;
 	}
 
-	const QByteArray plain = AStanza.firstElement(QStringLiteral("body")).text().toUtf8();
-	if (!encryptStanza(account,contactJid,AStanza))
+	QByteArray plain = AStanza.firstElement(QStringLiteral("body")).text().toUtf8();
+	QByteArray cached;
+	if (account->cachedMessage(messageId,cached) && cached.contains("aesgcm://"))
+		plain = cached;
+	if (!encryptStanza(account,contactJid,AStanza,plain))
 	{
 		LOG_STRM_WARNING(AStreamJid,QString("Cannot encrypt OMEMO message to %1").arg(contactJid));
 		setMessageStatus(messageId,StatusPending);
@@ -872,13 +919,14 @@ bool Omemo::processOutbound(const Jid &AStreamJid, Stanza &AStanza)
 	return false;
 }
 
-bool Omemo::encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, Stanza &AStanza)
+bool Omemo::encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, Stanza &AStanza,
+	const QByteArray &APlain)
 {
 	QDomElement body = AStanza.firstElement(QStringLiteral("body"));
 	if (body.isNull())
 		return false;
 
-	const QByteArray plain = body.text().toUtf8();
+	const QByteArray plain = !APlain.isEmpty() ? APlain : body.text().toUtf8();
 	QDomElement encrypted;
 	QString error;
 	if (!AAccount->encryptMessage(AContactJid,plain,encrypted,&error))
@@ -978,8 +1026,11 @@ void Omemo::flushPending(OmemoAccount *AAccount, const QString &AJid)
 		}
 
 		Stanza stanza = message.stanza;
-		const QByteArray plain = stanza.firstElement(QStringLiteral("body")).text().toUtf8();
-		if (!encryptStanza(AAccount,contactJid,stanza))
+		QByteArray plain = stanza.firstElement(QStringLiteral("body")).text().toUtf8();
+		QByteArray cached;
+		if (AAccount->cachedMessage(stanza.id(),cached) && cached.contains("aesgcm://"))
+			plain = cached;
+		if (!encryptStanza(AAccount,contactJid,stanza,plain))
 		{
 			LOG_STRM_WARNING(message.streamJid,QString("Dropping queued OMEMO message to %1").arg(contactJid));
 			setMessageStatus(stanza.id(),StatusFailed);

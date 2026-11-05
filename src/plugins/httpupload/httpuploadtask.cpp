@@ -101,6 +101,12 @@ XmppError HttpUploadTask::error() const
 	return FError;
 }
 
+void HttpUploadTask::setContentTypeOverride(const QString &AContentType)
+{
+	if (FState == Creating)
+		FContentTypeOverride = AContentType;
+}
+
 bool HttpUploadTask::start()
 {
 	if (FState != Creating)
@@ -115,7 +121,8 @@ bool HttpUploadTask::start()
 		return fail(IERR_HTTPUPLOAD_FILE_TOO_LARGE,tr("File is too large: maximum size is %1 bytes").arg(FMaxFileSize));
 
 	FFileSize = fileInfo.size();
-	FContentType = QMimeDatabase().mimeTypeForFile(fileInfo).name();
+	FContentType = !FContentTypeOverride.isEmpty()
+		? FContentTypeOverride : QMimeDatabase().mimeTypeForFile(fileInfo).name();
 	if (FContentType.isEmpty())
 		FContentType = QStringLiteral("application/octet-stream");
 

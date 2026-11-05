@@ -41,6 +41,7 @@ public:
 	virtual void abort(const XmppError &AError = XmppError());
 	//IStanzaRequestOwner
 	virtual void stanzaRequestResult(const Jid &AStreamJid, const Stanza &AStanza);
+	void setContentTypeOverride(const QString &AContentType);
 signals:
 	void stateChanged();
 	void progressChanged();
@@ -76,6 +77,7 @@ private:
 	QString FServiceNS;
 	QString FFileName;
 	QString FContentType;
+	QString FContentTypeOverride;
 	qint64 FFileSize;
 	qint64 FMaxFileSize;
 	State FState;

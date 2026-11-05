@@ -8,6 +8,7 @@
 
 #include <interfaces/iaccountmanager.h>
 #include <interfaces/iendtoendencryption.h>
+#include <interfaces/ifileuploadencryption.h>
 #include <interfaces/iimagemediaprovider.h>
 #include <interfaces/imessagedocumentcontext.h>
 #include <interfaces/imessagestylemanager.h>
@@ -36,12 +37,13 @@ class Omemo :
 	public IStanzaHandler,
 	public IMessageEditor,
 	public IEndToEndEncryption,
+	public IFileUploadEncryption,
 	public IMessageStyleHandler,
 	public IMessageViewUrlHandler,
 	public IImageMediaProvider
 {
 	Q_OBJECT
-	Q_INTERFACES(IPlugin IStanzaHandler IMessageEditor IEndToEndEncryption IMessageStyleHandler IMessageViewUrlHandler IImageMediaProvider)
+	Q_INTERFACES(IPlugin IStanzaHandler IMessageEditor IEndToEndEncryption IFileUploadEncryption IMessageStyleHandler IMessageViewUrlHandler IImageMediaProvider)
 	Q_PLUGIN_METADATA(IID "org.vacuum-im.plugins.Omemo")
 public:
 	Omemo();
@@ -60,6 +62,13 @@ public:
 	virtual bool messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessage, int ADirection);
 	// IEndToEndEncryption
 	virtual bool decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirection);
+	// IFileUploadEncryption
+	virtual bool isFileEncryptionEnabled(const Jid &AStreamJid, const Jid &AContactJid);
+	virtual bool encryptFile(const Jid &AStreamJid, const Jid &AContactJid,
+		const QString &AFileName, const QString &AOutputFileName,
+		QString &AFragment, QString *AError = nullptr);
+	virtual void registerUploadedFile(const Jid &AStreamJid, const QString &ACleanUrl,
+		const QString &ASourceFileName, const QString &AFragment);
 	// IMessageStyleHandler
 	virtual bool messageStyleContentInsert(int AOrder, QWidget *AWidget, const QString &AHtml,
 		QString &AModifiedHtml, const IMessageStyleContentOptions &AOptions);
@@ -140,7 +149,8 @@ private:
 	static int statusFromName(const QString &AName);
 	bool processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APlainOut = nullptr);
 	bool processOutbound(const Jid &AStreamJid, Stanza &AStanza);
-	bool encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, Stanza &AStanza);
+	bool encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, Stanza &AStanza,
+		const QByteArray &APlain = QByteArray());
 	void queuePending(const Jid &AStreamJid, const QString &AContactJid, const Stanza &AStanza);
 	void flushPending(OmemoAccount *AAccount, const QString &AJid);
 	bool sendRaw(const Jid &AStreamJid, Stanza &AStanza);

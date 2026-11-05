@@ -55,6 +55,7 @@ FileTransfer::FileTransfer()
 	FDataPublisher = NULL;
 	FMessageWidgets = NULL;
 	FHttpUploads = NULL;
+	FFileEncryption = NULL;
 	FOptionsManager = NULL;
 	FRostersViewPlugin = NULL;
 	FMessageProcessor = NULL;
@@ -175,6 +176,10 @@ bool FileTransfer::initConnections(IPluginManager *APluginManager, int &AInitOrd
 		if (FHttpUploads)
 			connect(FHttpUploads->instance(),SIGNAL(servicesChanged(const Jid &)),SLOT(onHttpServicesChanged(const Jid &)));
 	}
+
+	plugin = APluginManager->pluginInterface("IFileUploadEncryption").value(0,NULL);
+	if (plugin)
+		FFileEncryption = qobject_cast<IFileUploadEncryption *>(plugin->instance());
 
 	plugin = APluginManager->pluginInterface("IXmppUriQueries").value(0,NULL);
 	if (plugin)
@@ -1295,6 +1300,15 @@ void FileTransfer::onSendFileByAction(bool)
 			int messageType = window!=NULL ? messageTypeForWindow(window) : Message::Chat;
 			if (httpUploadFile(streamJid,contactJid,messageType,file))
 				return;
+
+			if (FFileEncryption!=NULL && FFileEncryption->isFileEncryptionEnabled(streamJid,contactJid))
+			{
+				LOG_STRM_WARNING(streamJid,QString("OMEMO file transfer requires HTTP upload, to=%1").arg(contactJid.full()));
+				if (window != NULL)
+					showStatusEvent(window->viewWidget(),tr("OMEMO file transfer requires an HTTP upload service"));
+				return;
+			}
+
 			sendFile(streamJid,contactJid,file);
 		}
 	}

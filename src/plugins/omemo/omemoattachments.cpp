@@ -15,6 +15,7 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 
 #include <utils/logger.h>
 #include <utils/options.h>
@@ -243,10 +244,149 @@ QString OmemoAttachments::formatFileSize(qint64 ABytes)
 	return QObject::tr("%1 GB").arg(QString::number(ABytes/(1024.0*1024*1024),'f',2));
 }
 
+bool OmemoAttachments::encryptFile(const QString &AFileName, const QString &AOutputFileName,
+	QString &AFragment, QString *AError)
+{
+	AFragment.clear();
+	if (AError != nullptr)
+		AError->clear();
+
+	QFile input(AFileName);
+	if (!input.open(QIODevice::ReadOnly))
+	{
+		if (AError != nullptr)
+			*AError = QStringLiteral("cannot open source file: %1").arg(input.errorString());
+		return false;
+	}
+
+	QSaveFile output(AOutputFileName);
+	if (!output.open(QIODevice::WriteOnly))
+	{
+		if (AError != nullptr)
+			*AError = QStringLiteral("cannot create encrypted file: %1").arg(output.errorString());
+		return false;
+	}
+
+	unsigned char key[32] = {};
+	unsigned char iv[12] = {};
+	if (RAND_bytes(key,sizeof(key)) != 1 || RAND_bytes(iv,sizeof(iv)) != 1)
+	{
+		if (AError != nullptr)
+			*AError = QStringLiteral("cannot generate attachment key: %1").arg(opensslError());
+		output.cancelWriting();
+		return false;
+	}
+
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	bool ok = ctx != nullptr
+		&& EVP_EncryptInit_ex(ctx,EVP_aes_256_gcm(),nullptr,nullptr,nullptr) > 0
+		&& EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_SET_IVLEN,sizeof(iv),nullptr) > 0
+		&& EVP_EncryptInit_ex(ctx,nullptr,nullptr,key,iv) > 0;
+
+	QByteArray inputBuffer(64*1024,'\0');
+	QByteArray outputBuffer(inputBuffer.size()+16,'\0');
+	while (ok && !input.atEnd())
+	{
+		qint64 read = input.read(inputBuffer.data(),inputBuffer.size());
+		if (read < 0)
+		{
+			if (AError != nullptr)
+				*AError = QStringLiteral("cannot read source file: %1").arg(input.errorString());
+			ok = false;
+			break;
+		}
+		if (read == 0)
+			continue;
+
+		int written = 0;
+		ok = EVP_EncryptUpdate(ctx,reinterpret_cast<unsigned char *>(outputBuffer.data()),&written,
+			reinterpret_cast<const unsigned char *>(inputBuffer.constData()),int(read)) > 0;
+		if (ok)
+			ok = output.write(outputBuffer.constData(),written) == written;
+	}
+
+	if (ok)
+	{
+		int finalWritten = 0;
+		ok = EVP_EncryptFinal_ex(ctx,reinterpret_cast<unsigned char *>(outputBuffer.data()),&finalWritten) > 0;
+		if (ok)
+			ok = output.write(outputBuffer.constData(),finalWritten) == finalWritten;
+	}
+
+	unsigned char tag[16] = {};
+	if (ok)
+		ok = EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_GET_TAG,sizeof(tag),tag) > 0;
+	if (ok)
+		ok = output.write(reinterpret_cast<const char *>(tag),sizeof(tag)) == sizeof(tag);
+
+	if (ok)
+	{
+		ok = output.commit();
+		if (!ok && AError != nullptr)
+			*AError = QStringLiteral("cannot write encrypted file: %1").arg(output.errorString());
+	}
+	else
+	{
+		if (AError != nullptr && AError->isEmpty())
+			*AError = QStringLiteral("file encryption failed: %1").arg(opensslError());
+		output.cancelWriting();
+	}
+
+	EVP_CIPHER_CTX_free(ctx);
+	if (!ok)
+		return false;
+
+	AFragment = QByteArray(reinterpret_cast<const char *>(iv),sizeof(iv)).toHex()
+		+ QByteArray(reinterpret_cast<const char *>(key),sizeof(key)).toHex();
+	return true;
+}
+
+void OmemoAttachments::storeUploadedFile(OmemoAccount *AAccount, const QString &ACleanUrl,
+	const QString &ASourceFileName, const QString &AFragment)
+{
+	if (AAccount == nullptr || AAccount->store() == nullptr || AFragment.size() != IvHexSize + KeyHexSize)
+		return;
+
+	QByteArray iv = QByteArray::fromHex(AFragment.left(IvHexSize).toLatin1());
+	QByteArray key = QByteArray::fromHex(AFragment.mid(IvHexSize).toLatin1());
+	if (iv.size() != 12 || key.size() != 32)
+		return;
+
+	QUrl url(ACleanUrl);
+	url.setFragment(QString());
+	const QString cleanUrl = QString::fromUtf8(url.toEncoded());
+
+	OmemoStore::AttachmentKeys keys;
+	keys.iv = iv;
+	keys.key = key;
+	keys.added = QDateTime::currentMSecsSinceEpoch();
+	AAccount->store()->data().attachments.insert(cleanUrl,keys);
+	pruneAttachments(AAccount);
+	AAccount->store()->save();
+
+	const QString path = attachmentFilePath(AAccount,cleanUrl);
+	QDir dir(QFileInfo(path).absolutePath());
+	if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
+	{
+		LOG_ERROR(QString("OMEMO attachment directory create failed, path=%1").arg(dir.absolutePath()));
+		return;
+	}
+
+	QFile::remove(path);
+	if (!QFile::copy(ASourceFileName,path))
+		LOG_ERROR(QString("OMEMO attachment cache copy failed, from=%1, to=%2").arg(ASourceFileName,path));
+}
+
 void OmemoAttachments::downloadAttachment(OmemoAccount *AAccount, const QString &ACleanUrl)
 {
 	if (AAccount == nullptr || ACleanUrl.isEmpty())
 		return;
+	if (isFileCached(AAccount,ACleanUrl))
+	{
+		emit attachmentReady(AAccount,ACleanUrl,true);
+		return;
+	}
+
 	const QString accountId = AAccount->accountId().toString(QUuid::WithoutBraces);
 	if (FDownloads.value(accountId).contains(ACleanUrl))
 		return;

@@ -16,7 +16,7 @@
 // Receiving OMEMO encrypted files and images (XEP-0454).
 //
 // An OMEMO message body of the form
-//     aesgcm://<https-url>#<iv-hex><key-hex>
+//     aesgcm://<host/path>#<iv-hex><key-hex>  (the https scheme is replaced)
 // optionally followed by a single new line and a data: URI thumbnail carries
 // an AES-256-GCM encrypted file.  The message key material must never reach
 // the plaintext archive, so the body is sanitized: the aesgcm:// scheme is
@@ -60,6 +60,16 @@ public:
 	static bool isImageFilePath(const QString &ALocalFile);
 	// Human readable size, e.g. "3.5 MB".
 	static QString formatFileSize(qint64 ABytes);
+
+	// XEP-0454 outgoing file encryption.  Writes the AES-256-GCM ciphertext
+	// (with the authentication tag appended) to AOutputFileName and returns
+	// the 12-byte IV + 32-byte key as one lowercase hex string.
+	static bool encryptFile(const QString &AFileName, const QString &AOutputFileName,
+		QString &AFragment, QString *AError = nullptr);
+	// Registers the keys for a completed upload and caches the plaintext so
+	// the sender's own message can show the file without a download.
+	void storeUploadedFile(OmemoAccount *AAccount, const QString &ACleanUrl,
+		const QString &ASourceFileName, const QString &AFragment);
 
 	// Starts (or joins) the download of the encrypted file.  On success the
 	// decrypted file is written to the cache and attachmentReady() is emitted.
