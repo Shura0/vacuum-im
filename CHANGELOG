@@ -11,6 +11,20 @@ LEGEND
   [*] Marks of message delivery receipts, chat markers and message correction are placed by the message style templates via the %contentSlot:marks% placeholder, so a style defines where the marks are shown
   [*] The appearance of the message marks (pending/delivered/displayed checks and the edited note pencil) is defined by the style variant stylesheets with the vacuum-marks-* CSS classes, with the built-in look as a fallback
   [+] Chat message handler: the last active chat is restored when the main window is first shown after a restart; switching tabs updates the restore target, closing the chat clears it, and the stored contact is normalized to a bare JID
+  [+] Vim plugin: visual copy copies sender names and message text only, without timestamps or delivery/read/corrected/encryption marks
+  [+] Vim plugin: CARET mode between NORMAL and VISUAL (v in NORMAL shows a movable block cursor, v again starts the selection in VISUAL)
+  [+] Vim plugin: P pastes the clipboard into the input box as a quoted reply and enters INSERT
+  [+] Vim plugin: vim keys work in non-Latin keyboard layouts (Cyrillic, Greek, ...) and on layouts that move the punctuation: a produced vim character wins, otherwise the physical key is mapped to its US QWERTY position; Ctrl/Alt combinations are unchanged
+  [+] Vim plugin: yb, yy and the visual y briefly highlight the copied text (0.3 s) so a yank is visible, without touching the cursor or the clipboard
+  [+] Vim plugin: yb and yy also work in CARET mode; a caret that sits on the sender/time cells or the marks copies the nearest message body
+  [+] Vim plugin: yy copies one displayed line under the caret (a wrapped message is copied line by line), yb keeps copying the whole message body
+  [+] Vim plugin: gv in NORMAL brings back the last VISUAL selection and returns to VISUAL mode
+  [+] Vim plugin: o in VISUAL moves the block cursor to the other end of the selection, so the following motions extend it from there
+  [+] Vim plugin: V starts linewise VISUAL mode (whole displayed lines, i.e. whole messages): vertical motions and { }/gg/G extend the selection by lines, h/l are ignored, y copies the selected lines, o and gv keep the linewise kind, and v/V switch between charwise and linewise or leave VISUAL like in vim
+  [+] Vim plugin: yn copies the interlocutor's nick — the contact's displayed name in a private chat, the author of the message under the cursor in a room; yj copies the address — the contact's bare JID, or in a room the real JID when the room is non-anonymous and the room/nick occupant address otherwise
+  [*] Vim plugin: the Vim mode page in the options dialog has an icon (the Vim mark from Simple Icons, CC0)
+  [+] Vim plugin: :help (:h) opens a modeless help window with the modes, the current key bindings (taken from the options, so rebinding keys updates it), the COMMAND list and the global hotkeys; :help <topic> jumps to a section, and the window is navigated like a pager (j/k, Ctrl-D/Ctrl-U, Ctrl-F/Ctrl-B, gg/G, q/Esc)
+  [+] Vim plugin: works in conference (MUC) rooms, not only in private chats: the room log and input box follow the vim modes, keys work in the room log, yb/yy/gv/o and the copy flash work there too; the plugin now depends on the multiuserchat plugin
   [!] Added new plugin for HTTP file upload (XEP-0363): discovers the account's upload service, sends the file over HTTP and shares the resulting URL in the message body with a jabber:x:oob fallback
   [!] Added new plugin for end-to-end encryption of 1:1 chats (legacy OMEMO 0.3, XEP-0384)
   [+] OMEMO: per-chat encryption switch and per-message encryption status marks

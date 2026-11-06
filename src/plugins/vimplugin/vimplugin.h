@@ -22,6 +22,8 @@
 // plugin build units, and the conflict must point to the same plugin identity
 #define SHORTCUTMANAGER_UUID "{3F6D20F1-401D-4832-92C3-DB6687891EFD}"
 
+class VimHelpDialog;
+
 // style handler order for the message bounds markers, leaves a free slot
 // between the known handlers (see definitions/messagestylehandlerorders.h)
 #define MSHO_VIM 300
@@ -41,7 +43,9 @@ enum VimMode
 	InsertMode,
 	VisualMode,
 	CommandMode,
-	SearchPromptMode
+	SearchPromptMode,
+	CaretMode	// NORMAL with a visible, movable block cursor: a staging
+			// mode for VISUAL, entered with 'v' when nothing is selected
 };
 
 enum VimActionId
@@ -65,6 +69,14 @@ enum VimActionId
 	ActionVisualCopy,
 	ActionPasteClipboard,
 	ActionOpenNotification,
+	ActionMoveLeft,
+	ActionMoveRight,
+	ActionPasteQuotation,
+	ActionReselectVisual,
+	ActionSwapSelectionEnds,
+	ActionEnterVisualLine,
+	ActionCopyNick,
+	ActionCopyJid,
 	Action__Count
 };
 
@@ -98,6 +110,9 @@ public:
 	static QString actionTitle(VimActionId AAction);
 	static QString actionKeysString(VimMode AMode, VimActionId AAction);
 	static void saveActionKeysString(VimMode AMode, VimActionId AAction, const QString &AKeys);
+	// the vim key character of a key event with the layout fallback used by
+	// the chat windows (the help window reuses it for its pager keys)
+	static QChar keyChar(QKeyEvent *AEvent);
 	// global hotkeys (they are shared with mainwindow/notifications, the
 	// shortcut manager that usually configures them conflicts with this plugin)
 	static QKeySequence globalShortcutKey(const QString &AId);
@@ -107,10 +122,15 @@ protected:
 private slots:
 	void onChatWindowCreated(IMessageChatWindow *AWindow);
 	void onChatWindowDestroyed(IMessageChatWindow *AWindow);
+	// conference (MUC) windows are not IMessageChatWindow, they have their
+	// own manager interface and are tracked separately
+	void onMultiChatWindowCreated(IMultiUserChatWindow *AWindow);
+	void onMultiChatWindowDestroyed(IMultiUserChatWindow *AWindow);
 	void onOptionsOpened();
 	void onOptionsClosed();
-	void onWindowContentAppended();
+	void onWindowContentAppended(const QString &AHtml, const IMessageStyleContentOptions &AOptions);
 	void onWindowStyleChanged();
+	void onWindowTabPageActivated();
 private:
 	void loadKeymap();
 	void loadGlobalShortcuts();
@@ -122,7 +142,10 @@ private:
 	// main window (the vim modes swallow the single Escape everywhere)
 	bool registerEscapeKey();
 	bool inMainWindowContext(QWidget *AFocusWidget) const;
+	bool inRosterContext(QWidget *AFocusWidget) const;
+	bool inHelpContext(QWidget *AFocusWidget) const;
 	bool processKey(QKeyEvent *AEvent);
+	QKeyCombination eventCombination(VimMode AMode, QKeyEvent *AEvent) const;
 	bool editorEventFilter(QWidget *editorWidget, QEvent *event);
 	bool processViewerKey(QKeyEvent *AEvent);
 	bool processRosterKey(QKeyEvent *AEvent);
@@ -130,31 +153,45 @@ private:
 	// vim filter on the chat editors: installed AFTER the EditWidget own
 	// filter, runs BEFORE it and before the widget shortcuts activation -
 	// the only reliable point to block Enter ("send") and Escape ("close")
-	void installEditorFilter(IMessageChatWindow *AWindow);
-	void placeCursorAtLastMessage(IMessageChatWindow *AWindow);
+	void installEditorFilter(IMessageWindow *AWindow);
+	void installWindow(IMessageWindow *AWindow);
+	void uninstallWindow(IMessageWindow *AWindow);
+	void placeCursorAtLastMessage(IMessageWindow *AWindow);
 	bool executeAction(VimMode AMode, VimActionId AAction, int ACount);
 	// actions
 	void doScroll(bool AVisual, int ABlocks);
 	void doGotoEdge(bool AFirst, bool AVisual);
 	void doSearchPrompt();
 	void doSearchNext(bool ABackward);
-	void doCopyBlock(IMessageChatWindow *AWindow, bool AMessage);
+	void doCopyBlock(IMessageWindow *AWindow, bool AMessage);
+	void doCopyAuthor(IMessageWindow *AWindow, bool AJid);
+	void doEnterVisualLine(IMessageWindow *AWindow);
+	void doReselectVisual(IMessageWindow *AWindow);
+	void rememberVisualSelection();
 	void doEnterInsert(bool AEditLast);
 	void doPasteClipboard();
+	void doPasteQuotation();
 	void doEnterCommand();
 	void executeCommand();
+	void showHelp(const QString &ATopic);
+	QString buildHelpHtml() const;
 	void applyPresenceShow(int AShow, const QString &AStatusText);
 	// helpers
-	IMessageChatWindow *contextWindow(QWidget *AFocusWidget) const;
-	IMessageChatWindow *activeChatWindow() const;
-	QTextBrowser *chatViewer(IMessageChatWindow *AWindow) const;
-	IMessageEditWidget *chatEditor(IMessageChatWindow *AWindow) const;
+	QList<IMessageWindow *> messageWindows() const;
+	IMessageWindow *contextWindow(QWidget *AFocusWidget) const;
+	IMessageWindow *activeChatWindow() const;
+	QTextBrowser *chatViewer(IMessageWindow *AWindow) const;
+	IMessageEditWidget *chatEditor(IMessageWindow *AWindow) const;
 	void closeMainWindow();
 	void setApplicationMode(VimMode AMode);
-	void applyModeToWindow(IMessageChatWindow *AWindow);
-	void updateCursor(IMessageChatWindow *AWindow, bool AEnsureVisible=false);
-	void focusModeWidget(IMessageChatWindow *AWindow);
+	void applyModeToWindow(IMessageWindow *AWindow);
+	void updateCursor(IMessageWindow *AWindow, bool AEnsureVisible=false);
+	void focusModeWidget(IMessageWindow *AWindow);
 	QList< QPair<int,int> > messageMarkerRanges(QTextDocument *ADocument) const;
+	QPair<int,int> nearestMessageRange(QTextDocument *ADocument, int APosition) const;
+	QString messageCopyText(QTextDocument *ADocument, int AStart, int AEnd) const;
+	QString visualSelectionText(QTextBrowser *AViewer) const;
+	void flashCopiedRange(IMessageWindow *AWindow, int AStart, int AEnd);
 private:
 	IPluginManager     *FPluginManager = nullptr;
 	IMessageWidgets    *FMessageWidgets = nullptr;
@@ -162,8 +199,13 @@ private:
 	IRostersViewPlugin *FRostersViewPlugin = nullptr;
 	IOptionsManager    *FOptionsManager = nullptr;
 	IPresenceManager   *FPresenceManager = nullptr;
+	IMultiUserChatManager *FMultiChatManager = nullptr;
 
 	VimMode FMode = NormalMode;
+	// VISUAL comes in two flavours like in vim: charwise ('v') and
+	// linewise ('V'); the latter selects whole displayed lines and ignores
+	// the horizontal motions
+	bool FVisualLine = false;
 	QString FSearchString;
 	int FCount = -1;
 	QList<QKeyCombination> FKeyBuffer;
@@ -179,6 +221,16 @@ private:
 	QList<QPointer<QWidget> > FEditorWidgets;
 	// keys whose press was consumed by vim, their releases are swallowed too
 	QSet<int> FConsumedKeys;
+	// identifies the newest copy flash: an older timer must not clear it
+	quint64 FFlashGeneration = 0;
+	// the last VISUAL selection range, restored by "gv" in the same viewer
+	QPointer<QTextBrowser> FLastVisualViewer;
+	int FLastVisualAnchor = -1;
+	int FLastVisualPosition = -1;
+	bool FLastVisualLine = false;
+	// the single ":help" window, kept alive (hidden on close) so its
+	// geometry survives the session
+	QPointer<VimHelpDialog> FHelpDialog;
 };
 
 #endif // VIMPLUGIN_H

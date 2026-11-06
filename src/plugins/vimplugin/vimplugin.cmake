@@ -1,2 +1,2 @@
-set(SOURCES vimplugin.cpp vimoptionswidget.cpp )
-set(HEADERS vimplugin.h vimoptionswidget.h )
+set(SOURCES vimplugin.cpp vimoptionswidget.cpp vimhelpdialog.cpp )
+set(HEADERS vimplugin.h vimoptionswidget.h vimhelpdialog.h )

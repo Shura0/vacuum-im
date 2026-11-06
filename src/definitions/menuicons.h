@@ -240,4 +240,7 @@
 //VCard
 #define MNI_VCARD                       "VCard"
 
+//VimPlugin
+#define MNI_VIM                         "vim"
+
 #endif // DEF_MENUICONS_H
