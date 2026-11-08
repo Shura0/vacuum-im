@@ -60,6 +60,7 @@ protected:
 	void clearTabs();
 	void updateTab(int AIndex);
 	void updateTabs(int AFrom, int ATo);
+	bool canCloseTabPage(IMessageTabPage *APage) const;
 protected:
 	void showEvent(QShowEvent *AEvent);
 	void closeEvent(QCloseEvent *AEvent);

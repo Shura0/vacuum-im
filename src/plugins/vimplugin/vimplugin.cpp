@@ -2748,7 +2748,7 @@ static const VimHelpCommand kHelpCommands[] =
 	{ "status",              "<show> [status]", QT_TR_NOOP("Set a presence show (online, away, xa, dnd, offline) and a status text") },
 	{ "w;send",              "<text>",     QT_TR_NOOP("Send the text as a message") },
 	{ "clear",               "",           QT_TR_NOOP("Clear the chat log") },
-	{ "close;tabclose",      "",           QT_TR_NOOP("Close the current chat tab") },
+	{ "close;tabclose",      "",           QT_TR_NOOP("Close the current chat tab (the last tab of a tab window is kept)") },
 	{ "chat",                "<jid> [text]", QT_TR_NOOP("Open a chat with the contact and optionally send a message") },
 	{ "join",                "<room> [nick] [password]", QT_TR_NOOP("Join a conference room") },
 	{ "help;h",              "[topic]",    QT_TR_NOOP("Show this help (topics: modes, normal, visual, command, search, global)") }

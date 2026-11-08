@@ -1,5 +1,6 @@
 #include "tabwindow.h"
 
+#include <QApplication>
 #include <QToolButton>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -268,6 +269,21 @@ void TabWindow::removeTabPage(IMessageTabPage *APage)
 	}
 }
 
+// A chat page is the only thing a tab window can hold, and closing the last
+// one either deletes the window or leaves the main window without any chat
+// buffer (the vim modes of vimplugin need one to work on).  The forced
+// removals - detaching, joining another window, destroying the page - do not
+// go through this check, only the user's close actions do.
+bool TabWindow::canCloseTabPage(IMessageTabPage *APage) const
+{
+	if (APage!=NULL && hasTabPage(APage) && tabPageCount()<=1)
+	{
+		QApplication::beep();
+		return false;
+	}
+	return true;
+}
+
 void TabWindow::createActions()
 {
 	for (int tabNumber=1; tabNumber<=10; tabNumber++)
@@ -468,7 +484,9 @@ void TabWindow::onTabChanged(int AIndex)
 
 void TabWindow::onTabCloseRequested(int AIndex)
 {
-	removeTabPage(tabPage(AIndex));
+	IMessageTabPage *page = tabPage(AIndex);
+	if (canCloseTabPage(page))
+		removeTabPage(page);
 }
 
 void TabWindow::onTabMenuRequested(int AIndex)
@@ -485,6 +503,7 @@ void TabWindow::onTabMenuRequested(int AIndex)
 		tabClose->setData(ADR_TAB_INDEX, AIndex);
 		tabClose->setData(ADR_TAB_MENU_ACTION, CloseTabAction);
 		tabClose->setShortcutId(SCT_TABWINDOW_CLOSETAB);
+		tabClose->setEnabled(ui.twtTabs->count()>1);
 		connect(tabClose,SIGNAL(triggered(bool)),SLOT(onTabMenuActionTriggered(bool)));
 		menu->addAction(tabClose,AG_MWTWTM_MWIDGETS_TAB_ACTIONS);
 
@@ -567,7 +586,9 @@ void TabWindow::onTabPageShowMinimized()
 
 void TabWindow::onTabPageClose()
 {
-	removeTabPage(qobject_cast<IMessageTabPage *>(sender()));
+	IMessageTabPage *page = qobject_cast<IMessageTabPage *>(sender());
+	if (canCloseTabPage(page))
+		removeTabPage(page);
 }
 
 void TabWindow::onTabPageChanged()
@@ -704,7 +725,8 @@ void TabWindow::onTabMenuActionTriggered(bool)
 		int tabAction = action->data(ADR_TAB_MENU_ACTION).toInt();
 		if (tabAction == CloseTabAction)
 		{
-			removeTabPage(page);
+			if (canCloseTabPage(page))
+				removeTabPage(page);
 		}
 		else if (tabAction == CloseOtherTabsAction)
 		{
@@ -745,7 +767,9 @@ void TabWindow::onShortcutActivated(const QString &AId, QWidget *AWidget)
 	{
 		if (AId == SCT_TABWINDOW_CLOSETAB)
 		{
-			removeTabPage(currentTabPage());
+			IMessageTabPage *page = currentTabPage();
+			if (canCloseTabPage(page))
+				removeTabPage(page);
 		}
 		else if (AId == SCT_TABWINDOW_CLOSEOTHERTABS)
 		{
