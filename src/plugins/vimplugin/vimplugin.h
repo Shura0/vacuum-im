@@ -8,14 +8,18 @@
 #include <QPointer>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/imessagewidgets.h>
 #include <interfaces/imainwindow.h>
 #include <interfaces/irostersview.h>
+#include <interfaces/irostermanager.h>
 #include <interfaces/ioptionsmanager.h>
 #include <interfaces/ipresencemanager.h>
 #include <interfaces/imultiuserchat.h>
+#include <interfaces/ibookmarks.h>
+#include <interfaces/irecentcontacts.h>
 
 #define VIMPLUGIN_UUID  "{A0593123-5391-4ae7-96fd-6442b2916263}"
 // duplicated here on purpose: the shortcutmanager header is not shared across
@@ -23,6 +27,10 @@
 #define SHORTCUTMANAGER_UUID "{3F6D20F1-401D-4832-92C3-DB6687891EFD}"
 
 class VimHelpDialog;
+
+// a conference room and the nick it was last joined with: the ":join"
+// completion works on a list of these
+typedef QPair<QString, QString> VimKnownRoom;
 
 // style handler order for the message bounds markers, leaves a free slot
 // between the known handlers (see definitions/messagestylehandlerorders.h)
@@ -173,6 +181,21 @@ private:
 	void doPasteQuotation();
 	void doEnterCommand();
 	void executeCommand();
+	// Tab completion of the COMMAND mode name, cycling through the
+	// kHelpCommands aliases with Tab/Shift+Tab
+	bool completeCommandLine(bool ABackwards);
+	QStringList rosterJidCandidates(const QString &APrefix) const;
+	// resolves the token under the cursor: the text before it in AHead, the
+	// token itself in ATyped and the candidates in ACandidates
+	bool commandCompletionCandidates(const QString &ALine, QString &AHead, QString &ATyped, QStringList &ACandidates) const;
+	// the stream of the first presence, the one the commands talk to
+	Jid commandStreamJid() const;
+	// the rooms ":join" knows about with the nick they were last joined with
+	QList<VimKnownRoom> knownRooms() const;
+	QStringList joinRoomCandidates(const QString &APrefix) const;
+	QStringList joinNickCandidates(const QString &ARoom, const QString &APrefix) const;
+	QStringList leaveRoomCandidates(const QString &APrefix) const;
+	void resetCommandCompletion();
 	void showHelp(const QString &ATopic);
 	QString buildHelpHtml() const;
 	void applyPresenceShow(int AShow, const QString &AStatusText);
@@ -200,6 +223,11 @@ private:
 	IOptionsManager    *FOptionsManager = nullptr;
 	IPresenceManager   *FPresenceManager = nullptr;
 	IMultiUserChatManager *FMultiChatManager = nullptr;
+	IRosterManager     *FRosterManager = nullptr;
+	// optional: the :join command completes the bookmarked and recently
+	// joined conference rooms
+	IBookmarks         *FBookmarks = nullptr;
+	IRecentContacts    *FRecentContacts = nullptr;
 
 	VimMode FMode = NormalMode;
 	// VISUAL comes in two flavours like in vim: charwise ('v') and
@@ -231,6 +259,12 @@ private:
 	// the single ":help" window, kept alive (hidden on close) so its
 	// geometry survives the session
 	QPointer<VimHelpDialog> FHelpDialog;
+	// the running COMMAND mode completion cycle: the candidates, the current
+	// one and the name applied last, so repeated Tab keeps cycling instead of
+	// restarting; any other key in COMMAND mode drops the cycle
+	QStringList FCompletionCandidates;
+	int FCompletionIndex = -1;
+	QString FCompletionApplied;
 };
 
 #endif // VIMPLUGIN_H

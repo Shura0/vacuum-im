@@ -18,6 +18,8 @@
 
 #include <definitions/menuicons.h>
 #include <definitions/optionvalues.h>
+#include <definitions/recentitemproperties.h>
+#include <definitions/recentitemtypes.h>
 #include <definitions/shortcuts.h>
 #include <utils/logger.h>
 #include <utils/options.h>
@@ -521,11 +523,26 @@ bool VimPlugin::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 	if (plugin)
 		FPresenceManager = qobject_cast<IPresenceManager *>(plugin->instance());
 
+	// optional: the :chat command completes contact JIDs from the roster
+	plugin = APluginManager->pluginInterface("IRosterManager").value(0,NULL);
+	if (plugin)
+		FRosterManager = qobject_cast<IRosterManager *>(plugin->instance());
+
 	// optional: conference (MUC) windows live in their own manager and are
 	// not part of IMessageWidgets::chatWindows()
 	plugin = APluginManager->pluginInterface("IMultiUserChatManager").value(0,NULL);
 	if (plugin)
 		FMultiChatManager = qobject_cast<IMultiUserChatManager *>(plugin->instance());
+
+	// optional: the :join command completes the bookmarked and the recently
+	// joined rooms with the nicks they were joined with
+	plugin = APluginManager->pluginInterface("IBookmarks").value(0,NULL);
+	if (plugin)
+		FBookmarks = qobject_cast<IBookmarks *>(plugin->instance());
+
+	plugin = APluginManager->pluginInterface("IRecentContacts").value(0,NULL);
+	if (plugin)
+		FRecentContacts = qobject_cast<IRecentContacts *>(plugin->instance());
 
 	connect(Options::instance(), SIGNAL(optionsOpened()), SLOT(onOptionsOpened()));
 	connect(Options::instance(), SIGNAL(optionsClosed()), SLOT(onOptionsClosed()));
@@ -854,6 +871,8 @@ void VimPlugin::closeMainWindow()
 // ============ modes ============
 void VimPlugin::setApplicationMode(VimMode AMode)
 {
+	// a mode change drops the running command-line completion cycle
+	resetCommandCompletion();
 	// the previous VISUAL selection is still in the viewer: remember it for
 	// "gv" before the mode switch clears the native selection
 	if (FMode==VisualMode && AMode!=VisualMode)
@@ -1198,6 +1217,20 @@ bool VimPlugin::eventFilter(QObject *watched, QEvent *event)
 	return true;
 }
 
+// Tab completion is a fixed command-line key, not a layout dependent one:
+// only plain Tab and Shift+Tab (Backtab) are taken, Ctrl/Alt/Meta keep their
+// usual meaning (tab switching etc.)
+static bool vimCompletionKey(QKeyEvent *AEvent, bool *ABackwards)
+{
+	if (AEvent->modifiers() & (Qt::ControlModifier|Qt::AltModifier|Qt::MetaModifier))
+		return false;
+	if (AEvent->key()!=Qt::Key_Tab && AEvent->key()!=Qt::Key_Backtab)
+		return false;
+	if (ABackwards!=NULL)
+		*ABackwards = AEvent->key()==Qt::Key_Backtab || (AEvent->modifiers() & Qt::ShiftModifier);
+	return true;
+}
+
 bool VimPlugin::editorEventFilter(QWidget *editorWidget, QEvent *event)
 {
 	// vim owns Enter and Escape on the chat editors: Enter must not trigger
@@ -1210,14 +1243,29 @@ bool VimPlugin::editorEventFilter(QWidget *editorWidget, QEvent *event)
 	QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
 	const bool isEnter = keyEvent->key()==Qt::Key_Return || keyEvent->key()==Qt::Key_Enter;
 	const bool isEscape = keyEvent->key()==Qt::Key_Escape;
+	const bool isCompletion = FMode==CommandMode && vimCompletionKey(keyEvent,NULL);
 	// typing anything but Escape breaks the double-Escape gesture
 	if (!isEscape)
 		FEscapeElapsed.invalidate();
-	const bool ownsKey = isEscape || (isEnter && (FMode==CommandMode || FMode==SearchPromptMode));
+
+	// a key typed inside the command line ends the completion cycle; the key
+	// itself is not ours and goes to the editor
+	if (event->type()==QEvent::KeyPress && FMode==CommandMode && !isCompletion)
+		resetCommandCompletion();
+
+	const bool ownsKey = isEscape || isCompletion || (isEnter && (FMode==CommandMode || FMode==SearchPromptMode));
 	if (!ownsKey)
 		return false;
 	if (keyEvent->isAutoRepeat())
+	{
+		// a held Tab must not insert a tab character into the command line
+		if (isCompletion)
+		{
+			keyEvent->accept();
+			return true;
+		}
 		return false;
+	}
 
 	LOG_INFO(QString("[VimPlugin] editor key: key=%1, type=%2, mode=%3")
 		.arg(keyEvent->key()).arg(event->type()).arg(FMode));
@@ -1752,6 +1800,13 @@ bool VimPlugin::processEditorKey(QKeyEvent *AEvent)
 		{
 			AEvent->accept();
 			setApplicationMode(NormalMode);
+			return true;
+		}
+		bool backwards = false;
+		if (vimCompletionKey(AEvent,&backwards))
+		{
+			AEvent->accept();
+			completeCommandLine(backwards);
 			return true;
 		}
 		return false;	// typing into the command line
@@ -2694,20 +2749,76 @@ void VimPlugin::executeCommand()
 	}
 	else if (name=="join")
 	{
-		IPlugin *plugin = FPluginManager!=NULL ? FPluginManager->pluginInstance(QUuid(MULTIUSERCHAT_UUID)) : NULL;
-		IMultiUserChatManager *manager = qobject_cast<IMultiUserChatManager *>(plugin!=NULL ? plugin->instance() : NULL);
 		QString room = args.section(' ', 0, 0);
 		QString nick = args.section(' ', 1, 1);
 		QString password = args.section(' ', 2).trimmed();
-		if (manager!=NULL && !room.isEmpty() && FPresenceManager!=NULL && !FPresenceManager->presences().isEmpty())
+		const Jid streamJid = commandStreamJid();
+		if (FMultiChatManager!=NULL && Jid(room).isValid() && FMultiChatManager->isReady(streamJid))
 		{
-			Jid streamJid = FPresenceManager->presences().first()->streamJid();
-			manager->getMultiChatWindow(streamJid, Jid(room), nick, password);
+			IMultiUserChatWindow *chatWindow = FMultiChatManager->getMultiChatWindow(streamJid, Jid(room), nick, password);
+			if (chatWindow!=NULL)
+			{
+				// creating the window only builds the tab page: like the
+				// roster double click, the presence has to be sent and the
+				// page has to be shown, otherwise nothing is joined
+				if (chatWindow->multiUserChat()->state()==IMultiUserChat::Closed)
+					chatWindow->multiUserChat()->sendStreamPresence();
+				chatWindow->showTabPage();
+				applyModeToWindow(chatWindow);
+			}
+			else
+			{
+				QApplication::beep();
+				LOG_INFO(QString("[VimPlugin] :join failed to open room '%1'").arg(room));
+			}
 		}
 		else
 		{
 			QApplication::beep();
 			LOG_INFO("[VimPlugin] :join failed, MUC support or online stream is not available");
+		}
+	}
+	else if (name=="leave" || name=="part")
+	{
+		const QString target = args.section(' ', 0, 0);
+		IMultiUserChatWindow *roomWindow = NULL;
+		if (FMultiChatManager!=NULL)
+		{
+			if (target.isEmpty())
+			{
+				// no argument: the room the command line was typed in
+				roomWindow = qobject_cast<IMultiUserChatWindow *>(window!=NULL ? window->instance() : NULL);
+			}
+			else
+			{
+				// the room of the current account wins when the same room is
+				// open on several accounts
+				const Jid streamJid = commandStreamJid();
+				foreach (IMultiUserChatWindow *candidate, FMultiChatManager->multiChatWindows())
+				{
+					if (candidate->contactJid().bare().compare(Jid(target).bare(), Qt::CaseInsensitive)!=0)
+						continue;
+					if (roomWindow==NULL)
+						roomWindow = candidate;
+					if (candidate->streamJid().bare()==streamJid.bare())
+					{
+						roomWindow = candidate;
+						break;
+					}
+				}
+			}
+		}
+		if (roomWindow!=NULL)
+		{
+			// the same way the "Exit from Conference" action does: the
+			// unavailable presence is sent, the window closes itself when the
+			// room is left
+			roomWindow->exitAndDestroy(QString());
+		}
+		else
+		{
+			QApplication::beep();
+			LOG_INFO(QString("[VimPlugin] :leave failed, room '%1' is not open").arg(target));
 		}
 	}
 	else if (name=="help" || name=="h")
@@ -2728,7 +2839,7 @@ void VimPlugin::executeCommand()
 
 // ============ help ============
 // The COMMAND mode commands.  Kept next to the ":help" page because it shows
-// them (and the future command name completion will read the same table).
+// them (and the command name completion reads the same table).
 struct VimHelpCommand
 {
 	const char *names;	// aliases separated by ';', the canonical one first
@@ -2749,10 +2860,347 @@ static const VimHelpCommand kHelpCommands[] =
 	{ "w;send",              "<text>",     QT_TR_NOOP("Send the text as a message") },
 	{ "clear",               "",           QT_TR_NOOP("Clear the chat log") },
 	{ "close;tabclose",      "",           QT_TR_NOOP("Close the current chat tab (the last tab of a tab window is kept)") },
-	{ "chat",                "<jid> [text]", QT_TR_NOOP("Open a chat with the contact and optionally send a message") },
-	{ "join",                "<room> [nick] [password]", QT_TR_NOOP("Join a conference room") },
+	{ "chat",                "<jid> [text]", QT_TR_NOOP("Open a chat with the contact (Tab completes a roster JID) and optionally send a message") },
+	{ "join",                "<room> [nick] [password]", QT_TR_NOOP("Join a conference room (Tab completes a bookmarked or recently joined room and its nick)") },
+	{ "leave;part",          "[room]",     QT_TR_NOOP("Leave the current conference room (Tab completes an open room); with a room, leave that room") },
 	{ "help;h",              "[topic]",    QT_TR_NOOP("Show this help (topics: modes, normal, visual, command, search, global)") }
 };
+
+// ============ command completion ============
+// The stream the COMMAND mode commands talk to: the one of the window the
+// command line was typed in, so with several accounts the right one is used
+// (the same choice ":chat" and ":join" make).  A window without an address
+// yet falls back to the first presence.
+Jid VimPlugin::commandStreamJid() const
+{
+	IMessageWindow *window = activeChatWindow();
+	if (window!=NULL && !window->streamJid().isEmpty())
+		return window->streamJid();
+	if (FPresenceManager!=NULL && !FPresenceManager->presences().isEmpty())
+		return FPresenceManager->presences().first()->streamJid();
+	return Jid();
+}
+
+// Resolves the token Tab completes: the command name before the first space,
+// the JID after ":chat" and the room or nick after ":join".  AHead receives
+// the text in front of the token, ATyped the token itself and ACandidates the
+// matches.  Returns false when the cursor is on a part that is not completed
+// (the message of ":chat", the password of ":join", any other argument).
+bool VimPlugin::commandCompletionCandidates(const QString &ALine, QString &AHead, QString &ATyped, QStringList &ACandidates) const
+{
+	const int space = ALine.indexOf(' ');
+	if (space < 0)
+	{
+		AHead = QString(":");
+		ATyped = ALine;
+		for (unsigned i=0; i<sizeof(kHelpCommands)/sizeof(kHelpCommands[0]); ++i)
+			foreach (const QString &alias, QString::fromLatin1(kHelpCommands[i].names).split(';'))
+				if (alias.startsWith(ATyped, Qt::CaseInsensitive) && !ACandidates.contains(alias))
+					ACandidates.append(alias);
+		return true;
+	}
+
+	const QString name = ALine.left(space);
+	const QString args = ALine.mid(space+1);
+	if (name.compare("chat", Qt::CaseInsensitive)==0)
+	{
+		// only the first argument (the JID) is completed, the optional text
+		// after it starts after another space
+		if (args.contains(' '))
+			return false;
+		AHead = ":" + ALine.left(space+1);
+		ATyped = args;
+		ACandidates = rosterJidCandidates(args);
+		return true;
+	}
+	if (name.compare("join", Qt::CaseInsensitive)==0)
+	{
+		const int argSpace = args.indexOf(' ');
+		if (argSpace < 0)
+		{
+			AHead = ":" + ALine.left(space+1);
+			ATyped = args;
+			ACandidates = joinRoomCandidates(args);
+			return true;
+		}
+		const QString room = args.left(argSpace);
+		const QString rest = args.mid(argSpace+1);
+		// the nick is completed, the password is not: a completion must
+		// never put a secret on the screen
+		if (rest.contains(' '))
+			return false;
+		AHead = ":" + ALine.left(space+1) + room + " ";
+		ATyped = rest;
+		ACandidates = joinNickCandidates(room, rest);
+		return true;
+	}
+	if (name.compare("leave", Qt::CaseInsensitive)==0 || name.compare("part", Qt::CaseInsensitive)==0)
+	{
+		if (args.contains(' '))
+			return false;
+		AHead = ":" + ALine.left(space+1);
+		ATyped = args;
+		ACandidates = leaveRoomCandidates(args);
+		return true;
+	}
+	return false;
+}
+
+// Tab in COMMAND mode completes the name after ':' against the kHelpCommands
+// table, the first argument of ":chat" against the contact JIDs of the roster
+// and the room and nick arguments of ":join" against the known conference
+// rooms.  Repeated Tab (Shift+Tab backwards) cycles through the candidates
+// like the vim command line; any other key drops the cycle.
+bool VimPlugin::completeCommandLine(bool ABackwards)
+{
+	IMessageWindow *window = activeChatWindow();
+	IMessageEditWidget *editor = chatEditor(window);
+	QTextEdit *textEdit = editor!=NULL ? editor->textEdit() : NULL;
+	if (textEdit==NULL)
+		return false;
+
+	const QString text = textEdit->toPlainText();
+	if (!text.startsWith(':'))
+	{
+		resetCommandCompletion();
+		QApplication::beep();
+		return true;
+	}
+	const QString line = text.mid(1);
+
+	QString head;		// the text before the completed token
+	QString typed;		// the token being completed
+	QStringList candidates;
+	if (!commandCompletionCandidates(line, head, typed, candidates))
+	{
+		resetCommandCompletion();
+		QApplication::beep();
+		return true;
+	}
+
+	QTextCursor cursor = textEdit->textCursor();
+	// continue the cycle while the line still holds the token applied last
+	if (!FCompletionCandidates.isEmpty() && typed.compare(FCompletionApplied, Qt::CaseInsensitive)==0)
+	{
+		const int count = FCompletionCandidates.count();
+		FCompletionIndex = ((FCompletionIndex + (ABackwards ? -1 : 1)) % count + count) % count;
+	}
+	else
+	{
+		if (candidates.isEmpty())
+		{
+			resetCommandCompletion();
+			QApplication::beep();
+			return true;
+		}
+		candidates.sort(Qt::CaseInsensitive);
+		FCompletionCandidates = candidates;
+		FCompletionIndex = ABackwards ? candidates.count()-1 : 0;
+		// a token typed in full moves to the next candidate, so Tab does
+		// something even when it is also a prefix of others (:h -> help)
+		if (candidates.count()>1)
+		{
+			for (int i=0; i<candidates.count(); ++i)
+			{
+				if (candidates.at(i).compare(typed, Qt::CaseInsensitive)==0)
+				{
+					FCompletionIndex = (i + (ABackwards ? -1 : 1) + candidates.count()) % candidates.count();
+					break;
+				}
+			}
+		}
+	}
+
+	const QString completed = FCompletionCandidates.at(FCompletionIndex);
+	FCompletionApplied = completed;
+	editor->document()->setPlainText(head + completed);
+	cursor = textEdit->textCursor();
+	cursor.movePosition(QTextCursor::End);
+	textEdit->setTextCursor(cursor);
+	return true;
+}
+
+// The contact JIDs of the roster the ":chat" command talks to: the stream of
+// the first presence (that is what executeCommand() uses).  When the stream
+// is not known or its roster is not available yet, every open roster is
+// searched, so completion still works before the first presence arrives.
+QStringList VimPlugin::rosterJidCandidates(const QString &APrefix) const
+{
+	QStringList jids;
+	if (FRosterManager==NULL)
+		return jids;
+
+	const Jid streamJid = commandStreamJid();
+
+	QList<IRoster *> rosters = FRosterManager->rosters();
+	if (!streamJid.isEmpty())
+	{
+		IRoster *roster = FRosterManager->findRoster(streamJid);
+		if (roster==NULL)
+		{
+			// findRoster compares the full JID, a presence may carry a resource
+			foreach (IRoster *candidate, rosters)
+			{
+				if (candidate->streamJid().bare()==streamJid.bare())
+				{
+					roster = candidate;
+					break;
+				}
+			}
+		}
+		if (roster!=NULL)
+			rosters = QList<IRoster *>() << roster;
+	}
+
+	foreach (IRoster *roster, rosters)
+	{
+		foreach (const IRosterItem &item, roster->items())
+		{
+			const QString jid = item.itemJid.bare();
+			if (!jid.isEmpty() && jid.startsWith(APrefix, Qt::CaseInsensitive) && !jids.contains(jid))
+				jids.append(jid);
+		}
+	}
+	jids.sort(Qt::CaseInsensitive);
+	return jids;
+}
+
+void VimPlugin::resetCommandCompletion()
+{
+	FCompletionCandidates.clear();
+	FCompletionIndex = -1;
+	FCompletionApplied.clear();
+}
+
+static void vimAddKnownRoom(QList<VimKnownRoom> &ARooms, const QString &AJid, const QString &ANick)
+{
+	const QString jid = Jid(AJid).bare();
+	if (jid.isEmpty())
+		return;
+	for (int i=0; i<ARooms.count(); ++i)
+	{
+		if (ARooms.at(i).first.compare(jid, Qt::CaseInsensitive)==0)
+		{
+			// a source that knows the nick fills the gap of one that does not
+			if (ARooms[i].second.isEmpty() && !ANick.isEmpty())
+				ARooms[i].second = ANick;
+			return;
+		}
+	}
+	ARooms.append(qMakePair(jid, ANick));
+}
+
+// The conference rooms the ":join" command can use, each with the nick it was
+// last joined with: the rooms joined before (the recent contacts keep the
+// nick), the bookmarks and the rooms open right now.
+QList<VimKnownRoom> VimPlugin::knownRooms() const
+{
+	QList<VimKnownRoom> rooms;
+
+	// ":join" opens the room on the stream of the first presence; before any
+	// presence arrives every stream with a roster is searched, because the
+	// bookmarks and the recent contacts are stored per stream
+	QList<Jid> streams;
+	const Jid activeStreamJid = commandStreamJid();
+	if (!activeStreamJid.isEmpty())
+		streams.append(activeStreamJid);
+	else if (FRosterManager!=NULL)
+		foreach (IRoster *roster, FRosterManager->rosters())
+			streams.append(roster->streamJid());
+
+	foreach (const Jid &streamJid, streams)
+	{
+		if (FRecentContacts!=NULL && FRecentContacts->isReady(streamJid))
+		{
+			foreach (const IRecentItem &item, FRecentContacts->streamItems(streamJid))
+			{
+				if (item.type==REIT_CONFERENCE)
+					vimAddKnownRoom(rooms, item.reference, FRecentContacts->itemProperty(item,REIP_CONFERENCE_NICK).toString());
+			}
+		}
+	}
+	foreach (const Jid &streamJid, streams)
+	{
+		if (FBookmarks!=NULL && FBookmarks->isReady(streamJid))
+		{
+			foreach (const IBookmark &bookmark, FBookmarks->bookmarks(streamJid))
+			{
+				if (bookmark.type==IBookmark::TypeRoom && bookmark.isValid())
+					vimAddKnownRoom(rooms, bookmark.room.roomJid.bare(), bookmark.room.nick);
+			}
+		}
+	}
+	if (FMultiChatManager!=NULL)
+	{
+		foreach (IMultiUserChat *chat, FMultiChatManager->multiUserChats())
+		{
+			bool knownStream = streams.isEmpty();
+			foreach (const Jid &streamJid, streams)
+			{
+				if (chat->streamJid().bare()==streamJid.bare())
+				{
+					knownStream = true;
+					break;
+				}
+			}
+			if (knownStream)
+				vimAddKnownRoom(rooms, chat->roomJid().bare(), chat->nickname());
+		}
+	}
+	return rooms;
+}
+
+QStringList VimPlugin::joinRoomCandidates(const QString &APrefix) const
+{
+	QStringList rooms;
+	foreach (const VimKnownRoom &room, knownRooms())
+	{
+		if (room.first.startsWith(APrefix, Qt::CaseInsensitive) && !rooms.contains(room.first))
+			rooms.append(room.first);
+	}
+	rooms.sort(Qt::CaseInsensitive);
+	return rooms;
+}
+
+// The rooms that are open right now: ":leave" can only part from a room that
+// is already joined, so the bookmarks and the recents are not used here.
+QStringList VimPlugin::leaveRoomCandidates(const QString &APrefix) const
+{
+	QStringList rooms;
+	if (FMultiChatManager!=NULL)
+	{
+		foreach (IMultiUserChatWindow *window, FMultiChatManager->multiChatWindows())
+		{
+			const QString jid = window->contactJid().bare();
+			if (!jid.isEmpty() && jid.startsWith(APrefix, Qt::CaseInsensitive) && !rooms.contains(jid))
+				rooms.append(jid);
+		}
+	}
+	rooms.sort(Qt::CaseInsensitive);
+	return rooms;
+}
+
+QStringList VimPlugin::joinNickCandidates(const QString &ARoom, const QString &APrefix) const
+{
+	const QString room = Jid(ARoom).bare();
+	QStringList nicks;
+	foreach (const VimKnownRoom &known, knownRooms())
+	{
+		if (known.first.compare(room, Qt::CaseInsensitive)==0
+			&& !known.second.isEmpty() && known.second.startsWith(APrefix, Qt::CaseInsensitive)
+			&& !nicks.contains(known.second))
+			nicks.append(known.second);
+	}
+
+	// a join without a nick uses the account name, so the completion offers
+	// the value the join will really use
+	const QString accountNick = commandStreamJid().uNode();
+	if (!accountNick.isEmpty() && accountNick.startsWith(APrefix, Qt::CaseInsensitive) && !nicks.contains(accountNick))
+		nicks.append(accountNick);
+
+	nicks.sort(Qt::CaseInsensitive);
+	return nicks;
+}
 
 // the anchors of the page, ":help <topic>" scrolls to one of them
 static QString vimHelpAnchorForTopic(const QString &ATopic)
@@ -2871,6 +3319,10 @@ QString VimPlugin::buildHelpHtml() const
 	html += QString("<h2><a name=\"command\"></a>%1</h2>").arg(tr("COMMAND mode"));
 	html += QString("<p>%1</p>").arg(tr("Press <b>:</b> in NORMAL, type a command and press Enter. "
 		"Missing arguments are taken from the rest of the line."));
+	html += QString("<p>%1</p>").arg(tr("<b>Tab</b> completes the command name after <b>:</b>, the contact JID "
+		"after <b>:chat</b>, the room and the nick after <b>:join</b> (the bookmarked rooms, the rooms joined "
+		"before and the open rooms) and the open room after <b>:leave</b>; repeated <b>Tab</b> cycles through "
+		"the matches and <b>Shift+Tab</b> cycles backwards."));
 	html += "<table width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"4\">";
 	for (unsigned i=0; i<sizeof(kHelpCommands)/sizeof(kHelpCommands[0]); ++i)
 	{
