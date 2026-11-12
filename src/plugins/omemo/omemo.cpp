@@ -697,7 +697,17 @@ bool Omemo::isFileEncryptionEnabled(const Jid &AStreamJid, const Jid &AContactJi
 	OmemoAccount *account = accountForStream(AStreamJid);
 	if (account != nullptr && !account->isStarted())
 		account->start(false);
-	return account != nullptr && account->isStarted() && account->isChatEnabled(AContactJid.bare());
+	if (account == nullptr || !account->isStarted() || !account->isChatEnabled(AContactJid.bare()))
+		return false;
+
+	// The attachment key travels inside the OMEMO encrypted body.  If the
+	// contact has no OMEMO devices the message is sent as plaintext, so an
+	// aesgcm:// url would be unusable for the recipient and the usual x:oob
+	// file link would be missing.  Encrypt the file only when the message
+	// will actually be OMEMO encrypted.
+	const QString contact = AContactJid.bare();
+	account->ensureDeviceList(contact);
+	return account->isDeviceListKnown(contact) && account->hasDevices(contact);
 }
 
 bool Omemo::encryptFile(const Jid &AStreamJid, const Jid &AContactJid,

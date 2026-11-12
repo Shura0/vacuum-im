@@ -117,8 +117,12 @@ atomically with `0600` permissions.  Keys are never written to
 
 - Only legacy 0.3; OMEMO 2 peers are not supported.
 - No MUC, calls. One-to-one files are encrypted and sent through the HTTP
-  upload service (XEP-0363 + XEP-0454) when OMEMO is enabled for the chat;
-  without an upload service the file cannot be sent through OMEMO.
+  upload service (XEP-0363 + XEP-0454) when OMEMO is enabled for the chat and
+  the contact actually has OMEMO devices; without an upload service the file
+  cannot be sent through OMEMO.  If the contact has no OMEMO devices (so the
+  message itself would be sent in plaintext) the file is uploaded unencrypted
+  and sent as an ordinary `https://` link with an `x:oob` fallback, because the
+  aesgcm key would otherwise never reach the recipient.
 - Identity changes on an existing device are rejected by the Signal trust
   callback and need manual session cleanup (not exposed in the UI yet).
 - Profile password changes are not migrated yet; the OMEMO file is encrypted

@@ -12,6 +12,11 @@
 // When enabled for a chat, the file is encrypted before it is uploaded and the
 // message body uses the XEP-0454 aesgcm:// scheme.  The encryption key and IV
 // must never be written to the plaintext message archive.
+//
+// isFileEncryptionEnabled() must return false when the message would not be
+// end-to-end encrypted (for example, the contact has no OMEMO devices): the
+// key is only delivered inside the encrypted body, and without it the
+// recipient could neither use the aesgcm:// url nor see the plain x:oob link.
 class IFileUploadEncryption
 {
 public:
