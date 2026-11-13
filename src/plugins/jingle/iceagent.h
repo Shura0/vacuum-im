@@ -73,9 +73,10 @@ private:
 	struct CheckPair {
 		IceCandidate local;
 		IceCandidate remote;
-		QByteArray transactionId; //Pending RFC5389-style request
-		QByteArray classicTransactionId; //Pending RFC3489-style request (no magic cookie)
-		int sendStyle;            //Alternates styles while unverified: 0 = 5389, 1 = classic
+		QByteArray transactionId; //Pending request, empty when not waiting for a response
+		QByteArray lastPacket;    //Serialized request, retransmitted byte-identically (RFC 5389 RTO)
+		int attempts;             //Retransmissions of the pending transaction
+		qint64 rtoMs;             //Current retransmission timeout, doubles per attempt
 		bool verified;
 		bool nominated;
 		qint64 lastSent;
@@ -85,6 +86,8 @@ private:
 	QUdpSocket *socketForComponent(int AComponent) const;
 	bool sendCheck(CheckPair &APair, bool ANominate);
 	void handleStunRequest(const QByteArray &AData, const QHostAddress &AFrom, quint16 APort, int AComponent);
+	void logErrorCode(const QByteArray &AData);
+	void sendStunError(const QByteArray &ARequest, const QHostAddress &ATo, quint16 APort, int AComponent, int ACode, const QString &AReason);
 	void handleStunResponse(const QByteArray &AData, int AComponent);
 	void updateNominated(const IceCandidate &ARemote, int AComponent);
 	void tryNominate();

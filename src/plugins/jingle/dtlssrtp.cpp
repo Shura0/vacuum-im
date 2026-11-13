@@ -16,6 +16,8 @@
 
 #include <srtp2/srtp.h>
 
+#include <utils/logger.h>
+
 //Accept any certificate chain in the verify callback; peer identity is checked
 //strictly against the fingerprint from the session description afterwards.
 static int dtlsVerifyCallback(int APreverify, X509_STORE_CTX *AStoreCtx)
@@ -281,6 +283,10 @@ void DtlsSrtp::pumpHandshake()
 
 	SSL *ssl = static_cast<SSL *>(Fssl);
 	const int result = SSL_do_handshake(ssl);
+	const int handshakeError = result == 1 ? 0 : SSL_get_error(ssl, result);
+	if (result != 1 && handshakeError != SSL_ERROR_WANT_READ && handshakeError != SSL_ERROR_WANT_WRITE)
+		LOG_WARNING(QString("DtlsSrtp: handshake failed as %1, result=%2 error=%3").
+			arg(FAsClient ? "client" : "server").arg(result).arg(handshakeError));
 	flushOutgoing();
 
 	//flushOutgoing() can be re-entrant: datagramOut feeds the peer directly in tests and
@@ -322,6 +328,14 @@ void DtlsSrtp::flushOutgoing()
 		if (read <= 0)
 			break;
 		datagram.resize(read);
+		//Debug aid: DTLS records leaving the handshake (a ClientHello starts with 0x16).
+		static int s_outCount = 0;
+		if (s_outCount < 8)
+		{
+			++s_outCount;
+			LOG_DEBUG(QString("DtlsSrtp: datagram out %1 bytes first=0x%2").
+				arg(datagram.size()).arg(quint8(datagram.at(0)), 2, 16, QChar('0')));
+		}
 		emit datagramOut(datagram);
 	}
 }

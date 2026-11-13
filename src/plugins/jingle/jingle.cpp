@@ -266,8 +266,8 @@ bool Jingle::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStan
 			AAccept = true;
 			if (!reply.isNull())
 				FStanzaProcessor->sendStanzaOut(AStreamJid, reply);
-			//TODO: drop to LOG_STRM_DEBUG once DTLS-SRTP interop is settled
-			LOG_STRM_INFO(AStreamJid, QString("Jingle action '%1' of session '%2' received from %3: %4").arg(action, sid, AStanza.from(), AStanza.toString(0).trimmed()));
+			LOG_STRM_INFO(AStreamJid, QString("Jingle action '%1' of session '%2' received from %3").arg(action, sid, AStanza.from()));
+			LOG_STRM_DEBUG(AStreamJid, QString("Jingle incoming stanza: %1").arg(AStanza.toString(0).trimmed()));
 			return true;
 		}
 		return false;
@@ -354,8 +354,7 @@ void Jingle::sendSessionRequest(JingleSession *ASession, Stanza &AStanza)
 {
 	QDomElement jingleElem = AStanza.firstElement("jingle", NS_JINGLE);
 	LOG_STRM_INFO(ASession->streamJid(), QString("Jingle action '%1' of session '%2' sent to %3, waiting for acknowledge").arg(jingleElem.attribute("action"), jingleElem.attribute("sid"), AStanza.to()));
-	//TODO: drop to LOG_STRM_DEBUG once DTLS-SRTP interop is settled; needed to see the offer peers get
-	LOG_STRM_INFO(ASession->streamJid(), QString("Jingle outgoing stanza: %1").arg(AStanza.toString(0).trimmed()));
+	LOG_STRM_DEBUG(ASession->streamJid(), QString("Jingle outgoing stanza: %1").arg(AStanza.toString(0).trimmed()));
 	FPendingRequests.insert(AStanza.id(), ASession->sid());
 	FStanzaProcessor->sendStanzaRequest(this, ASession->streamJid(), AStanza, JINGLE_INITIATE_TIMEOUT);
 }
@@ -500,8 +499,8 @@ bool Jingle::processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza
 	session->storeInitiate(AJingleElem);
 	session->showWindow();
 
-	//TODO: drop to LOG_STRM_DEBUG once DTLS-SRTP interop is settled
-	LOG_STRM_INFO(AStreamJid, QString("Jingle session-initiate received from %1: %2").arg(initiatorJid.full(), AStanza.toString(0).trimmed()));
+	LOG_STRM_INFO(AStreamJid, QString("Jingle session-initiate received from %1").arg(initiatorJid.full()));
+	LOG_STRM_DEBUG(AStreamJid, QString("Jingle incoming stanza: %1").arg(AStanza.toString(0).trimmed()));
 	emit callReceived(AStreamJid, contactJid, sid);
 	return true;
 }
