@@ -3,6 +3,7 @@
     Qt 6.8 (or newer) with the modules: Core Gui Widgets Network Xml Sql Svg
     PrintSupport Multimedia LinguistTools
     OpenSSL 1.1 or newer
+    libsrtp2 (needed to build the jingle plugin)
     CMake 3.16 or newer
     C++17 compiler
   ==Linux==
@@ -23,6 +24,8 @@
     PLUGIN_adiummessagestyle build the adiummessagestyle plugin (OFF by default;
                              it is not ported to Qt 6 yet)
     SPELLCHECKER_BACKEND     HUNSPELL / ENCHANT / ASPELL / NONE
+    PLUGIN_jingle            build the Jingle voice-call plugin (ON by default;
+                             links OpenSSL and libsrtp2, loads libopus at runtime)
 
 
 [Windows]

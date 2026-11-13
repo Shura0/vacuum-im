@@ -81,6 +81,10 @@
 //JabberSearch
 #define MNI_JSEARCH                     "jsearch"
 
+//Jingle
+#define MNI_JINGLE_CALL                 "jingleCall"
+#define MNI_JINGLE_VIDEO                "jingleVideo"
+
 //MainWindow
 #define MNI_MAINWINDOW_LOGO16           "mainwindowLogo16"
 #define MNI_MAINWINDOW_LOGO24           "mainwindowLogo24"

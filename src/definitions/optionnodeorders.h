@@ -7,6 +7,7 @@
 #define ONO_ROSTERVIEW            300
 #define ONO_MESSAGES              400
 #define ONO_CONFERENCES           420
+#define ONO_CALLS                 430
 #define ONO_HISTORY               450
 #define ONO_STATUSITEMS           500
 #define ONO_NOTIFICATIONS         600

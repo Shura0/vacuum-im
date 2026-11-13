@@ -1,0 +1,150 @@
+#include "callwindow.h"
+
+#include <QCloseEvent>
+#include <QFont>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QTimer>
+#include <QVBoxLayout>
+
+CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
+	: QWidget(AParent)
+{
+	FSid = ASid;
+	FSeconds = 0;
+	FProgrammaticClose = false;
+
+	setWindowTitle(tr("Voice Call"));
+	setAttribute(Qt::WA_DeleteOnClose, false);
+	setMinimumWidth(300);
+
+	QVBoxLayout *mainLayout = new QVBoxLayout(this);
+
+	FNameLabel = new QLabel(this);
+	FNameLabel->setAlignment(Qt::AlignHCenter);
+	FNameLabel->setWordWrap(true);
+	QFont nameFont = FNameLabel->font();
+	nameFont.setPointSize(nameFont.pointSize() + 3);
+	nameFont.setBold(true);
+	FNameLabel->setFont(nameFont);
+	mainLayout->addWidget(FNameLabel);
+
+	FStatusLabel = new QLabel(this);
+	FStatusLabel->setAlignment(Qt::AlignHCenter);
+	FStatusLabel->setWordWrap(true);
+	mainLayout->addWidget(FStatusLabel);
+
+	FTimeLabel = new QLabel(this);
+	FTimeLabel->setAlignment(Qt::AlignHCenter);
+	FTimeLabel->hide();
+	mainLayout->addWidget(FTimeLabel);
+
+	mainLayout->addStretch();
+
+	QHBoxLayout *buttonsLayout = new QHBoxLayout();
+	buttonsLayout->setContentsMargins(0, 0, 0, 0);
+
+	FAnswerButton = new QPushButton(tr("&Answer"), this);
+	FAnswerButton->hide();
+	buttonsLayout->addWidget(FAnswerButton);
+
+	FDeclineButton = new QPushButton(tr("&Decline"), this);
+	FDeclineButton->hide();
+	buttonsLayout->addWidget(FDeclineButton);
+
+	FHangupButton = new QPushButton(tr("Hang &up"), this);
+	FHangupButton->hide();
+	buttonsLayout->addWidget(FHangupButton);
+
+	mainLayout->addLayout(buttonsLayout);
+
+	connect(FAnswerButton, &QPushButton::clicked, this, &CallWindow::answerRequested);
+	connect(FDeclineButton, &QPushButton::clicked, this, &CallWindow::declineRequested);
+	connect(FHangupButton, &QPushButton::clicked, this, &CallWindow::hangupRequested);
+
+	FTimer = new QTimer(this);
+	FTimer->setInterval(1000);
+	connect(FTimer, &QTimer::timeout, this, &CallWindow::onTimerTick);
+
+	resize(300, 140);
+}
+
+CallWindow::~CallWindow()
+{
+
+}
+
+void CallWindow::setPeer(const QString &AName, const QString &AJid)
+{
+	if (AName == AJid || AName.isEmpty())
+		FNameLabel->setText(AJid);
+	else
+		FNameLabel->setText(QString("%1\n%2").arg(AName, AJid));
+}
+
+void CallWindow::setStatusText(const QString &AText)
+{
+	FStatusLabel->setText(AText);
+}
+
+void CallWindow::setAnswerVisible(bool AVisible)
+{
+	FAnswerButton->setVisible(AVisible);
+}
+
+void CallWindow::setDeclineVisible(bool AVisible)
+{
+	FDeclineButton->setVisible(AVisible);
+}
+
+void CallWindow::setHangupVisible(bool AVisible)
+{
+	FHangupButton->setVisible(AVisible);
+}
+
+void CallWindow::setTimerActive(bool AActive)
+{
+	if (AActive)
+	{
+		FSeconds = 0;
+		FTimeLabel->setText("00:00");
+		FTimeLabel->show();
+		FTimer->start();
+	}
+	else
+	{
+		FTimer->stop();
+		FTimeLabel->hide();
+	}
+}
+
+void CallWindow::closeBySession()
+{
+	FProgrammaticClose = true;
+	close();
+}
+
+void CallWindow::closeEvent(QCloseEvent *ACloseEvent)
+{
+	if (!FProgrammaticClose)
+	{
+		//The user pressed the window close button - let the owner decide what to do with the call
+		FProgrammaticClose = true;
+		ACloseEvent->accept();
+		emit userClosed();
+	}
+	else
+	{
+		ACloseEvent->accept();
+	}
+}
+
+void CallWindow::onTimerTick()
+{
+	++FSeconds;
+
+	const qint64 minutes = FSeconds / 60;
+	const qint64 seconds = FSeconds % 60;
+	FTimeLabel->setText(QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0')));
+}

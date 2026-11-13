@@ -36,6 +36,7 @@ Main Features
   * Support for avatars with the ability to specify a contact an arbitrary image as an avatar
   * Ability to add annotation to contact
   * Legacy OMEMO 0.3 end-to-end encryption for one-to-one chats
+  * Voice calls over Jingle (XEP-0166/0167/0176/0320/0326), video calls in development
 
 
 Portable Version

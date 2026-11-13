@@ -29,6 +29,9 @@
 //Iq Message Presence Out
 #define SHO_IMPO_CAPTCHAFORMS         100
 
+//Jingle
+#define SHO_JINGLE                    850
+
 //Default
 #define SHO_DEFAULT                   1000
 

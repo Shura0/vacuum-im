@@ -144,4 +144,9 @@
 #define OHO_APPEARANCE_MESSAGES                   700
 #define   OWO_APPEARANCE_EMOTICONS                730
 
+//Calls
+#define OHO_CALLS_SETTINGS                        100
+#define   OWO_CALLS_ENABLED                       110
+#define   OWO_CALLS_ALLOWUNKNOWN                  120
+
 #endif // DEF_OPTIONWIDGETORDERS_H

@@ -107,4 +107,17 @@
 
 #define NS_VACUUM_PRIVATESTORAGE_UPDATE         "vacuum:privatestorage:update"
 
+// Jingle (XEP-0166 and family)
+#define NS_JINGLE                                         "urn:xmpp:jingle:1"
+#define NS_JINGLE_ERRORS                                  "urn:xmpp:jingle:errors:1"
+#define NS_JINGLE_APPS_RTP                                "urn:xmpp:jingle:apps:rtp:1"
+#define NS_JINGLE_APPS_RTP_AUDIO                          "urn:xmpp:jingle:apps:rtp:audio"
+#define NS_JINGLE_APPS_RTP_VIDEO                          "urn:xmpp:jingle:apps:rtp:video"
+#define NS_JINGLE_APPS_RTP_INFO                           "urn:xmpp:jingle:apps:rtp:info:1"
+#define NS_JINGLE_APPS_RTP_SSMA                           "urn:xmpp:jingle:apps:rtp:ssma:0"
+#define NS_JINGLE_APPS_RTP_FEEDBACK                       "urn:xmpp:jingle:apps:rtp:feedback:1"
+#define NS_JINGLE_APPS_RTP_RTCP_FB                        "urn:xmpp:jingle:apps:rtp:rtcp-fb:0"
+#define NS_JINGLE_APPS_DTLS                               "urn:xmpp:jingle:apps:dtls:0"
+#define NS_JINGLE_TRANSPORTS_ICEUDP                       "urn:xmpp:jingle:transports:ice-udp:1"
+
 #endif // DEF_NAMESPACES_H

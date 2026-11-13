@@ -106,6 +106,10 @@
 #define OPV_MESSAGES_TABWINDOW_NAME                     "messages.tab-windows.window.name"
 #define OPV_MESSAGES_TABWINDOW_TABSCLOSABLE             "messages.tab-windows.window.tabs-closable"
 #define OPV_MESSAGES_TABWINDOW_TABSBOTTOM               "messages.tab-windows.window.tabs-bottom"
+// Jingle
+#define OPV_JINGLE_ROOT                                       "jingle"
+#define OPV_JINGLE_ENABLED                                    "jingle.enabled"
+#define OPV_JINGLE_ALLOWUNKNOWN                               "jingle.allow-unknown"
 // Emoticons
 #define OPV_MESSAGES_EMOTICONS_ICONSET                  "messages.emoticons.iconset"
 #define OPV_MESSAGES_EMOTICONS_MAXINMESSAGE             "messages.emoticons.max-in-message"

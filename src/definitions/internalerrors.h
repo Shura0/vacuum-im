@@ -103,6 +103,9 @@
 #define IERR_STARTTLS_INVALID_RESPONCE                       "starttls-invalid-responce"
 #define IERR_STARTTLS_NEGOTIATION_FAILED                     "starttls-negotiation-failed"
 
+// Jingle
+#define IERR_JINGLE_CALL_FAILED                              "jingle-call-failed"
+
 // XmppStreams
 #define IERR_XMPPSTREAM_DESTROYED                            "xmppstream-destroyed"
 #define IERR_XMPPSTREAM_NOT_SECURE                           "xmppstream-not-secure"

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<icondef>
+  <icon>
+    <key>jingleCall</key>
+    <object mime="image/png">jinglecall.png</object>
+  </icon>
+  <icon>
+    <key>jingleVideo</key>
+    <object mime="image/png">jinglevideo.png</object>
+  </icon>
+</icondef>
