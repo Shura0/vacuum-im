@@ -86,7 +86,9 @@ class QxtX11Data {
 public:
 	QxtX11Data()
 	{
-		m_display = QX11Info::display();
+		// QX11Info::display() returns the Wayland (wl_display) pointer on the
+		// Wayland platform, so use it only when really running under X11
+		m_display = QX11Info::isPlatformX11() ? QX11Info::display() : 0;
 	}
 
 	bool isValid()

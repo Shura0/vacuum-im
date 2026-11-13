@@ -74,6 +74,9 @@ bool IdlePlatform::init()
 	if(d->ss_info)
 		return true;
 
+	if(!QX11Info::isPlatformX11())
+		return false;
+
 	old_handler = XSetErrorHandler(xerrhandler);
 
 	int event_base, error_base;
