@@ -1,5 +1,6 @@
 #include "mediaengine.h"
 #include "dtlssrtp.h"
+#include "rtcpsession.h"
 
 #include <QAudioDevice>
 #include <QAudioFormat>
@@ -13,40 +14,41 @@
 
 #include <utils/logger.h>
 
-//The subset of the libopus API we use; loaded at runtime to keep the plugin
-//buildable on systems without the codec package.
-typedef void *(*OpusEncoderCreateFunc)(int FS, int Channels, int Application, int *Error);
-typedef int (*OpusEncoderCtlFunc)(void *Encoder, int Request, ...);
-typedef int (*OpusEncodeFunc)(void *Encoder, const short *Pcm, int FrameSize, unsigned char *Data, int MaxBytes);
-typedef void *(*OpusDecoderCreateFunc)(int FS, int Channels, int *Error);
-typedef int (*OpusDecodeFunc)(void *Decoder, const unsigned char *Data, int Len, short *Out, int MaxFrameSize, int DecodeFec);
+typedef void (*OpusEncoderDestroyFunc)(void *AEncoder);
+typedef void (*OpusDecoderDestroyFunc)(void *ADecoder);
 
 #define OPUS_APPLICATION_VOIP 2048
 #define OPUS_SET_BITRATE_REQUEST 4002
+#define OPUS_SET_INBAND_FEC_REQUEST 4012
+#define OPUS_SET_PACKET_LOSS_PERC_REQUEST 4014
 
 static const int OpusSampleRate = 48000;
 static const int OpusChannels = 2;
 static const int OpusFrameMs = 20;
 static const int OpusFrameSamples = OpusSampleRate * OpusFrameMs / 1000; //960
+static const int OpusMaxFrameSamples = OpusSampleRate * 120 / 1000;      //120 ms, the largest Opus frame
 static const int OpusFrameBytes = OpusFrameSamples * OpusChannels * int(sizeof(short)); //3840
 static const int OpusMaxPacket = 1500;
 
-//RTP static header size with no CSRCs/extensions is 12 bytes
-static const int RtpHeaderSize = 12;
+//The RTCP report interval and the playout budget are described in RFC 3550 6.3
+static const int RtcpMinIntervalMs = 5000;
 
-MediaEngine::MediaEngine(QObject *AParent)
-	: QObject(AParent)
+MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 {
 	FIceAgent = nullptr;
 	FDtlsSrtp = nullptr;
 	FOpusLib = nullptr;
 	FOpusEncoder = nullptr;
 	FOpusDecoder = nullptr;
+	FOpusEncode = nullptr;
+	FOpusDecode = nullptr;
 	FSource = nullptr;
 	FSink = nullptr;
 	FCaptureIo = nullptr;
 	FPlaybackIo = nullptr;
 	FMediaTimer = nullptr;
+	FRtcpSession = nullptr;
+	FRtcpTimer = nullptr;
 
 	FLocalSsrc = QRandomGenerator::global()->generate();
 	FRemotePayloadType = -1;
@@ -56,15 +58,32 @@ MediaEngine::MediaEngine(QObject *AParent)
 	FFirstPacket = true;
 	FAudioActive = false;
 	FAsDtlsClient = true;
+	FFailPending = false;
+
+	FPeerReportLogged = false;
+	FPlayoutDue = 0;
+	FLastPlayoutMs = -1;
 }
 
 MediaEngine::~MediaEngine()
 {
 	stop();
+
+	//The codec contexts are allocated by libopus, not by the plugin
+	OpusEncoderDestroyFunc encoderDestroy = FOpusLib ?
+		reinterpret_cast<OpusEncoderDestroyFunc>(FOpusLib->resolve("opus_encoder_destroy")) : nullptr;
+	OpusDecoderDestroyFunc decoderDestroy = FOpusLib ?
+		reinterpret_cast<OpusDecoderDestroyFunc>(FOpusLib->resolve("opus_decoder_destroy")) : nullptr;
+	if (encoderDestroy && FOpusEncoder)
+		encoderDestroy(FOpusEncoder);
+	if (decoderDestroy && FOpusDecoder)
+		decoderDestroy(FOpusDecoder);
 }
 
 bool MediaEngine::initialize()
 {
+	FClock.start();
+
 	FIceAgent = new IceAgent(this);
 	FDtlsSrtp = new DtlsSrtp(this);
 
@@ -80,6 +99,33 @@ bool MediaEngine::initialize()
 		FIceAgent->writeMedia(ADatagram, 1);
 	});
 
+	FRtcpSession = new RtcpSession(this);
+	FRtcpSession->setLocalSsrc(FLocalSsrc);
+	FRtcpSession->setClockRate(OpusSampleRate);
+	connect(FRtcpSession, &RtcpSession::reportSent, this, [this](const QString &ASummary) {
+		LOG_DEBUG(QString("MediaEngine: %1, jitter buffer depth=%2 target=%3 plc=%4 late=%5").
+			arg(ASummary).arg(FJitter.depth()).arg(FJitter.targetFrames()).
+			arg(FJitter.concealedFrames()).arg(FJitter.latePackets()));
+		if (FRtcpSession->fractionLost() >= 26) //More than 10% of the peer's stream lost
+			LOG_WARNING(QString("MediaEngine: poor reception, %1").arg(ASummary));
+	});
+	connect(FRtcpSession, &RtcpSession::peerReportReceived, this, [this](const QString &ASummary) {
+		if (!FPeerReportLogged)
+		{
+			FPeerReportLogged = true;
+			LOG_INFO(QString("MediaEngine: RTCP reports are flowing, %1").arg(ASummary));
+		}
+		else
+			LOG_DEBUG(QString("MediaEngine: %1").arg(ASummary));
+	});
+	connect(FRtcpSession, &RtcpSession::peerBye, this, []() {
+		LOG_INFO("MediaEngine: peer sent RTCP BYE");
+	});
+
+	FRtcpTimer = new QTimer(this);
+	FRtcpTimer->setSingleShot(true);
+	connect(FRtcpTimer, &QTimer::timeout, this, &MediaEngine::sendRtcpReport);
+
 	if (!FDtlsSrtp->createIdentity())
 	{
 		LOG_WARNING("MediaEngine: DTLS identity failed (check OpenSSL)");
@@ -93,10 +139,7 @@ bool MediaEngine::initialize()
 		return false;
 	}
 
-	FFormat = QAudioFormat();
-	FFormat.setSampleRate(OpusSampleRate);
-	FFormat.setChannelCount(OpusChannels);
-	FFormat.setSampleFormat(QAudioFormat::Int16);
+	FPcmBuffer.resize(OpusMaxFrameSamples * OpusChannels * int(sizeof(short)));
 
 	FMediaTimer = new QTimer(this);
 	FMediaTimer->setInterval(OpusFrameMs);
@@ -118,7 +161,9 @@ bool MediaEngine::loadOpus()
 
 	OpusEncoderCreateFunc encoderCreate = reinterpret_cast<OpusEncoderCreateFunc>(FOpusLib->resolve("opus_encoder_create"));
 	OpusDecoderCreateFunc decoderCreate = reinterpret_cast<OpusDecoderCreateFunc>(FOpusLib->resolve("opus_decoder_create"));
-	if (!encoderCreate || !decoderCreate)
+	FOpusEncode = reinterpret_cast<OpusEncodeFunc>(FOpusLib->resolve("opus_encode"));
+	FOpusDecode = reinterpret_cast<OpusDecodeFunc>(FOpusLib->resolve("opus_decode"));
+	if (!encoderCreate || !decoderCreate || !FOpusEncode || !FOpusDecode)
 		return false;
 
 	int error = 0;
@@ -131,7 +176,13 @@ bool MediaEngine::loadOpus()
 
 	OpusEncoderCtlFunc encoderCtl = reinterpret_cast<OpusEncoderCtlFunc>(FOpusLib->resolve("opus_encoder_ctl"));
 	if (encoderCtl)
+	{
 		encoderCtl(FOpusEncoder, OPUS_SET_BITRATE_REQUEST, 48000);
+		//In-band FEC and an expected loss hint let the peer recover single lost
+		//packets instead of concealing them (the cost is a few kbit/s).
+		encoderCtl(FOpusEncoder, OPUS_SET_INBAND_FEC_REQUEST, 1);
+		encoderCtl(FOpusEncoder, OPUS_SET_PACKET_LOSS_PERC_REQUEST, 10);
+	}
 	return true;
 }
 
@@ -154,6 +205,7 @@ void MediaEngine::setRemoteCodec(int APayloadType, int AClockrate)
 {
 	FRemotePayloadType = APayloadType;
 	FRemoteClockrate = AClockrate;
+	FRtcpSession->setClockRate(FRemoteClockrate);
 }
 
 void MediaEngine::setDtlsClientRole(bool AAsClient)
@@ -169,6 +221,23 @@ void MediaEngine::startIce(bool AControlling)
 
 void MediaEngine::stop()
 {
+	if (FDtlsSrtp && FRtcpSession && FRtcpSession->isActive() &&
+		FDtlsSrtp->state() == DtlsSrtp::StateConnected)
+	{
+		//Tell the peer the stream is over; RFC 3550 requires a report before BYE
+		sendRtcp(FRtcpSession->buildReport(clockMs()) + FRtcpSession->buildBye());
+	}
+
+	if (FRtcpSession && FRtcpSession->isActive())
+	{
+		LOG_INFO(QString("MediaEngine: call media summary rx=%1 expected=%2 lost=%3 jitter=%4 ms rtt=%5 ms plc=%6 late=%7").
+			arg(FRtcpSession->receivedPackets()).arg(FRtcpSession->expectedPackets()).
+			arg(FRtcpSession->cumulativeLost()).arg(FRtcpSession->jitterMs(), 0, 'f', 1).
+			arg(FRtcpSession->peerReport().roundTripMs < 0 ? QString("n/a") :
+				QString::number(FRtcpSession->peerReport().roundTripMs, 'f', 1)).
+			arg(FJitter.concealedFrames()).arg(FJitter.latePackets()));
+	}
+
 	stopAudio();
 	if (FDtlsSrtp)
 		FDtlsSrtp->stop();
@@ -181,10 +250,32 @@ bool MediaEngine::isAudioActive() const
 	return FAudioActive;
 }
 
+qint64 MediaEngine::clockMs() const
+{
+	return FClock.isValid() ? FClock.elapsed() : 0;
+}
+
 void MediaEngine::onIceDisconnected(const QString &AReason)
 {
-	FAudioActive = false;
-	emit failed(AReason);
+	//The media path is gone: close the microphone and the speaker right away
+	stopAudio();
+	emitFailed(AReason);
+}
+
+void MediaEngine::emitFailed(const QString &AReason)
+{
+	//A failure is often detected in the middle of a datagram: the ICE socket,
+	//the DTLS handshake or the audio callback all end up here. Emitting the
+	//signal synchronously lets the session tear the call (and this object) down
+	//while the media path still holds pointers into it, so the signal is queued
+	//and delivered once the current stack has unwound.
+	if (FFailPending)
+		return;
+	FFailPending = true;
+	QMetaObject::invokeMethod(this, [this, AReason]() {
+		FFailPending = false;
+		emit failed(AReason);
+	}, Qt::QueuedConnection);
 }
 
 void MediaEngine::onDtlsStateChanged(int AState)
@@ -194,10 +285,10 @@ void MediaEngine::onDtlsStateChanged(int AState)
 	case DtlsSrtp::StateConnected:
 		emit dtlsConnected();
 		if (!startAudio())
-			emit failed(tr("Failed to initialize the audio devices"));
+			emitFailed(tr("Failed to initialize the audio devices"));
 		break;
 	case DtlsSrtp::StateFailed:
-		emit failed(tr("The encrypted media handshake failed"));
+		emitFailed(tr("The encrypted media handshake failed"));
 		break;
 	default:
 		break;
@@ -221,48 +312,40 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 	if (firstByte < 128 || firstByte > 223)
 		return;
 
-	//RTCP compound packets live in 192..223 (PT range of the RTCP messages)
-	const bool isRtcp = (AData.size() >= 4) && (quint8(AData.at(1)) >= 192 && quint8(AData.at(1)) <= 192 + 8);
-	const QByteArray plain = isRtcp ? FDtlsSrtp->unprotectRtcp(AData) : FDtlsSrtp->unprotectRtp(AData);
-	if (plain.isEmpty() || plain.size() < RtpHeaderSize)
-		return;
+	//RTP and RTCP share the socket (RFC 5761, rtcp-mux). The second octet of an
+	//RTCP packet is its type (192..223); an RTP payload type never uses that
+	//range because SDP has to avoid the 64..95 payload types that would collide.
+	const bool isRtcp = (AData.size() >= 4) && (quint8(AData.at(1)) >= 192 && quint8(AData.at(1)) <= 223);
 
 	if (isRtcp)
-		return; //RTCP stats arrive with the call polish phase
-
-	//Parse the fixed RTP header
-	const quint8 secondByte = quint8(plain.at(1));
-	const int payloadType = secondByte & 0x7F;
-	const int csrcCount = quint8(plain.at(0)) & 0x0F;
-	int offset = RtpHeaderSize + csrcCount * 4;
-	if (offset > plain.size())
-		return;
-	const bool hasExtension = quint8(plain.at(0)) & 0x10;
-	if (hasExtension)
 	{
-		if (offset + 4 > plain.size())
-			return;
-		const quint16 extensionLength = qFromBigEndian<quint16>(plain.constData() + offset + 2);
-		offset += 4 + extensionLength * 4;
-		if (offset > plain.size())
-			return;
+		const QByteArray plain = FDtlsSrtp->unprotectRtcp(AData);
+		if (!plain.isEmpty())
+			FRtcpSession->onRtcpReceived(plain, clockMs());
+		return;
 	}
-	const QByteArray payload = plain.mid(offset);
-	if (payload.isEmpty())
+
+	const QByteArray plain = FDtlsSrtp->unprotectRtp(AData);
+	const RtpHeader header = parseRtpHeader(plain);
+	if (!header.valid)
 		return;
 
-	if (payloadType != FRemotePayloadType && FRemotePayloadType >= 0)
+	//Every stream packet feeds the reception statistics, including the ones we
+	//do not decode (comfort noise, a payload type that is not the negotiated one)
+	const quint64 extendedSeq = FSeqTracker.extend(header.sequence);
+	const qint64 now = clockMs();
+	FRtcpSession->onRtpReceived(extendedSeq, header.timestamp, now);
+
+	if (FRtcpSession->remoteSsrc() != header.ssrc)
+	{
+		FRtcpSession->setRemoteSsrc(header.ssrc);
+		LOG_INFO(QString("MediaEngine: remote RTP stream ssrc=0x%1").arg(header.ssrc, 8, 16, QChar('0')));
+	}
+
+	if (FRemotePayloadType >= 0 && header.payloadType != FRemotePayloadType)
 		return;
 
-	static short pcm[OpusFrameSamples * OpusChannels];
-	OpusDecodeFunc decoderDecode = reinterpret_cast<OpusDecodeFunc>(FOpusLib->resolve("opus_decode"));
-	if (!decoderDecode)
-		return;
-
-	const int samples = decoderDecode(FOpusDecoder, reinterpret_cast<const unsigned char *>(payload.constData()),
-	                                  payload.size(), pcm, OpusFrameSamples, 0);
-	if (samples > 0 && FPlaybackIo)
-		FPlaybackIo->write(reinterpret_cast<const char *>(pcm), samples * OpusChannels * qint64(sizeof(short)));
+	FJitter.push(extendedSeq, plain.mid(header.payloadOffset, header.payloadLength), now);
 }
 
 void MediaEngine::onMediaTick()
@@ -272,26 +355,100 @@ void MediaEngine::onMediaTick()
 	if (FRemotePayloadType < 0)
 		return;
 
-	if (FCaptureIo->bytesAvailable() < OpusFrameBytes)
+	drainPlayback();
+	captureAndSend();
+}
+
+void MediaEngine::drainPlayback()
+{
+	const qint64 now = clockMs();
+	if (FLastPlayoutMs < 0)
+		FLastPlayoutMs = now - OpusFrameMs;
+
+	qint64 elapsed = now - FLastPlayoutMs;
+	FLastPlayoutMs = now;
+	if (elapsed < 0)
+		elapsed = 0;
+	//After a stall (a suspended process, a long glitch) do not burst the sink
+	if (elapsed > 200)
+		elapsed = 200;
+
+	FPlayoutDue += elapsed * OpusSampleRate / 1000;
+
+	//Play as many frames as the audio clock owes, so that a peer using a 40 or
+	//60 ms packetization stays in step and the sink does not accumulate delay
+	int written = 0;
+	while (FPlayoutDue > 0 && written < OpusSampleRate)
+	{
+		QByteArray payload;
+		const JitterBuffer::Result result = FJitter.pop(payload, now);
+		if (result == JitterBuffer::Empty)
+		{
+			//Nothing due: drop the remaining budget instead of bursting later
+			FPlayoutDue = 0;
+			break;
+		}
+
+		const int samples = (result == JitterBuffer::Data) ?
+			decodeOpus(payload.constData(), payload.size()) : decodeOpus(nullptr, 0);
+		if (samples <= 0)
+		{
+			FPlayoutDue = 0;
+			break;
+		}
+
+		const QByteArray pcm = FPlaybackConverter.convert(
+			QByteArray(FPcmBuffer.constData(), samples * OpusChannels * int(sizeof(short))));
+		if (!pcm.isEmpty())
+			FPlaybackIo->write(pcm);
+		FPlayoutDue -= samples;
+		written += samples;
+	}
+}
+
+int MediaEngine::decodeOpus(const char *AData, int ALength)
+{
+	if (!FOpusDecode || !FOpusDecoder)
+		return 0;
+
+	//A null payload with a zero length asks libopus for packet loss concealment
+	const int samples = FOpusDecode(FOpusDecoder, reinterpret_cast<const unsigned char *>(AData), ALength,
+		reinterpret_cast<short *>(FPcmBuffer.data()), OpusMaxFrameSamples, 0);
+	return samples > 0 ? samples : 0;
+}
+
+void MediaEngine::captureAndSend()
+{
+	if (!FCaptureIo || !FOpusEncode || !FOpusEncoder)
 		return;
 
-	const QByteArray pcm = FCaptureIo->read(OpusFrameBytes);
-	static unsigned char rtpPayload[OpusMaxPacket];
-	OpusEncodeFunc encoderEncode = reinterpret_cast<OpusEncodeFunc>(FOpusLib->resolve("opus_encode"));
-	if (!encoderEncode || pcm.size() < OpusFrameBytes)
-		return;
+	FCapturePending.append(FCaptureConverter.convert(FCaptureIo->readAll()));
+	//Keep at most 200 ms of captured audio; the timer normally drains every frame
+	if (FCapturePending.size() > OpusFrameBytes * 10)
+		FCapturePending.remove(0, FCapturePending.size() - OpusFrameBytes * 10);
 
-	const int payloadSize = encoderEncode(FOpusEncoder, reinterpret_cast<const short *>(pcm.constData()),
-	                                      OpusFrameSamples, rtpPayload, sizeof(rtpPayload));
-	if (payloadSize <= 0)
-		return;
+	static unsigned char payload[OpusMaxPacket];
+	while (FCapturePending.size() >= OpusFrameBytes)
+	{
+		const QByteArray frame = FCapturePending.left(OpusFrameBytes);
+		FCapturePending.remove(0, OpusFrameBytes);
 
-	const QByteArray packet = buildRtpPacket(QByteArray(reinterpret_cast<const char *>(rtpPayload), payloadSize), FFirstPacket);
-	FFirstPacket = false;
+		const int payloadSize = FOpusEncode(FOpusEncoder, reinterpret_cast<const short *>(frame.constData()),
+			OpusFrameSamples, payload, sizeof(payload));
+		if (payloadSize <= 0)
+			continue;
 
-	const QByteArray protectedPacket = FDtlsSrtp->protectRtp(packet);
-	if (!protectedPacket.isEmpty())
-		FIceAgent->writeMedia(protectedPacket, 1);
+		const quint32 timestamp = FTimestamp;
+		const QByteArray packet = buildRtpPacket(QByteArray(reinterpret_cast<const char *>(payload), payloadSize), FFirstPacket);
+		FFirstPacket = false;
+
+		const qint64 now = clockMs();
+		FRtcpSession->onRtpSent(timestamp, payloadSize, now);
+
+		const QByteArray protectedPacket = FDtlsSrtp->protectRtp(packet);
+		if (!protectedPacket.isEmpty())
+			FIceAgent->writeMedia(protectedPacket, 1);
+	}
 }
 
 QByteArray MediaEngine::buildRtpPacket(const QByteArray &AOpusPayload, bool AMarker)
@@ -314,6 +471,57 @@ QByteArray MediaEngine::buildRtpPacket(const QByteArray &AOpusPayload, bool AMar
 	return packet;
 }
 
+void MediaEngine::scheduleRtcpReport(int AMs)
+{
+	FRtcpTimer->start(AMs);
+}
+
+void MediaEngine::sendRtcpReport()
+{
+	if (!FAudioActive || !FRtcpSession->isActive())
+		return;
+
+	sendRtcp(FRtcpSession->buildReport(clockMs()));
+
+	//RFC 3550 6.3: a random multiplier keeps participant reports apart
+	scheduleRtcpReport(RtcpMinIntervalMs + int(QRandomGenerator::global()->bounded(500)));
+}
+
+void MediaEngine::sendRtcp(const QByteArray &APacket)
+{
+	const QByteArray protectedPacket = FDtlsSrtp->protectRtcp(APacket);
+	if (!protectedPacket.isEmpty())
+		FIceAgent->writeMedia(protectedPacket, 1);
+}
+
+//Picks a format the device accepts, preferring the natural codec format. The
+//sample format is always 16-bit: every conversion below assumes it.
+static QAudioFormat negotiateFormat(const QAudioDevice &ADevice)
+{
+	QList<int> rates;
+	rates.append(48000);
+	const QAudioFormat preferred = ADevice.preferredFormat();
+	if (preferred.sampleRate() > 0 && !rates.contains(preferred.sampleRate()))
+		rates.append(preferred.sampleRate());
+	foreach (int rate, QList<int>() << 44100 << 32000 << 16000 << 8000)
+		if (!rates.contains(rate))
+			rates.append(rate);
+
+	foreach (int rate, rates)
+	{
+		foreach (int channels, QList<int>() << 2 << 1)
+		{
+			QAudioFormat format;
+			format.setSampleRate(rate);
+			format.setChannelCount(channels);
+			format.setSampleFormat(QAudioFormat::Int16);
+			if (ADevice.isFormatSupported(format))
+				return format;
+		}
+	}
+	return QAudioFormat();
+}
+
 bool MediaEngine::startAudio()
 {
 	if (FAudioActive)
@@ -324,10 +532,34 @@ bool MediaEngine::startAudio()
 	if (inputDevice.isNull() || outputDevice.isNull())
 		return false;
 
-	FSource = new QAudioSource(inputDevice, FFormat, this);
-	FSink = new QAudioSink(outputDevice, FFormat, this);
-	FSource->setBufferSize(OpusFrameBytes * 4);
-	FSink->setBufferSize(OpusFrameBytes * 4);
+	//The device may refuse 48 kHz stereo: a headset microphone is often mono and
+	//a Bluetooth link prefers its own rate. The codec side stays at 48 kHz, the
+	//converter at the device boundary adapts rate and channel count.
+	FSourceFormat = negotiateFormat(inputDevice);
+	FSinkFormat = negotiateFormat(outputDevice);
+	if (!FSourceFormat.isValid() || !FSinkFormat.isValid())
+	{
+		LOG_WARNING(QString("MediaEngine: the default audio devices do not accept any 16-bit format, "
+		                    "input '%1', output '%2'").arg(inputDevice.description(), outputDevice.description()));
+		return false;
+	}
+	if (FSourceFormat.sampleRate() != OpusSampleRate || FSourceFormat.channelCount() != OpusChannels ||
+		FSinkFormat.sampleRate() != OpusSampleRate || FSinkFormat.channelCount() != OpusChannels)
+	{
+		LOG_INFO(QString("MediaEngine: audio format adapted, capture %1 Hz/%2 ch, playback %3 Hz/%4 ch, codec %5 Hz/%6 ch").
+			arg(FSourceFormat.sampleRate()).arg(FSourceFormat.channelCount()).
+			arg(FSinkFormat.sampleRate()).arg(FSinkFormat.channelCount()).
+			arg(OpusSampleRate).arg(OpusChannels));
+	}
+	FCaptureConverter.configure(FSourceFormat.sampleRate(), FSourceFormat.channelCount(),
+		OpusSampleRate, OpusChannels);
+	FPlaybackConverter.configure(OpusSampleRate, OpusChannels,
+		FSinkFormat.sampleRate(), FSinkFormat.channelCount());
+
+	FSource = new QAudioSource(inputDevice, FSourceFormat, this);
+	FSink = new QAudioSink(outputDevice, FSinkFormat, this);
+	FSource->setBufferSize(FSourceFormat.bytesForDuration(80000)); //80 ms
+	FSink->setBufferSize(FSinkFormat.bytesForDuration(80000));
 
 	FCaptureIo = FSource->start();
 	FPlaybackIo = FSink->start();
@@ -338,6 +570,17 @@ bool MediaEngine::startAudio()
 	}
 
 	FAudioActive = true;
+
+	//Start the playout and the RTCP clock from a clean state: packets that
+	//arrived before the media path was ready must not add latency
+	FJitter.reset(clockMs());
+	FSeqTracker.reset();
+	FLastPlayoutMs = -1;
+	FPlayoutDue = 0;
+	FCapturePending.clear();
+	FRtcpSession->start();
+	scheduleRtcpReport(RtcpMinIntervalMs / 2 + int(QRandomGenerator::global()->bounded(RtcpMinIntervalMs / 2)));
+
 	FMediaTimer->start();
 	return true;
 }
@@ -346,6 +589,8 @@ void MediaEngine::stopAudio()
 {
 	FMediaTimer->stop();
 	FAudioActive = false;
+	FRtcpTimer->stop();
+	FRtcpSession->stop();
 
 	if (FSource)
 		FSource->stop();
@@ -357,4 +602,6 @@ void MediaEngine::stopAudio()
 	delete FSink;
 	FSource = nullptr;
 	FSink = nullptr;
+	FCaptureConverter.reset();
+	FPlaybackConverter.reset();
 }

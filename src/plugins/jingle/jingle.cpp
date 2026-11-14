@@ -37,26 +37,11 @@ Jingle::Jingle()
 
 Jingle::~Jingle()
 {
-	for(QHash<Jid, QList<int> >::const_iterator it=FStanzaHandles.constBegin(); it!=FStanzaHandles.constEnd(); ++it)
-		foreach(int handleId, it.value())
-			FStanzaProcessor->removeStanzaHandle(handleId);
-	FStanzaHandles.clear();
-
-	if (FDiscovery)
-	{
-		FDiscovery->removeFeatureHandler(NS_JINGLE_APPS_RTP, this);
-		FDiscovery->removeDiscoFeature(NS_JINGLE_APPS_RTP);
-		FDiscovery->removeDiscoFeature(NS_JINGLE);
-		FDiscovery->removeDiscoFeature(NS_JINGLE_APPS_RTP_AUDIO);
-		FDiscovery->removeDiscoFeature(NS_JINGLE_TRANSPORTS_ICEUDP);
-		FDiscovery->removeDiscoFeature(NS_JINGLE_APPS_DTLS);
-	}
-	if (FOptionsManager)
-	{
-		FOptionsManager->removeOptionsDialogHolder(this);
-		FOptionsManager->removeOptionsDialogNode(OPN_CALLS);
-	}
-
+	//Only what this object owns is released here. The plugin manager unloads
+	//plugins in an arbitrary order, so a dependency (the stanza processor, the
+	//service discovery) may already be destroyed by now, and calling into it
+	//from this destructor dereferences freed memory - that was a crash on every
+	//program exit. The per-stream registrations are removed in onStreamClosed().
 	qDeleteAll(FSessions);
 	FSessions.clear();
 }

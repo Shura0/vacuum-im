@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QMessageAuthenticationCode>
 #include <QNetworkInterface>
+#include <QPointer>
 #include <QRandomGenerator>
 #include <QSet>
 #include <QStringList>
@@ -188,6 +189,7 @@ bool IceAgent::start()
 	//RFC 8445: ufrag at least 24 bits, password at least 128 bits
 	FLocalUfrag = randomBytes(4).toHex();
 	FLocalPwd = randomBytes(32).toHex();
+	FLocalCandidates.clear();
 
 	FRtpSocket = new QUdpSocket(this);
 	FRtcpSocket = new QUdpSocket(this);
@@ -239,11 +241,23 @@ void IceAgent::stop()
 	if (FCheckTimer)
 	{
 		FCheckTimer->stop();
-		delete FCheckTimer;
+		FCheckTimer->disconnect(this);
+		//stop() can be reached from a slot of this timer (a consent failure ends
+		//the call) or from a slot of one of the sockets below, so the objects are
+		//released after the current call stack rather than inside it.
+		FCheckTimer->deleteLater();
 		FCheckTimer = nullptr;
 	}
-	delete FRtpSocket;
-	delete FRtcpSocket;
+
+	for (QUdpSocket *socket : {FRtpSocket, FRtcpSocket})
+	{
+		if (socket)
+		{
+			socket->disconnect(this);
+			socket->close();
+			socket->deleteLater();
+		}
+	}
 	FRtpSocket = nullptr;
 	FRtcpSocket = nullptr;
 	FStarted = false;
@@ -404,10 +418,14 @@ bool IceAgent::sendCheck(CheckPair &APair, bool ANominate)
 
 void IceAgent::onUdpReadyRead()
 {
-	QUdpSocket *socket = qobject_cast<QUdpSocket *>(sender());
-	const int componentId = socket == FRtcpSocket ? 2 : 1;
+	QPointer<QUdpSocket> socket = qobject_cast<QUdpSocket *>(sender());
+	if (!socket || (socket != FRtpSocket && socket != FRtcpSocket))
+		return;
 
-	while (socket->hasPendingDatagrams())
+	QPointer<IceAgent> self(this);
+	const int componentId = (socket == FRtcpSocket) ? 2 : 1;
+
+	while (!socket.isNull() && socket->hasPendingDatagrams())
 	{
 		QByteArray data;
 		data.resize(int(socket->pendingDatagramSize()));
@@ -429,6 +447,11 @@ void IceAgent::onUdpReadyRead()
 				handleStunRequest(data, peerAddress, peerPort, componentId);
 			else if (type == StunBindingSuccess || type == StunBindingError)
 				handleStunResponse(data, componentId);
+
+			//A STUN check can complete the connection and start the media path;
+			//that path may in turn give up on this transport immediately.
+			if (self.isNull() || !FStarted || socket.isNull())
+				return;
 		}
 		else
 		{
@@ -442,6 +465,12 @@ void IceAgent::onUdpReadyRead()
 					.arg(quint8(data.at(0)), 2, 16, QChar('0')).arg(head).arg(sLen));
 			}
 			emit mediaReceived(data, componentId);
+
+			//A handler of mediaReceived may end the call: in that case the agent
+			//and this socket have been torn down already and neither may be touched
+			//again (this used to crash on the second datagram of a failed call).
+			if (self.isNull() || !FStarted || socket.isNull())
+				return;
 		}
 	}
 }
