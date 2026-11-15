@@ -48,8 +48,16 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FSilent = false;
 	FRemoteOpusPayloadType = -1;
 	FRemoteOpusClockrate = 48000;
+	FOfferPending = false;
+	FAnswerPending = false;
+	FTransportSent = false;
 
 	FState = AInitiated ? IJingle::CallOutgoing : IJingle::CallRinging;
+
+	FGatherTimer = new QTimer(this);
+	FGatherTimer->setSingleShot(true);
+	FGatherTimer->setInterval(3000);
+	connect(FGatherTimer, &QTimer::timeout, this, &JingleSession::onGatherWaitTimeout);
 
 	FMediaEngine = new MediaEngine(this);
 	if (!FMediaEngine->initialize())
@@ -76,6 +84,9 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 		});
 
 		//The callee binds its ports immediately so that candidates can be offered
+		FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
+		connect(FMediaEngine->iceAgent(), &IceAgent::gatheringFinished, this, &JingleSession::onGatheringFinished);
+		connect(FMediaEngine->iceAgent(), &IceAgent::candidateGathered, this, &JingleSession::onCandidateGathered);
 		if (!FInitiated)
 			FMediaEngine->startIce(false);
 	}
@@ -149,12 +160,13 @@ void JingleSession::initiate()
 		return;
 
 	if (FMediaEngine)
+	{
+		FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
 		FMediaEngine->startIce(true);
+	}
 
-	QDomElement jingleElem;
-	Stanza initiate = makeSessionAction("session-initiate", &jingleElem);
-	addContentElement(jingleElem);
-	FJingle->sendSessionRequest(this, initiate);
+	FOfferPending = true;
+	continueInitiate();
 
 	if (!FSilent)
 	{
@@ -164,9 +176,36 @@ void JingleSession::initiate()
 	}
 }
 
+void JingleSession::continueInitiate(bool AForce)
+{
+	if (!FOfferPending || FTerminated)
+		return;
+
+	if (!AForce && FMediaEngine && !FMediaEngine->iceAgent()->isGatheringFinished())
+	{
+		armGatherWait();
+		return;
+	}
+	if (!AForce)
+		FGatherTimer->stop();
+	FOfferPending = false;
+
+	if (FMediaEngine && FMediaEngine->iceAgent()->localCandidates().isEmpty())
+	{
+		finishLocally("failed-application", tr("No network candidates are available"));
+		return;
+	}
+
+	QDomElement jingleElem;
+	Stanza initiate = makeSessionAction("session-initiate", &jingleElem);
+	addContentElement(jingleElem);
+	FTransportSent = true;
+	FJingle->sendSessionRequest(this, initiate);
+}
+
 void JingleSession::answer()
 {
-	if (FState != IJingle::CallRinging || FTerminated)
+	if (FState != IJingle::CallRinging || FTerminated || FAnswerPending)
 		return;
 
 	if (!FMediaEngine)
@@ -184,12 +223,83 @@ void JingleSession::answer()
 	FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
 	applyDtlsClientRole();
 
+	FAnswerPending = true;
+	continueAnswer();
+}
+
+void JingleSession::continueAnswer(bool AForce)
+{
+	if (!FAnswerPending || FTerminated)
+		return;
+
+	if (!AForce && FMediaEngine && !FMediaEngine->iceAgent()->isGatheringFinished())
+	{
+		armGatherWait();
+		return;
+	}
+	if (!AForce)
+		FGatherTimer->stop();
+	FAnswerPending = false;
+
+	if (FMediaEngine && FMediaEngine->iceAgent()->localCandidates().isEmpty())
+	{
+		finishLocally("failed-application", tr("No network candidates are available"));
+		return;
+	}
+
 	QDomElement jingleElem;
 	Stanza accept = makeSessionAction("session-accept", &jingleElem);
 	addContentElement(jingleElem);
+	FTransportSent = true;
 	FJingle->sendSessionAction(this, accept);
 
 	setState(IJingle::CallActive);
+}
+
+void JingleSession::armGatherWait()
+{
+	if (!FGatherTimer->isActive())
+	{
+		LOG_STRM_DEBUG(FStreamJid, QString("Jingle session '%1' waits for candidate gathering").arg(FSid));
+		FGatherTimer->start();
+	}
+}
+
+void JingleSession::onGatheringFinished()
+{
+	if (FTerminated)
+		return;
+	FGatherTimer->stop();
+	if (FOfferPending)
+		continueInitiate();
+	if (FAnswerPending)
+		continueAnswer();
+}
+
+void JingleSession::onGatherWaitTimeout()
+{
+	if (FTerminated)
+		return;
+	LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': candidate gathering is still running, sending the transport with the candidates known so far").arg(FSid));
+	if (FOfferPending)
+		continueInitiate(true);
+	if (FAnswerPending)
+		continueAnswer(true);
+}
+
+void JingleSession::onCandidateGathered(const IceCandidate &ACandidate)
+{
+	//Candidates found before the offer/answer went out are already in it; only
+	//the late ones travel in a separate transport-info action
+	if (!FTransportSent || FTerminated)
+		return;
+
+	QDomElement jingleElem;
+	Stanza info = makeSessionAction("transport-info", &jingleElem);
+	addTransportInfo(jingleElem, ACandidate);
+	FJingle->sendSessionAction(this, info);
+	LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': late %2 candidate %3:%4 sent in transport-info").
+		arg(FSid, ACandidate.type, ACandidate.address).arg(ACandidate.port));
 }
 
 void JingleSession::decline()
@@ -540,23 +650,8 @@ void JingleSession::addTransport(QDomElement &AContentElem) const
 		transportElem.setAttribute("ufrag", agent->localUfrag());
 		transportElem.setAttribute("pwd", agent->localPwd());
 
-		int index = 0;
 		for (const IceCandidate &candidate : agent->localCandidates())
-		{
-			QDomElement candidateElem = doc.createElement("candidate");
-			candidateElem.setAttribute("foundation", QString::number(candidate.componentId));
-			candidateElem.setAttribute("component", QString::number(candidate.componentId));
-			candidateElem.setAttribute("generation", QString::number(index / 2));
-			candidateElem.setAttribute("id", QString("v%1c%2").arg(index).arg(candidate.componentId));
-			candidateElem.setAttribute("network", "0");
-			candidateElem.setAttribute("priority", QString::number(candidate.priority));
-			candidateElem.setAttribute("type", "host");
-			candidateElem.setAttribute("ip", candidate.address);
-			candidateElem.setAttribute("address", candidate.address); //XEP-0176 spelling, for older parsers
-			candidateElem.setAttribute("port", QString::number(candidate.port));
-			transportElem.appendChild(candidateElem);
-			++index;
-		}
+			appendCandidateElement(transportElem, candidate);
 
 		//Conversations/Smack + Swiften variant: a BARE <fingerprint> child of <transport>
 		//carrying the setup attribute itself, exactly as those clients serialize it.
@@ -572,6 +667,53 @@ void JingleSession::addTransport(QDomElement &AContentElem) const
 	}
 
 	AContentElem.appendChild(transportElem);
+}
+
+void JingleSession::appendCandidateElement(QDomElement &ATransportElem, const IceCandidate &ACandidate) const
+{
+	QDomDocument doc = ATransportElem.ownerDocument();
+
+	QDomElement candidateElem = doc.createElement("candidate");
+	candidateElem.setAttribute("foundation", QString::number(ACandidate.componentId));
+	candidateElem.setAttribute("component", QString::number(ACandidate.componentId));
+	candidateElem.setAttribute("generation", "0");
+	candidateElem.setAttribute("id", QString("v%1c%2").arg(ACandidate.port).arg(ACandidate.componentId));
+	candidateElem.setAttribute("network", "0");
+	candidateElem.setAttribute("priority", QString::number(ACandidate.priority));
+	candidateElem.setAttribute("type", ACandidate.type);
+	candidateElem.setAttribute("ip", ACandidate.address);
+	candidateElem.setAttribute("address", ACandidate.address); //XEP-0176 spelling, for older parsers
+	candidateElem.setAttribute("port", QString::number(ACandidate.port));
+	if (!ACandidate.relatedAddress.isEmpty() && ACandidate.relatedPort != 0)
+	{
+		//Both spellings: the ICE RFC one and the XEP-0176 heritage one
+		candidateElem.setAttribute("raddr", ACandidate.relatedAddress);
+		candidateElem.setAttribute("rport", QString::number(ACandidate.relatedPort));
+		candidateElem.setAttribute("rel-addr", ACandidate.relatedAddress);
+		candidateElem.setAttribute("rel-port", QString::number(ACandidate.relatedPort));
+	}
+	ATransportElem.appendChild(candidateElem);
+}
+
+void JingleSession::addTransportInfo(QDomElement &AJingleElem, const IceCandidate &ACandidate) const
+{
+	QDomDocument doc = AJingleElem.ownerDocument();
+
+	QDomElement contentElem = doc.createElement("content");
+	contentElem.setAttribute("name", FContentName);
+
+	QDomElement transportElem = doc.createElementNS(NS_JINGLE_TRANSPORTS_ICEUDP, "transport");
+	if (FMediaEngine)
+	{
+		IceAgent *agent = FMediaEngine->iceAgent();
+		transportElem.setAttribute("ufrag", agent->localUfrag());
+		transportElem.setAttribute("pwd", agent->localPwd());
+	}
+	appendCandidateElement(transportElem, ACandidate);
+
+	//Some parsers (Swiften) insist on a non-empty content, keep <transport> alone
+	contentElem.appendChild(transportElem);
+	AJingleElem.appendChild(contentElem);
 }
 
 void JingleSession::addReason(QDomElement &AJingleElem, const QString &ACode, const QString &AText) const
@@ -667,10 +809,15 @@ void JingleSession::processContentElem(const QDomElement &AContentElem)
 				continue;
 			if (candidate.componentId != 1 && candidate.componentId != 2)
 				continue;
-			//Host candidates with IPv4 only for now; srflx/relay arrive with the NAT phase
-			const QString type = candidateElem.attribute("type", "host");
-			if (type != "host")
+			candidate.type = candidateElem.attribute("type", "host");
+			if (candidate.type != "host" && candidate.type != "srflx" &&
+				candidate.type != "relay" && candidate.type != "prflx")
+			{
+				LOG_STRM_DEBUG(FStreamJid, QString("Jingle session '%1': skipping the unsupported %2 candidate %3:%4").
+					arg(FSid, candidate.type, candidate.address).arg(candidate.port));
 				continue;
+			}
+			candidate.relatedAddress = candidateElem.attribute("raddr", candidateElem.attribute("rel-addr"));
 			agent->addRemoteCandidate(candidate);
 		}
 	}

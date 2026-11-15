@@ -1,2 +1,2 @@
-set(SOURCES jingle.cpp jinglesession.cpp callwindow.cpp iceagent.cpp dtlssrtp.cpp mediaengine.cpp jitterbuffer.cpp rtcpsession.cpp audioconvert.cpp)
-set(HEADERS jingle.h jinglesession.h callwindow.h iceagent.h dtlssrtp.h mediaengine.h jitterbuffer.h rtcpsession.h rtpdefs.h audioconvert.h)
+set(SOURCES jingle.cpp jinglesession.cpp callwindow.cpp iceagent.cpp dtlssrtp.cpp mediaengine.cpp jitterbuffer.cpp rtcpsession.cpp audioconvert.cpp stunmessage.cpp natservice.cpp turnclient.cpp callsoptionswidget.cpp)
+set(HEADERS jingle.h jinglesession.h callwindow.h iceagent.h dtlssrtp.h mediaengine.h jitterbuffer.h rtcpsession.h rtpdefs.h audioconvert.h stunmessage.h natservice.h turnclient.h callsoptionswidget.h)

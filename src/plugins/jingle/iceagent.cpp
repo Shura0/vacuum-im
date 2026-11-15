@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QHostInfo>
 #include <QMessageAuthenticationCode>
 #include <QNetworkInterface>
 #include <QPointer>
@@ -14,6 +15,9 @@
 
 #include <definitions/namespaces.h>
 #include <utils/logger.h>
+
+#include "stunmessage.h"
+#include "turnclient.h"
 
 //STUN message types and attributes (RFC 5389/8489, RFC 8445 subset)
 static const quint16 StunBindingRequest       = 0x0001;
@@ -148,9 +152,20 @@ IceAgent::IceAgent(QObject *AParent)
 	FRtpSocket = nullptr;
 	FRtcpSocket = nullptr;
 	FCheckTimer = nullptr;
+	FGatherTimer = nullptr;
+	FTurn = nullptr;
+	FForceRelay = false;
 	FControlling = false;
 	FStarted = false;
 	FConnected = false;
+	FGathering = false;
+	FGatheringFinished = false;
+	FStunPort = 0;
+	FStunAttempts = 0;
+	FStunLastSent = 0;
+	FStunRtoMs = 0;
+	FStunPending = false;
+	FTurnPending = false;
 	FTieBreaker = QRandomGenerator::global()->generate64();
 	FLastActivityMs = 0;
 	FTrace = 0;
@@ -190,6 +205,16 @@ bool IceAgent::start()
 	FLocalUfrag = randomBytes(4).toHex();
 	FLocalPwd = randomBytes(32).toHex();
 	FLocalCandidates.clear();
+	FRemoteCandidates.clear();
+	FCheckPairs.clear();
+	FConnected = false;
+	FGathering = false;
+	FGatheringFinished = false;
+	FStunTransactionId.clear();
+	FStunPacket.clear();
+	FStunPending = false;
+	FTurnPending = false;
+	FForceRelay = FNatConfig.forceRelay;
 
 	FRtpSocket = new QUdpSocket(this);
 	FRtcpSocket = new QUdpSocket(this);
@@ -216,7 +241,7 @@ bool IceAgent::start()
 			candidate.componentId = component;
 			candidate.address = address.toString();
 			candidate.port = (component == 1) ? FRtpSocket->localPort() : FRtcpSocket->localPort();
-			candidate.priority = hostPriority(component, interfaceIndex);
+			candidate.priority = candidatePriority("host", component, interfaceIndex);
 			FLocalCandidates.append(candidate);
 		}
 		++interfaceIndex;
@@ -233,6 +258,7 @@ bool IceAgent::start()
 	FCheckTimer->start();
 
 	FStarted = true;
+	startNatGathering();
 	return true;
 }
 
@@ -249,6 +275,22 @@ void IceAgent::stop()
 		FCheckTimer = nullptr;
 	}
 
+	if (FGatherTimer)
+	{
+		FGatherTimer->stop();
+		FGatherTimer->disconnect(this);
+		FGatherTimer->deleteLater();
+		FGatherTimer = nullptr;
+	}
+
+	if (FTurn)
+	{
+		FTurn->disconnect(this);
+		FTurn->stop();
+		FTurn->deleteLater();
+		FTurn = nullptr;
+	}
+
 	for (QUdpSocket *socket : {FRtpSocket, FRtcpSocket})
 	{
 		if (socket)
@@ -262,12 +304,36 @@ void IceAgent::stop()
 	FRtcpSocket = nullptr;
 	FStarted = false;
 	FConnected = false;
+	FGathering = false;
+	FGatheringFinished = true; //unblocks anyone waiting, the agent is unusable now
+	FStunPending = false;
+	FTurnPending = false;
+	FStunTransactionId.clear();
+	FStunPacket.clear();
 	FCheckPairs.clear();
+}
+
+void IceAgent::setNatConfig(const NatConfig &AConfig)
+{
+	FNatConfig = AConfig;
+}
+
+bool IceAgent::isGatheringFinished() const
+{
+	return FGatheringFinished;
 }
 
 QList<IceCandidate> IceAgent::localCandidates() const
 {
-	return FLocalCandidates;
+	//In the relay-only test mode the direct candidates stay hidden: they would
+	//still work locally and defeat the purpose of the test.
+	QList<IceCandidate> candidates;
+	for (const IceCandidate &candidate : FLocalCandidates)
+	{
+		if (!FForceRelay || candidate.isRelay())
+			candidates.append(candidate);
+	}
+	return candidates;
 }
 
 void IceAgent::setRemoteCredentials(const QString &AUfrag, const QString &APwd)
@@ -280,16 +346,25 @@ void IceAgent::addRemoteCandidate(const IceCandidate &ACandidate)
 {
 	FRemoteCandidates.append(ACandidate);
 	if (FTrace < 80)
-		LOG_INFO(QString("IceAgent: remote candidate %1:%2 comp=%3 added (ufrag %4)").
-			arg(ACandidate.address).arg(ACandidate.port).arg(ACandidate.componentId).arg(ACandidate.ufrag));
+		LOG_INFO(QString("IceAgent: remote candidate %1:%2 comp=%3 type=%4 added (ufrag %5)").
+			arg(ACandidate.address).arg(ACandidate.port).arg(ACandidate.componentId).
+			arg(ACandidate.type, ACandidate.ufrag));
+
+	//The relay drops outgoing traffic unless the peer IP has a permission, and
+	//the permission is per address, not per candidate/port.
+	if (FTurn != nullptr && ACandidate.componentId == 1)
+		FTurn->addPermission(QHostAddress(ACandidate.address));
 
 	if (!FStarted || FConnected)
 		return;
 
-	//Pair every remote candidate with the local candidate of the same component
+	//Pair every remote candidate with a local candidate of the same component.
+	//In the relay-only mode only the relay path is allowed to be used.
 	for (const IceCandidate &local : FLocalCandidates)
 	{
 		if (local.componentId != ACandidate.componentId)
+			continue;
+		if (FForceRelay && !local.isRelay())
 			continue;
 		CheckPair pair;
 		pair.local = local;
@@ -314,15 +389,15 @@ bool IceAgent::writeMedia(const QByteArray &AData, int AComponent)
 	if (!FConnected)
 		return false;
 
-	QUdpSocket *socket = socketForComponent(AComponent);
 	for (const CheckPair &pair : FCheckPairs)
 	{
 		if (pair.local.componentId == AComponent && pair.nominated)
 		{
-			const qint64 written = socket->writeDatagram(AData, QHostAddress(pair.remote.address), pair.remote.port);
-			LOG_DEBUG(QString("IceAgent: media out %1 bytes comp=%2 to %3:%4 written=%5").
-				arg(AData.size()).arg(AComponent).arg(pair.remote.address).arg(pair.remote.port).arg(written));
-			return written != -1;
+			const bool written = sendPairPacket(pair, AData);
+			LOG_DEBUG(QString("IceAgent: media out %1 bytes comp=%2 to %3:%4 via %5 written=%6").
+				arg(AData.size()).arg(AComponent).arg(pair.remote.address).arg(pair.remote.port).
+				arg(pair.local.isRelay() ? "relay" : "direct").arg(written));
+			return written;
 		}
 	}
 	static int s_dropped = 0;
@@ -331,17 +406,50 @@ bool IceAgent::writeMedia(const QByteArray &AData, int AComponent)
 	return false;
 }
 
-quint32 IceAgent::hostPriority(int AComponent, int AInterfaceIndex) const
+int IceAgent::typePreference(const QString &AType)
+{
+	//RFC 8445 5.1.2.2 recommended values, high preference for the direct paths
+	if (AType == QStringLiteral("relay"))
+		return 0;
+	if (AType == QStringLiteral("srflx") || AType == QStringLiteral("prflx"))
+		return 100;
+	return 126; //host
+}
+
+quint32 IceAgent::candidatePriority(const QString &AType, int AComponent, int AInterfaceIndex) const
 {
 	//RFC 8445: (type-preference << 24) | (local-preference << 8) | (256 - component)
-	const quint32 typePreference = 126;
 	const quint32 localPreference = 65535 - AInterfaceIndex;
-	return (typePreference << 24) + (localPreference << 8) + (256 - AComponent);
+	return (quint32(typePreference(AType)) << 24) + (localPreference << 8) + (256 - AComponent);
 }
 
 QUdpSocket *IceAgent::socketForComponent(int AComponent) const
 {
 	return AComponent == 2 ? FRtcpSocket : FRtpSocket;
+}
+
+bool IceAgent::sendPairPacket(const CheckPair &APair, const QByteArray &AData)
+{
+	if (APair.local.isRelay())
+	{
+		if (FTurn == nullptr || !FTurn->isAllocated())
+			return false;
+		return FTurn->sendTo(AData, QHostAddress(APair.remote.address), APair.remote.port);
+	}
+	QUdpSocket *socket = socketForComponent(APair.local.componentId);
+	return socket != nullptr && socket->writeDatagram(AData, QHostAddress(APair.remote.address), APair.remote.port) >= 0;
+}
+
+bool IceAgent::writePathPacket(const QByteArray &AData, const QHostAddress &ATo, quint16 APort, int AComponent, bool AViaRelay)
+{
+	if (AViaRelay)
+	{
+		if (FTurn == nullptr || !FTurn->isAllocated())
+			return false;
+		return FTurn->sendTo(AData, ATo, APort);
+	}
+	QUdpSocket *socket = socketForComponent(AComponent);
+	return socket != nullptr && socket->writeDatagram(AData, ATo, APort) >= 0;
 }
 
 bool IceAgent::sendCheck(CheckPair &APair, bool ANominate)
@@ -396,7 +504,7 @@ bool IceAgent::sendCheck(CheckPair &APair, bool ANominate)
 	quint16 finalLength = qToBigEndian<quint16>(quint16(withIntegrity.size() + fingerprint.size()));
 	packet.replace(2, 2, QByteArray(reinterpret_cast<const char*>(&finalLength), 2));
 
-	if (socketForComponent(APair.local.componentId)->writeDatagram(packet, QHostAddress(APair.remote.address), APair.remote.port) < 0)
+	if (!sendPairPacket(APair, packet))
 		return false;
 
 	APair.transactionId = transactionId;
@@ -443,8 +551,63 @@ void IceAgent::onUdpReadyRead()
 				LOG_INFO(QString("IceAgent: STUN %1 type=0x%2 received from %3:%4 comp=%5").
 					arg(type == StunBindingRequest ? "request" : "response").arg(type, 4, 16, QChar('0')).
 					arg(peerAddress.toString()).arg(peerPort).arg(componentId));
+
+			//A binding response to our own srflx gathering request is not an ICE
+			//check response: it never matches a pair's transaction.
+			if (type == StunBindingSuccess && !FStunTransactionId.isEmpty() && data.mid(8, 12) == FStunTransactionId)
+			{
+				Stun::Message message;
+				if (message.parse(data))
+				{
+					const QHostAddress mappedAddress = message.xorAddress(Stun::AttributeXorMappedAddress);
+					const quint16 mappedPort = message.xorPort(Stun::AttributeXorMappedAddress);
+					FStunTransactionId.clear();
+					FStunPacket.clear();
+					FStunPending = false;
+					if (mappedAddress.isNull() || mappedPort == 0)
+					{
+						LOG_WARNING(QString("IceAgent: STUN server %1:%2 answered our srflx request without a usable XOR-MAPPED-ADDRESS").
+							arg(FStunServer.toString()).arg(FStunPort));
+					}
+					else if (FForceRelay)
+					{
+						//Relay-only mode: a direct path must not be offered to the peer
+						LOG_INFO(QString("IceAgent: srflx candidate %1:%2 ignored in relay-only mode").
+							arg(mappedAddress.toString()).arg(mappedPort));
+					}
+					else
+					{
+						IceCandidate candidate;
+						candidate.componentId = 1;
+						candidate.address = mappedAddress.toString();
+						candidate.port = mappedPort;
+						candidate.type = QStringLiteral("srflx");
+						candidate.priority = candidatePriority("srflx", 1, 0);
+						for (const IceCandidate &local : FLocalCandidates)
+						{
+							if (local.componentId == 1)
+							{
+								candidate.relatedAddress = local.address;
+								candidate.relatedPort = local.port;
+								break;
+							}
+						}
+						FLocalCandidates.append(candidate);
+						LOG_INFO(QString("IceAgent: srflx candidate %1:%2 gathered from STUN %3:%4").
+							arg(candidate.address).arg(candidate.port).arg(FStunServer.toString()).arg(FStunPort));
+						emit candidateGathered(candidate);
+					}
+
+					if (self.isNull() || !FStarted)
+						return;
+					if (!FTurnPending)
+						finishGathering();
+				}
+				continue;
+			}
+
 			if (type == StunBindingRequest)
-				handleStunRequest(data, peerAddress, peerPort, componentId);
+				handleStunRequest(data, peerAddress, peerPort, componentId, false);
 			else if (type == StunBindingSuccess || type == StunBindingError)
 				handleStunResponse(data, componentId);
 
@@ -510,7 +673,7 @@ void IceAgent::logErrorCode(const QByteArray &AData)
 	}
 }
 
-void IceAgent::sendStunError(const QByteArray &ARequest, const QHostAddress &ATo, quint16 APort, int AComponent, int ACode, const QString &AReason)
+void IceAgent::sendStunError(const QByteArray &ARequest, const QHostAddress &ATo, quint16 APort, int AComponent, int ACode, const QString &AReason, bool AViaRelay)
 {
 	const bool delineating = isDelineatingStun(ARequest);
 	QByteArray header;
@@ -540,10 +703,10 @@ void IceAgent::sendStunError(const QByteArray &ARequest, const QHostAddress &ATo
 	QByteArray packet = header + attributes + stunAttribute(StunAttrMessageIntegrity, hmac);
 	const quint16 finalLength = qToBigEndian<quint16>(quint16(packet.size() - StunHeaderSize));
 	packet.replace(2, 2, QByteArray(reinterpret_cast<const char*>(&finalLength), 2));
-	socketForComponent(AComponent)->writeDatagram(packet, ATo, APort);
+	writePathPacket(packet, ATo, APort, AComponent, AViaRelay);
 }
 
-void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AFrom, quint16 APort, int AComponent)
+void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AFrom, quint16 APort, int AComponent, bool AViaRelay)
 {
 	if (!fingerprintValid(AData))
 	{
@@ -628,7 +791,7 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 		{
 			if (FTrace < 200)
 				LOG_WARNING(QString("IceAgent: role conflict with %1:%2, answering 487").arg(AFrom.toString()).arg(APort));
-			sendStunError(AData, AFrom, APort, AComponent, 487, "Role Conflict");
+			sendStunError(AData, AFrom, APort, AComponent, 487, "Role Conflict", AViaRelay);
 			return;
 		}
 		FControlling = !FControlling;
@@ -712,7 +875,7 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 		quint16 finalLength = qToBigEndian<quint16>(quint16(withIntegrity.size() + fingerprint.size()));
 		packet.replace(2, 2, QByteArray(reinterpret_cast<const char*>(&finalLength), 2));
 
-		socketForComponent(AComponent)->writeDatagram(packet, AFrom, APort);
+		writePathPacket(packet, AFrom, APort, AComponent, AViaRelay);
 		//Debug aid: the answer itself, decodable offline with libnice.
 		static int s_answerTrace = 0;
 		if (s_answerTrace < 3)
@@ -729,7 +892,8 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 		remote.componentId = AComponent;
 		remote.address = AFrom.toString();
 		remote.port = APort;
-		updateNominated(remote, AComponent);
+		remote.type = AViaRelay ? QStringLiteral("relay") : QStringLiteral("prflx");
+		updateNominated(remote, AComponent, AViaRelay);
 	}
 }
 
@@ -819,12 +983,16 @@ void IceAgent::handleStunResponse(const QByteArray &AData, int AComponent)
 	}
 }
 
-void IceAgent::updateNominated(const IceCandidate &ARemote, int AComponent)
+void IceAgent::updateNominated(const IceCandidate &ARemote, int AComponent, bool AViaRelay)
 {
-	//Controlled role: the controlling peer tells us which pair to use
+	//Controlled role: the controlling peer tells us which pair to use. The
+	//nomination arrived over a concrete path, so only pairs using the same
+	//path may win - a relay nomination must not mark a direct pair (and vice
+	//versa), the media would leave through the wrong socket.
 	for (CheckPair &pair : FCheckPairs)
 	{
 		if (pair.local.componentId == AComponent &&
+			pair.local.isRelay() == AViaRelay &&
 			pair.remote.address == ARemote.address && pair.remote.port == ARemote.port)
 			pair.nominated = true;
 	}
@@ -846,21 +1014,72 @@ void IceAgent::updateNominated(const IceCandidate &ARemote, int AComponent)
 	}
 }
 
+int IceAgent::bestPairIndex(int AComponent) const
+{
+	//Prefer the most direct local path (host > srflx > relay), then the RFC 8445
+	//pair priority. The pair priority alone cannot express the path preference:
+	//a relay-local pair against a host remote and a host-local pair against a
+	//relay remote both reduce to 2 * max(priority) there.
+	int best = -1;
+	int bestPreference = -1;
+	quint64 bestPriority = 0;
+	for (int i = 0; i < FCheckPairs.count(); ++i)
+	{
+		const CheckPair &pair = FCheckPairs.at(i);
+		if (pair.local.componentId != AComponent || !pair.verified)
+			continue;
+		if (FForceRelay && !pair.local.isRelay())
+			continue;
+
+		const quint32 controllingPriority = FControlling ? pair.local.priority : pair.remote.priority;
+		const quint32 controlledPriority = FControlling ? pair.remote.priority : pair.local.priority;
+		const quint64 priority = (quint64(qMin(controllingPriority, controlledPriority)) << 32) +
+			2 * quint64(qMax(controllingPriority, controlledPriority)) +
+			(controllingPriority > controlledPriority ? 1 : 0);
+
+		const int preference = typePreference(pair.local.type);
+		if (preference > bestPreference || (preference == bestPreference && priority > bestPriority))
+		{
+			best = i;
+			bestPreference = preference;
+			bestPriority = priority;
+		}
+	}
+	return best;
+}
+
 void IceAgent::tryNominate()
 {
 	if (FConnected || !FControlling)
 		return;
 
-	//Nominate every pair that already passed a check. Requiring a verified pair for each
-	//component the peer advertised is wrong: with rtcp-mux the peer lists component-2
-	//candidates but never makes component 2 usable, and the call would never start.
+	//Nominate the best verified pair per component. A component may have several
+	//verified pairs (host and srflx share one socket; relay is a second path),
+	//nominating all of them would send every media packet twice.
 	bool nominated = false;
-	for (CheckPair &pair : FCheckPairs)
+	for (int component : {1, 2})
 	{
-		if (!pair.verified)
+		bool alreadyNominated = false;
+		for (const CheckPair &pair : FCheckPairs)
+		{
+			if (pair.local.componentId == component && pair.nominated)
+			{
+				alreadyNominated = true;
+				break;
+			}
+		}
+		if (alreadyNominated)
 			continue;
+
+		const int index = bestPairIndex(component);
+		if (index < 0)
+			continue;
+
+		CheckPair &pair = FCheckPairs[index];
 		if (FTrace < 80)
-			LOG_INFO(QString("IceAgent: nominating %1:%2 comp=%3").arg(pair.remote.address).arg(pair.remote.port).arg(pair.local.componentId));
+			LOG_INFO(QString("IceAgent: nominating %1:%2 comp=%3 local=%4 type=%5").
+				arg(pair.remote.address).arg(pair.remote.port).arg(component).
+				arg(pair.local.address).arg(pair.local.type));
 		sendCheck(pair, true);
 		pair.nominated = true;
 		nominated = true;
@@ -884,6 +1103,33 @@ void IceAgent::onCheckTimer()
 		return;
 
 	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+	//Server-reflexive gathering request retransmission (RFC 5389 7.2.1)
+	if (FStunPending && !FStunTransactionId.isEmpty() && FRtpSocket != nullptr)
+	{
+		if (now - FStunLastSent > FStunRtoMs)
+		{
+			if (FStunAttempts >= 7)
+			{
+				LOG_WARNING(QString("IceAgent: STUN server %1:%2 did not answer the srflx request").
+					arg(FStunServer.toString()).arg(FStunPort));
+				FStunTransactionId.clear();
+				FStunPacket.clear();
+				FStunPending = false;
+				if (!FTurnPending)
+					finishGathering();
+			}
+			else
+			{
+				FRtpSocket->writeDatagram(FStunPacket, FStunServer, FStunPort);
+				++FStunAttempts;
+				FStunRtoMs = qMin<qint64>(FStunRtoMs * 2, 1600);
+				FStunLastSent = now;
+				if (FTrace < 80)
+					LOG_DEBUG(QString("IceAgent: retransmit srflx request attempt=%1").arg(FStunAttempts));
+			}
+		}
+	}
 
 	if (FConnected)
 	{
@@ -920,10 +1166,8 @@ void IceAgent::onCheckTimer()
 				pair.rtoMs = CheckIntervalMs;
 				continue;
 			}
-			QUdpSocket *socket = socketForComponent(pair.local.componentId);
-			if (socket && !pair.lastPacket.isEmpty())
+			if (!pair.lastPacket.isEmpty() && sendPairPacket(pair, pair.lastPacket))
 			{
-				socket->writeDatagram(pair.lastPacket, QHostAddress(pair.remote.address), pair.remote.port);
 				++pair.attempts;
 				pair.rtoMs = qMin<qint64>(pair.rtoMs * 2, 1600);
 				pair.lastSent = now;
@@ -936,4 +1180,181 @@ void IceAgent::onCheckTimer()
 		if (now - pair.lastSent > CheckIntervalMs * 2)
 			sendCheck(pair, false);
 	}
+}
+
+void IceAgent::startNatGathering()
+{
+	FGathering = true;
+	FGatheringFinished = false;
+	FStunPending = FNatConfig.hasStun() && !FNatConfig.forceRelay;
+	FTurnPending = FNatConfig.hasTurn();
+
+	if (!FStunPending && !FTurnPending)
+	{
+		finishGathering();
+		return;
+	}
+
+	//Hard upper bound: a call must not stall when a NAT server is unreachable.
+	//The session also caps its own wait, this only keeps the agent honest.
+	FGatherTimer = new QTimer(this);
+	FGatherTimer->setSingleShot(true);
+	FGatherTimer->setInterval(2500);
+	connect(FGatherTimer, &QTimer::timeout, this, &IceAgent::finishGathering);
+	FGatherTimer->start();
+
+	if (FStunPending)
+	{
+		LOG_INFO(QString("IceAgent: gathering srflx candidate from STUN %1:%2").arg(FNatConfig.stunHost).arg(FNatConfig.stunPort));
+		QHostInfo::lookupHost(FNatConfig.stunHost, this, [this](const QHostInfo &AInfo) {
+			if (!FStarted || !FStunPending)
+				return;
+			QHostAddress address;
+			for (const QHostAddress &candidate : AInfo.addresses())
+			{
+				if (candidate.protocol() == QAbstractSocket::IPv4Protocol)
+				{
+					address = candidate;
+					break;
+				}
+			}
+			if (address.isNull())
+			{
+				LOG_WARNING(QString("IceAgent: failed to resolve STUN server '%1': %2").arg(FNatConfig.stunHost, AInfo.errorString()));
+				FStunPending = false;
+				if (!FTurnPending)
+					finishGathering();
+				return;
+			}
+			onStunServerResolved(address);
+		});
+	}
+
+	if (FTurnPending)
+	{
+		LOG_INFO(QString("IceAgent: allocating relay candidate on TURN %1:%2 (credentials %3)").
+			arg(FNatConfig.turnHost).arg(FNatConfig.turnPort).
+			arg(FNatConfig.turnUsername.isEmpty() ? "none" : "present"));
+		FTurn = new TurnClient(this);
+		FTurn->setServer(FNatConfig.turnHost, FNatConfig.turnPort);
+		FTurn->setCredentials(FNatConfig.turnUsername, FNatConfig.turnPassword);
+		connect(FTurn, &TurnClient::allocated, this, &IceAgent::onTurnAllocated);
+		connect(FTurn, &TurnClient::failed, this, &IceAgent::onTurnFailed);
+		connect(FTurn, &TurnClient::dataReceived, this, &IceAgent::onTurnData);
+		if (!FTurn->start())
+		{
+			FTurnPending = false;
+			if (!FStunPending)
+				finishGathering();
+		}
+	}
+}
+
+void IceAgent::onStunServerResolved(const QHostAddress &AAddress)
+{
+	if (!FStarted || !FStunPending || FRtpSocket == nullptr)
+		return;
+
+	FStunServer = AAddress;
+	FStunPort = FNatConfig.stunPort;
+	FStunTransactionId = Stun::transactionId();
+	FStunPacket = Stun::buildMessage(Stun::BindingRequest, FStunTransactionId,
+		QList<Stun::Attribute>() << Stun::Attribute(Stun::AttributeSoftware, QByteArray("Vacuum-IM")));
+	FStunAttempts = 1;
+	FStunRtoMs = CheckIntervalMs;
+	FStunLastSent = QDateTime::currentMSecsSinceEpoch();
+	FRtpSocket->writeDatagram(FStunPacket, FStunServer, FStunPort);
+	LOG_DEBUG(QString("IceAgent: srflx request sent to %1:%2 txn=%3").
+		arg(FStunServer.toString()).arg(FStunPort).arg(QString(FStunTransactionId.toHex())));
+}
+
+void IceAgent::onTurnAllocated(const QHostAddress &ARelayAddress, quint16 ARelayPort)
+{
+	FTurnPending = false;
+	if (!FStarted)
+		return;
+
+	IceCandidate candidate;
+	candidate.componentId = 1;
+	candidate.address = ARelayAddress.toString();
+	candidate.port = ARelayPort;
+	candidate.type = QStringLiteral("relay");
+	candidate.priority = candidatePriority("relay", 1, 0);
+	for (const IceCandidate &local : FLocalCandidates)
+	{
+		if (local.componentId == 1)
+		{
+			candidate.relatedAddress = local.address;
+			candidate.relatedPort = local.port;
+			break;
+		}
+	}
+
+	FLocalCandidates.append(candidate);
+	LOG_INFO(QString("IceAgent: relay candidate %1:%2 (related %3:%4) gathered from TURN").
+		arg(candidate.address).arg(candidate.port).arg(candidate.relatedAddress).arg(candidate.relatedPort));
+	emit candidateGathered(candidate);
+
+	if (!FStunPending)
+		finishGathering();
+}
+
+void IceAgent::onTurnFailed(const QString &AReason)
+{
+	FTurnPending = false;
+	LOG_WARNING(QString("IceAgent: TURN relay unavailable: %1").arg(AReason));
+	if (FForceRelay)
+		LOG_WARNING(QString("IceAgent: relay-only mode is enabled and TURN failed, the call cannot be established"));
+	if (!FStunPending)
+		finishGathering();
+}
+
+void IceAgent::onTurnData(const QByteArray &AData, const QHostAddress &APeerAddress, quint16 APeerPort)
+{
+	if (!FStarted)
+		return;
+
+	QPointer<IceAgent> self(this);
+	FLastActivityMs = QDateTime::currentMSecsSinceEpoch();
+
+	if (isStunData(AData))
+	{
+		const quint16 type = qFromBigEndian<quint16>(AData.constData());
+		if (type == StunBindingRequest)
+			handleStunRequest(AData, APeerAddress, APeerPort, 1, true);
+		else if (type == StunBindingSuccess || type == StunBindingError)
+			handleStunResponse(AData, 1);
+		return;
+	}
+
+	if (FTrace < 80)
+		LOG_DEBUG(QString("IceAgent: media datagram %1 bytes from %2:%3 via relay").arg(AData.size()).arg(APeerAddress.toString()).arg(APeerPort));
+	emit mediaReceived(AData, 1);
+}
+
+void IceAgent::finishGathering()
+{
+	if (FGatheringFinished)
+		return;
+
+	FGatheringFinished = true;
+	FGathering = false;
+
+	if (FGatherTimer != nullptr)
+	{
+		FGatherTimer->stop();
+		FGatherTimer->disconnect(this);
+		FGatherTimer->deleteLater();
+		FGatherTimer = nullptr;
+	}
+
+	LOG_INFO(QString("IceAgent: gathering finished, %1 local candidates: %2").
+		arg(localCandidates().count()).
+		arg([this]() {
+			QStringList list;
+			for (const IceCandidate &candidate : localCandidates())
+				list << QString("%1/%2:%3").arg(candidate.type).arg(candidate.address).arg(candidate.port);
+			return list.join(", ");
+		}()));
+	emit gatheringFinished();
 }

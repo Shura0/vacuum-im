@@ -12,6 +12,7 @@
 #include "mediaengine.h"
 
 class Jingle;
+class QTimer;
 
 class JingleSession :
 	public QObject
@@ -61,8 +62,16 @@ private:
 	void addContentElement(QDomElement &AJingleElem) const;
 	void addDescription(QDomElement &AContentElem) const;
 	void addTransport(QDomElement &AContentElem) const;
+	void appendCandidateElement(QDomElement &ATransportElem, const IceCandidate &ACandidate) const;
+	void addTransportInfo(QDomElement &AJingleElem, const IceCandidate &ACandidate) const;
 	void addReason(QDomElement &AJingleElem, const QString &ACode, const QString &AText) const;
 	void processContentElem(const QDomElement &AContentElem);
+	void continueInitiate(bool AForce = false);
+	void continueAnswer(bool AForce = false);
+	void armGatherWait();
+	void onGatheringFinished();
+	void onGatherWaitTimeout();
+	void onCandidateGathered(const IceCandidate &ACandidate);
 	QString ourDtlsSetup() const;
 	void applyDtlsClientRole();
 	QString reasonText(const QString &AReason) const;
@@ -83,6 +92,10 @@ private:
 	Jingle *FJingle;
 	CallWindow *FWindow;
 	MediaEngine *FMediaEngine;
+	QTimer *FGatherTimer;
+	bool FOfferPending;
+	bool FAnswerPending;
+	bool FTransportSent;
 
 	QString FPeerFingerprint;
 	QString FPeerDtlsSetup;

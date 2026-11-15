@@ -14,6 +14,7 @@
 #include <interfaces/ixmppstreammanager.h>
 
 #include "jinglesession.h"
+#include "natservice.h"
 
 #define JINGLE_UUID "DB64AD0A-5ED3-450D-AC1A-FC4F7745F8D5"
 
@@ -63,6 +64,9 @@ public:
 	Stanza makeResultReply(const Stanza &AStanza) const;
 	Stanza makeErrorReply(const Stanza &AStanza, const XmppStanzaError &AError) const;
 	QString peerName(const Jid &AStreamJid, const Jid &AContactJid) const;
+	//Effective STUN/TURN configuration for a stream: the manual options first,
+	//then the services discovered with XEP-0215.
+	NatConfig natConfig(const Jid &AStreamJid) const;
 signals:
 	// IJingle notifications
 	void callStarted(const Jid &AStreamJid, const Jid &AContactJid, const QString &ASid);
@@ -80,6 +84,11 @@ private:
 	JingleSession *findSession(const Jid &AStreamJid, const QString &ASid) const;
 	JingleSession *findActiveSession(const Jid &AStreamJid, const Jid &AContactJid) const;
 	bool processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza, const QDomElement &AJingleElem, bool &AAccept);
+	bool processNatPush(const Jid &AStreamJid, const Stanza &AStanza, bool &AAccept);
+	void requestNatServices(const Jid &AStreamJid);
+	void requestNatCredentials(const Jid &AStreamJid, const NatService &AService);
+	void onNatServicesResult(const Jid &AStreamJid, const Stanza &AStanza);
+	void onNatCredentialsResult(const Jid &AStreamJid, const Stanza &AStanza, const NatService &AService);
 	void removeSession(JingleSession *ASession);
 	JingleSession *createSession(const Jid &AStreamJid, const Jid &AContactJid, const Jid &ALocalJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated);
 private:
@@ -92,6 +101,9 @@ private:
 	QHash<Jid, QList<int> > FStanzaHandles;    //streamJid -> registered stanza handle ids
 	QList<JingleSession *> FSessions;
 	QHash<QString, QString> FPendingRequests;  //iq id -> sid of a pending session-initiate
+	QHash<QString, QList<NatService> > FNatServices; //stream full jid -> known external services
+	QHash<QString, Jid> FNatServiceRequests;   //iq id -> stream full jid of a discovery request
+	QHash<QString, NatService> FNatCredentialRequests; //iq id -> service awaiting credentials
 };
 
 #endif // JINGLE_H

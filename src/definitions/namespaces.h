@@ -120,4 +120,7 @@
 #define NS_JINGLE_APPS_DTLS                               "urn:xmpp:jingle:apps:dtls:0"
 #define NS_JINGLE_TRANSPORTS_ICEUDP                       "urn:xmpp:jingle:transports:ice-udp:1"
 
+// External services (XEP-0215), used to discover STUN/TURN servers
+#define NS_EXTERNAL_SERVICES                              "urn:xmpp:extdisco:2"
+
 #endif // DEF_NAMESPACES_H

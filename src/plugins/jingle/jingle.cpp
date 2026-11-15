@@ -1,4 +1,5 @@
 #include "jingle.h"
+#include "callsoptionswidget.h"
 
 #include <QDomDocument>
 
@@ -19,6 +20,7 @@
 #include <definitions/stanzahandlerorders.h>
 
 #define SHC_JINGLE_IQ  "/iq[@type='set']/jingle[@xmlns='" NS_JINGLE "']"
+#define SHC_EXTDISCO_IQ  "/iq[@type='set']/services[@xmlns='" NS_EXTERNAL_SERVICES "']"
 
 #define ADR_STREAM_JID            Action::DR_StreamJid
 #define ADR_CONTACT_JID           Action::DR_Parametr1
@@ -143,12 +145,18 @@ bool Jingle::initSettings()
 {
 	Options::setDefaultValue(OPV_JINGLE_ENABLED, true);
 	Options::setDefaultValue(OPV_JINGLE_ALLOWUNKNOWN, false);
+	Options::setDefaultValue(OPV_JINGLE_STUN_SERVER, QString());
+	Options::setDefaultValue(OPV_JINGLE_TURN_SERVER, QString());
+	Options::setDefaultValue(OPV_JINGLE_TURN_USERNAME, QString());
+	Options::setDefaultValue(OPV_JINGLE_TURN_PASSWORD, QString());
+	Options::setDefaultValue(OPV_JINGLE_USE_DISCOVERY, true);
+	Options::setDefaultValue(OPV_JINGLE_FORCE_RELAY, false);
 	return true;
 }
 
 bool Jingle::isSupported(const Jid &AStreamJid, const Jid &AContactJid) const
 {
-	if (FDiscovery && AStreamJid.isValid() && AContactJid.isValid() && Options::fileValue(OPV_JINGLE_ENABLED).toBool())
+	if (FDiscovery && AStreamJid.isValid() && AContactJid.isValid() && Options::node(OPV_JINGLE_ENABLED).value().toBool())
 		return FDiscovery->checkDiscoFeature(AStreamJid, AContactJid, NS_JINGLE_APPS_RTP);
 	return false;
 }
@@ -230,7 +238,7 @@ bool Jingle::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStan
 
 	QDomElement jingleElem = AStanza.firstElement("jingle", NS_JINGLE);
 	if (jingleElem.isNull())
-		return false;
+		return processNatPush(AStreamJid, AStanza, AAccept);
 
 	const QString action = jingleElem.attribute("action");
 	const QString sid = jingleElem.attribute("sid");
@@ -272,6 +280,21 @@ bool Jingle::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStan
 
 void Jingle::stanzaRequestResult(const Jid &AStreamJid, const Stanza &AStanza)
 {
+	//XEP-0215 discovery and credential requests share the request owner with the
+	//session-initiate acknowledgements
+	if (FNatServiceRequests.contains(AStanza.id()))
+	{
+		const Jid streamJid = FNatServiceRequests.take(AStanza.id());
+		onNatServicesResult(streamJid, AStanza);
+		return;
+	}
+	if (FNatCredentialRequests.contains(AStanza.id()))
+	{
+		const NatService service = FNatCredentialRequests.take(AStanza.id());
+		onNatCredentialsResult(AStreamJid, AStanza, service);
+		return;
+	}
+
 	const QString sid = FPendingRequests.take(AStanza.id());
 	if (sid.isEmpty())
 		return;
@@ -322,8 +345,7 @@ QMultiMap<int, IOptionsDialogWidget *> Jingle::optionsDialogWidgets(const QStrin
 	if (FOptionsManager && ANodeId == OPN_CALLS)
 	{
 		widgets.insert(OHO_CALLS_SETTINGS, FOptionsManager->newOptionsDialogHeader(tr("Voice and video calls"), AParent));
-		widgets.insert(OWO_CALLS_ENABLED, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_JINGLE_ENABLED), tr("Enable voice and video calls"), AParent));
-		widgets.insert(OWO_CALLS_ALLOWUNKNOWN, FOptionsManager->newOptionsDialogWidget(Options::node(OPV_JINGLE_ALLOWUNKNOWN), tr("Allow calls from not authorized contacts"), AParent));
+		widgets.insert(OWO_CALLS_ENABLED, new CallsOptionsWidget(AParent));
 	}
 	return widgets;
 }
@@ -369,6 +391,239 @@ QString Jingle::peerName(const Jid &AStreamJid, const Jid &AContactJid) const
 	return AContactJid.bare();
 }
 
+//Accepts "host", "host:port", "turn:host:port" and "turn://host:port"; the
+//default port is the RFC 5766 one (3478).
+static bool parseServerSetting(const QString &ASetting, QString &AHost, quint16 &APort)
+{
+	QString value = ASetting.trimmed();
+	if (value.isEmpty())
+		return false;
+
+	const int schemeEnd = value.indexOf("://");
+	if (schemeEnd >= 0)
+		value = value.mid(schemeEnd + 3);
+	else if (value.startsWith("turn:") || value.startsWith("stun:"))
+		value = value.mid(5);
+
+	const int colon = value.lastIndexOf(':');
+	if (colon > 0 && value.indexOf(':') == colon)
+	{
+		AHost = value.left(colon).trimmed();
+		APort = quint16(value.mid(colon + 1).toUShort());
+	}
+	else
+	{
+		AHost = value;
+		APort = 0;
+	}
+	if (APort == 0)
+		APort = 3478;
+	return !AHost.isEmpty();
+}
+
+NatConfig Jingle::natConfig(const Jid &AStreamJid) const
+{
+	NatConfig config;
+	config.forceRelay = Options::node(OPV_JINGLE_FORCE_RELAY).value().toBool();
+
+	//Manual settings take precedence over the discovered services
+	parseServerSetting(Options::node(OPV_JINGLE_STUN_SERVER).value().toString(), config.stunHost, config.stunPort);
+	parseServerSetting(Options::node(OPV_JINGLE_TURN_SERVER).value().toString(), config.turnHost, config.turnPort);
+	if (config.hasTurn())
+	{
+		config.turnUsername = Options::node(OPV_JINGLE_TURN_USERNAME).value().toString();
+		config.turnPassword = Options::node(OPV_JINGLE_TURN_PASSWORD).value().toString();
+	}
+
+	if (!config.hasStun() || !config.hasTurn())
+	{
+		const QList<NatService> services = FNatServices.value(AStreamJid.full());
+		if (!config.hasStun())
+		{
+			for (const NatService &service : services)
+			{
+				if (NatDiscovery::isUsableStun(service))
+				{
+					config.stunHost = service.host;
+					config.stunPort = service.port;
+					break;
+				}
+			}
+		}
+		if (!config.hasTurn())
+		{
+			//Prefer a relay we already have credentials for (restricted services
+			//answer a separate credential request), fall back to an open one
+			NatService chosen;
+			bool found = false;
+			for (const NatService &service : services)
+			{
+				if (NatDiscovery::isUsableTurn(service) && !service.username.isEmpty())
+				{
+					chosen = service;
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+			{
+				for (const NatService &service : services)
+				{
+					if (NatDiscovery::isUsableTurn(service))
+					{
+						chosen = service;
+						found = true;
+						break;
+					}
+				}
+			}
+			if (found)
+			{
+				config.turnHost = chosen.host;
+				config.turnPort = chosen.port;
+				config.turnUsername = chosen.username;
+				config.turnPassword = chosen.password;
+			}
+		}
+	}
+
+	if (config.hasStun() || config.hasTurn())
+	{
+		LOG_DEBUG(QString("Jingle: NAT config for %1: stun=%2:%3 turn=%4:%5 forceRelay=%6").
+			arg(AStreamJid.full()).
+			arg(config.stunHost).arg(config.stunPort).
+			arg(config.turnHost).arg(config.turnPort).arg(config.forceRelay));
+	}
+	return config;
+}
+
+void Jingle::requestNatServices(const Jid &AStreamJid)
+{
+	if (!Options::node(OPV_JINGLE_USE_DISCOVERY).value().toBool())
+		return;
+
+	Stanza request(STANZA_KIND_IQ);
+	request.setType(STANZA_TYPE_GET);
+	request.setTo(AStreamJid.domain());
+	request.setUniqueId();
+	request.addElement("services", NS_EXTERNAL_SERVICES);
+
+	FNatServiceRequests.insert(request.id(), AStreamJid);
+	FStanzaProcessor->sendStanzaRequest(this, AStreamJid, request, JINGLE_INITIATE_TIMEOUT);
+	LOG_STRM_DEBUG(AStreamJid, QString("Requested external services (XEP-0215)"));
+}
+
+void Jingle::requestNatCredentials(const Jid &AStreamJid, const NatService &AService)
+{
+	Stanza request(STANZA_KIND_IQ);
+	request.setType(STANZA_TYPE_GET);
+	request.setTo(AStreamJid.domain());
+	request.setUniqueId();
+	QDomElement credentialsElem = request.addElement("credentials", NS_EXTERNAL_SERVICES);
+	QDomElement serviceElem = credentialsElem.ownerDocument().createElement("service");
+	serviceElem.setAttribute("type", AService.type);
+	serviceElem.setAttribute("host", AService.host);
+	serviceElem.setAttribute("port", QString::number(AService.port));
+	serviceElem.setAttribute("transport", AService.transport.isEmpty() ? QStringLiteral("udp") : AService.transport);
+	credentialsElem.appendChild(serviceElem);
+
+	FNatCredentialRequests.insert(request.id(), AService);
+	FStanzaProcessor->sendStanzaRequest(this, AStreamJid, request, JINGLE_INITIATE_TIMEOUT);
+	LOG_STRM_DEBUG(AStreamJid, QString("Requested credentials for the TURN service %1").arg(NatDiscovery::describe(AService)));
+}
+
+void Jingle::onNatServicesResult(const Jid &AStreamJid, const Stanza &AStanza)
+{
+	if (AStanza.isError())
+	{
+		const XmppStanzaError error(AStanza);
+		LOG_STRM_WARNING(AStreamJid, QString("External service discovery failed: %1").arg(error.condition()));
+		return;
+	}
+
+	const QDomElement servicesElem = AStanza.firstElement("services", NS_EXTERNAL_SERVICES);
+	if (servicesElem.isNull())
+		return;
+
+	QList<NatService> services = NatDiscovery::parseServices(servicesElem);
+	FNatServices[AStreamJid.full()] = services;
+
+	QStringList described;
+	for (const NatService &service : services)
+		described << NatDiscovery::describe(service);
+	LOG_STRM_INFO(AStreamJid, QString("External services discovered: %1").arg(described.join("; ")));
+
+	for (const NatService &service : services)
+	{
+		if (NatDiscovery::isUsableTurn(service) && service.restricted && service.username.isEmpty())
+			requestNatCredentials(AStreamJid, service);
+	}
+}
+
+void Jingle::onNatCredentialsResult(const Jid &AStreamJid, const Stanza &AStanza, const NatService &AService)
+{
+	if (AStanza.isError())
+	{
+		const XmppStanzaError error(AStanza);
+		LOG_STRM_WARNING(AStreamJid, QString("Failed to get credentials for the TURN service %1: %2").
+			arg(NatDiscovery::describe(AService), error.condition()));
+		return;
+	}
+
+	const QDomElement credentialsElem = AStanza.firstElement("credentials", NS_EXTERNAL_SERVICES);
+	if (credentialsElem.isNull())
+		return;
+
+	const QList<NatService> credentials = NatDiscovery::parseCredentials(credentialsElem);
+	QList<NatService> &services = FNatServices[AStreamJid.full()];
+	for (const NatService &credential : credentials)
+	{
+		for (NatService &cached : services)
+		{
+			const bool sameService = NatDiscovery::serviceKey(cached) == NatDiscovery::serviceKey(credential);
+			const bool sameKeyAsRequest = NatDiscovery::serviceKey(cached) == NatDiscovery::serviceKey(AService);
+			if (sameService || (credentials.count() == 1 && sameKeyAsRequest))
+			{
+				cached.username = credential.username;
+				cached.password = credential.password;
+				cached.expires = credential.expires;
+				LOG_STRM_INFO(AStreamJid, QString("TURN credentials received for %1, expires %2").
+					arg(NatDiscovery::describe(cached), cached.expires.isValid() ? cached.expires.toString(Qt::ISODate) : QString("never")));
+			}
+		}
+	}
+}
+
+bool Jingle::processNatPush(const Jid &AStreamJid, const Stanza &AStanza, bool &AAccept)
+{
+	const QDomElement servicesElem = AStanza.firstElement("services", NS_EXTERNAL_SERVICES);
+	if (servicesElem.isNull())
+		return false;
+
+	AAccept = true;
+	Stanza result = FStanzaProcessor->makeReplyResult(AStanza);
+	FStanzaProcessor->sendStanzaOut(AStreamJid, result);
+
+	const Jid from = AStanza.fromJid();
+	if (from.isValid() && from.domain() != AStreamJid.domain())
+	{
+		LOG_STRM_WARNING(AStreamJid, QString("Ignoring an external services push from %1").arg(from.full()));
+		return true;
+	}
+
+	QList<NatService> &services = FNatServices[AStreamJid.full()];
+	const QList<NatService> update = NatDiscovery::parseServices(servicesElem);
+	NatDiscovery::applyUpdate(services, update);
+	LOG_STRM_INFO(AStreamJid, QString("External services push applied (%1 entries)").arg(update.count()));
+
+	for (const NatService &service : services)
+	{
+		if (NatDiscovery::isUsableTurn(service) && service.restricted && service.username.isEmpty())
+			requestNatCredentials(AStreamJid, service);
+	}
+	return true;
+}
+
 void Jingle::onStreamOpened(IXmppStream *AXmppStream)
 {
 	IStanzaHandle shandle;
@@ -377,8 +632,11 @@ void Jingle::onStreamOpened(IXmppStream *AXmppStream)
 	shandle.direction = IStanzaHandle::DirectionIn;
 	shandle.streamJid = AXmppStream->streamJid();
 	shandle.conditions.append(SHC_JINGLE_IQ);
+	shandle.conditions.append(SHC_EXTDISCO_IQ);
 
 	FStanzaHandles[shandle.streamJid].append(FStanzaProcessor->insertStanzaHandle(shandle));
+
+	requestNatServices(shandle.streamJid);
 }
 
 void Jingle::onStreamClosed(IXmppStream *AXmppStream)
@@ -387,6 +645,15 @@ void Jingle::onStreamClosed(IXmppStream *AXmppStream)
 
 	foreach(int handleId, FStanzaHandles.take(streamJid))
 		FStanzaProcessor->removeStanzaHandle(handleId);
+
+	FNatServices.remove(streamJid.full());
+	for (auto it = FNatServiceRequests.begin(); it != FNatServiceRequests.end(); )
+	{
+		if (it.value() == streamJid)
+			it = FNatServiceRequests.erase(it);
+		else
+			++it;
+	}
 
 	QList<JingleSession *> streamSessions;
 	foreach(JingleSession *session, FSessions)
@@ -430,7 +697,7 @@ bool Jingle::processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza
 
 	AAccept = true;
 
-	if (!Options::fileValue(OPV_JINGLE_ENABLED).toBool())
+	if (!Options::node(OPV_JINGLE_ENABLED).value().toBool())
 	{
 		Stanza error = FStanzaProcessor->makeReplyError(AStanza, XmppStanzaError(XmppStanzaError::EC_SERVICE_UNAVAILABLE, tr("Calls are disabled")));
 		FStanzaProcessor->sendStanzaOut(AStreamJid, error);
@@ -464,7 +731,7 @@ bool Jingle::processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza
 		}
 	}
 
-	if (!Options::fileValue(OPV_JINGLE_ALLOWUNKNOWN).toBool() && !isAuthorized)
+	if (!Options::node(OPV_JINGLE_ALLOWUNKNOWN).value().toBool() && !isAuthorized)
 	{
 		LOG_STRM_WARNING(AStreamJid, QString("Declining call from not authorized contact %1").arg(contactJid.bare()));
 		Stanza result = FStanzaProcessor->makeReplyResult(AStanza);

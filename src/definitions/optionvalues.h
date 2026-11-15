@@ -110,6 +110,12 @@
 #define OPV_JINGLE_ROOT                                       "jingle"
 #define OPV_JINGLE_ENABLED                                    "jingle.enabled"
 #define OPV_JINGLE_ALLOWUNKNOWN                               "jingle.allow-unknown"
+#define OPV_JINGLE_STUN_SERVER                                "jingle.stun-server"
+#define OPV_JINGLE_TURN_SERVER                                "jingle.turn-server"
+#define OPV_JINGLE_TURN_USERNAME                              "jingle.turn-username"
+#define OPV_JINGLE_TURN_PASSWORD                              "jingle.turn-password"
+#define OPV_JINGLE_USE_DISCOVERY                              "jingle.use-discovery"
+#define OPV_JINGLE_FORCE_RELAY                                "jingle.force-relay"
 // Emoticons
 #define OPV_MESSAGES_EMOTICONS_ICONSET                  "messages.emoticons.iconset"
 #define OPV_MESSAGES_EMOTICONS_MAXINMESSAGE             "messages.emoticons.max-in-message"
