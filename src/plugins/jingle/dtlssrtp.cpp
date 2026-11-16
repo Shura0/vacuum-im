@@ -152,6 +152,13 @@ bool DtlsSrtp::start(bool AAsClient)
 {
 	if (!Fssl || FState == StateConnecting || FState == StateConnected)
 		return false;
+	if (FPeerFingerprint.isEmpty())
+	{
+		//Starting without it means the certificate check cannot pass and, worse, the
+		//role guess usually makes both sides the DTLS client.
+		LOG_WARNING("DtlsSrtp: refusing to start a handshake without the peer fingerprint");
+		return false;
+	}
 
 	FAsClient = AAsClient;
 	if (FAsClient)

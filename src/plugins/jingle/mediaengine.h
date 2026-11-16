@@ -56,6 +56,9 @@ public:
 	bool isAudioActive() const;
 	//DTLS role: we are the client when our advertised/adopted setup attribute is "active"
 	void setDtlsClientRole(bool AAsClient);
+	//Peer DTLS parameters from the session-accept: the handshake cannot start without
+	//them, and as the offerer they may arrive after ICE has already connected.
+	void applyDtlsParameters(bool AAsClient, const QString &APeerFingerprint);
 
 signals:
 	void iceConnected();
@@ -122,6 +125,8 @@ private:
 	AudioConverter FPlaybackConverter; //Opus (48 kHz, stereo) -> device format
 
 	bool FAsDtlsClient;
+	bool FRemoteParamsReady;
+	bool FIceConnected;
 	bool FAudioActive;
 	bool FFailPending;
 };

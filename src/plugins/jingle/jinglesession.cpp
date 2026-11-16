@@ -885,8 +885,7 @@ void JingleSession::applyDtlsClientRole()
 	//XEP-0359: the side that ends up with setup="active" is the DTLS client.
 	//As the offerer we are the client only if the peer's answer was "passive".
 	const bool asClient = FInitiated ? (FPeerDtlsSetup == "passive") : (FPeerDtlsSetup != "active");
-	FMediaEngine->setDtlsClientRole(asClient);
-	FMediaEngine->dtlsSrtp()->setPeerFingerprint(FPeerFingerprint);
+	FMediaEngine->applyDtlsParameters(asClient, FPeerFingerprint);
 }
 
 QString JingleSession::reasonText(const QString &AReason) const

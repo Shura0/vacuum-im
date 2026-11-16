@@ -58,6 +58,8 @@ MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 	FFirstPacket = true;
 	FAudioActive = false;
 	FAsDtlsClient = true;
+	FRemoteParamsReady = false;
+	FIceConnected = false;
 	FFailPending = false;
 
 	FPeerReportLogged = false;
@@ -88,8 +90,17 @@ bool MediaEngine::initialize()
 	FDtlsSrtp = new DtlsSrtp(this);
 
 	connect(FIceAgent, &IceAgent::connected, this, [this]() {
-		LOG_INFO(QString("MediaEngine: ICE connected, DTLS starting as %1").arg(FAsDtlsClient ? "client" : "server"));
+		FIceConnected = true;
 		emit iceConnected();
+		//As the offerer ICE can finish before the session-accept arrives. The answer
+		//carries the peer's fingerprint and the final setup role, and guessing either
+		//one makes both sides pick the same DTLS role and the handshake die instantly.
+		if (!FRemoteParamsReady)
+		{
+			LOG_INFO("MediaEngine: ICE connected, waiting for the peer's DTLS parameters before the handshake");
+			return;
+		}
+		LOG_INFO(QString("MediaEngine: ICE connected, DTLS starting as %1").arg(FAsDtlsClient ? "client" : "server"));
 		FDtlsSrtp->start(FAsDtlsClient);
 	});
 	connect(FIceAgent, &IceAgent::disconnected, this, &MediaEngine::onIceDisconnected);
@@ -211,6 +222,20 @@ void MediaEngine::setRemoteCodec(int APayloadType, int AClockrate)
 void MediaEngine::setDtlsClientRole(bool AAsClient)
 {
 	FAsDtlsClient = AAsClient;
+}
+
+void MediaEngine::applyDtlsParameters(bool AAsClient, const QString &APeerFingerprint)
+{
+	FAsDtlsClient = AAsClient;
+	FDtlsSrtp->setPeerFingerprint(APeerFingerprint);
+	FRemoteParamsReady = true;
+
+	//ICE may already be connected when the answer finally arrives
+	if (FIceConnected && FDtlsSrtp->state() != DtlsSrtp::StateConnected && FDtlsSrtp->state() != DtlsSrtp::StateConnecting)
+	{
+		LOG_INFO(QString("MediaEngine: DTLS parameters applied, starting handshake as %1").arg(FAsDtlsClient ? "client" : "server"));
+		FDtlsSrtp->start(FAsDtlsClient);
+	}
 }
 
 void MediaEngine::startIce(bool AControlling)
