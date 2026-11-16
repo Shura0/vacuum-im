@@ -536,6 +536,8 @@ void JingleSession::setState(IJingle::CallState AState)
 		FWindow->setTimerActive(false);
 		break;
 	case IJingle::CallActive:
+		if (!FActiveSince.isValid())
+			FActiveSince = QDateTime::currentDateTime();
 		FWindow->setStatusText(tr("Call in progress"));
 		FWindow->setAnswerVisible(false);
 		FWindow->setDeclineVisible(false);
@@ -559,11 +561,14 @@ void JingleSession::finishLocally(const QString &AReason, const QString &AText)
 {
 	if (FTerminated)
 		return;
+	FTerminated = true;
 
 	if (FMediaEngine)
 		FMediaEngine->stop();
 
 	setState(IJingle::CallFinished);
+
+	FJingle->reportCallEvent(FStreamJid, FContactJid, callEventText(AReason));
 
 	QString status = reasonText(AReason);
 	if (!AText.isEmpty())
@@ -886,6 +891,29 @@ void JingleSession::applyDtlsClientRole()
 	//As the offerer we are the client only if the peer's answer was "passive".
 	const bool asClient = FInitiated ? (FPeerDtlsSetup == "passive") : (FPeerDtlsSetup != "active");
 	FMediaEngine->applyDtlsParameters(asClient, FPeerFingerprint);
+}
+
+QString JingleSession::callEventText(const QString &AReason) const
+{
+	//An answered call is described by its duration, everything else by the reason
+	if (FActiveSince.isValid())
+	{
+		const int secs = qMax(0, int(FActiveSince.secsTo(QDateTime::currentDateTime())));
+		const QString duration = QTime(0, 0).addSecs(secs).toString(secs >= 3600 ? "h:mm:ss" : "m:ss");
+		return tr("Voice call, %1").arg(duration);
+	}
+
+	if (AReason == "decline")
+		return FInitiated ? tr("Voice call declined") : tr("Voice call rejected");
+	if (AReason == "busy")
+		return tr("Voice call, peer is busy");
+	if (AReason == "no-answer" || AReason == "expired" || AReason == "gone")
+		return FInitiated ? tr("Voice call, no answer") : tr("Missed voice call");
+	if (AReason == "cancel" || AReason == "success")
+		return FInitiated ? tr("Voice call cancelled") : tr("Missed voice call");
+	if (AReason == "failed" || AReason == "failed-application" || AReason == "connectivity-error")
+		return tr("Voice call failed");
+	return tr("Voice call ended");
 }
 
 QString JingleSession::reasonText(const QString &AReason) const

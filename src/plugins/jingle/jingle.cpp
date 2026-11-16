@@ -35,6 +35,8 @@ Jingle::Jingle()
 	FDiscovery = nullptr;
 	FOptionsManager = nullptr;
 	FRostersManager = nullptr;
+	FMessageWidgets = nullptr;
+	FMessageArchiver = nullptr;
 }
 
 Jingle::~Jingle()
@@ -85,6 +87,14 @@ bool Jingle::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 	plugin = APluginManager->pluginInterface("IRosterManager").value(0, nullptr);
 	if (plugin)
 		FRostersManager = qobject_cast<IRosterManager *>(plugin->instance());
+
+	plugin = APluginManager->pluginInterface("IMessageWidgets").value(0, nullptr);
+	if (plugin)
+		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
+
+	plugin = APluginManager->pluginInterface("IMessageArchiver").value(0, nullptr);
+	if (plugin)
+		FMessageArchiver = qobject_cast<IMessageArchiver *>(plugin->instance());
 
 	return FStanzaProcessor!=nullptr && FXmppStreamManager!=nullptr && FDiscovery!=nullptr;
 }
@@ -395,6 +405,33 @@ QString Jingle::peerName(const Jid &AStreamJid, const Jid &AContactJid) const
 		}
 	}
 	return AContactJid.bare();
+}
+
+void Jingle::reportCallEvent(const Jid &AStreamJid, const Jid &AContactJid, const QString &AText)
+{
+	const Jid streamJid = AStreamJid.bare();
+	const Jid contactJid = AContactJid.bare();
+
+	//Archived as a note: history keeps it next to the messages and the message
+	//handler renders notes as status lines, so the call shows up after a restart
+	//exactly the way it looked during the call.
+	if (FMessageArchiver != nullptr && !FMessageArchiver->saveNote(streamJid, contactJid, AText))
+		LOG_STRM_WARNING(streamJid, QString("Call event not saved to the history archive, with=%1, text=%2").arg(contactJid.bare(), AText));
+
+	if (FMessageWidgets != nullptr)
+	{
+		IMessageChatWindow *window = FMessageWidgets->findChatWindow(streamJid, contactJid);
+		if (window != nullptr)
+		{
+			IMessageStyleContentOptions options;
+			options.kind = IMessageStyleContentOptions::KindStatus;
+			options.direction = IMessageStyleContentOptions::DirectionIn;
+			options.time = QDateTime::currentDateTime();
+			window->viewWidget()->appendText(AText, options);
+		}
+	}
+
+	LOG_STRM_INFO(streamJid, QString("Call event recorded, with=%1, text=%2").arg(contactJid.bare(), AText));
 }
 
 //Accepts "host", "host:port", "turn:host:port" and "turn://host:port"; the

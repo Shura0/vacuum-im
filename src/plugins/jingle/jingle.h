@@ -6,6 +6,8 @@
 #include <QUuid>
 
 #include <interfaces/ijingle.h>
+#include <interfaces/imessagearchiver.h>
+#include <interfaces/imessagewidgets.h>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/istanzaprocessor.h>
@@ -64,6 +66,9 @@ public:
 	Stanza makeResultReply(const Stanza &AStanza) const;
 	Stanza makeErrorReply(const Stanza &AStanza, const XmppStanzaError &AError) const;
 	QString peerName(const Jid &AStreamJid, const Jid &AContactJid) const;
+	//Records the outcome of a call in the chat with the contact: a one-line note
+	//that the message handler renders as a status line and the archive keeps.
+	void reportCallEvent(const Jid &AStreamJid, const Jid &AContactJid, const QString &AText);
 	//Effective STUN/TURN configuration for a stream: the manual options first,
 	//then the services discovered with XEP-0215.
 	NatConfig natConfig(const Jid &AStreamJid) const;
@@ -98,6 +103,8 @@ private:
 	IServiceDiscovery *FDiscovery;
 	IOptionsManager *FOptionsManager;
 	IRosterManager *FRostersManager;
+	IMessageWidgets *FMessageWidgets;
+	IMessageArchiver *FMessageArchiver;
 	QHash<Jid, QList<int> > FStanzaHandles;    //streamJid -> registered stanza handle ids
 	QList<JingleSession *> FSessions;
 	QHash<QString, QString> FPendingRequests;  //iq id -> sid of a pending session-initiate

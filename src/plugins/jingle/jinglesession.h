@@ -1,6 +1,7 @@
 #ifndef JINGLESESSION_H
 #define JINGLESESSION_H
 
+#include <QDateTime>
 #include <QObject>
 #include <QStringList>
 
@@ -77,6 +78,8 @@ private:
 	QString ourDtlsSetup() const;
 	void applyDtlsClientRole();
 	QString reasonText(const QString &AReason) const;
+	//Text of the one-line call event that goes into the chat history
+	QString callEventText(const QString &AReason) const;
 
 private:
 	Jid FStreamJid;
@@ -106,6 +109,7 @@ private:
 	QList<QString> FRemotePayloadNames; //Codec names offered by the peer
 	int FRemoteOpusPayloadType;
 	int FRemoteOpusClockrate;
+	QDateTime FActiveSince; //When the call became active, invalid if it never did
 	bool FTerminated;
 };
 
