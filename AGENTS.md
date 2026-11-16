@@ -158,3 +158,4 @@ Outputs land in `build/plugins/*.so` and `build/` (loader). Plugins install to
 
 ## Other
 Do not try to install program. Ask user.
+Do not write a long commit message, just one - three sentences in one string will be enough. All the text you want to write down, write in mytetra log

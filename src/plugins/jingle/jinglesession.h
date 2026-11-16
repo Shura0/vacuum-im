@@ -72,6 +72,8 @@ private:
 	void onGatheringFinished();
 	void onGatherWaitTimeout();
 	void onCandidateGathered(const IceCandidate &ACandidate);
+	void armPeerWait();
+	void onPeerWaitTimeout();
 	QString ourDtlsSetup() const;
 	void applyDtlsClientRole();
 	QString reasonText(const QString &AReason) const;
@@ -93,6 +95,8 @@ private:
 	CallWindow *FWindow;
 	MediaEngine *FMediaEngine;
 	QTimer *FGatherTimer;
+	QTimer *FPeerWaitTimer;
+	int FRemoteCandidateCount;
 	bool FOfferPending;
 	bool FAnswerPending;
 	bool FTransportSent;

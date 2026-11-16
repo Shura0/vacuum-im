@@ -51,6 +51,7 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FOfferPending = false;
 	FAnswerPending = false;
 	FTransportSent = false;
+	FRemoteCandidateCount = 0;
 
 	FState = AInitiated ? IJingle::CallOutgoing : IJingle::CallRinging;
 
@@ -58,6 +59,11 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FGatherTimer->setSingleShot(true);
 	FGatherTimer->setInterval(3000);
 	connect(FGatherTimer, &QTimer::timeout, this, &JingleSession::onGatherWaitTimeout);
+
+	FPeerWaitTimer = new QTimer(this);
+	FPeerWaitTimer->setSingleShot(true);
+	FPeerWaitTimer->setInterval(8000);
+	connect(FPeerWaitTimer, &QTimer::timeout, this, &JingleSession::onPeerWaitTimeout);
 
 	FMediaEngine = new MediaEngine(this);
 	if (!FMediaEngine->initialize())
@@ -285,6 +291,22 @@ void JingleSession::onGatherWaitTimeout()
 		continueInitiate(true);
 	if (FAnswerPending)
 		continueAnswer(true);
+}
+
+void JingleSession::armPeerWait()
+{
+	if (!FPeerWaitTimer->isActive())
+		FPeerWaitTimer->start();
+}
+
+void JingleSession::onPeerWaitTimeout()
+{
+	if (FTerminated || FRemoteCandidateCount > 0)
+		return;
+	//A peer without any candidate cannot even start connectivity checks, the call
+	//then hangs in "connecting" until one of the sides gives up.
+	LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': no candidates received from %2 within 8s of the answer, the call cannot connect").
+		arg(FSid, FContactJid.full()));
 }
 
 void JingleSession::onCandidateGathered(const IceCandidate &ACandidate)
@@ -519,6 +541,7 @@ void JingleSession::setState(IJingle::CallState AState)
 		FWindow->setDeclineVisible(false);
 		FWindow->setHangupVisible(true);
 		FWindow->setTimerActive(true);
+		armPeerWait();
 		break;
 	case IJingle::CallFinished:
 		FWindow->setStatusText(tr("Call closed"));
@@ -680,6 +703,12 @@ void JingleSession::appendCandidateElement(QDomElement &ATransportElem, const Ic
 	candidateElem.setAttribute("id", QString("v%1c%2").arg(ACandidate.port).arg(ACandidate.componentId));
 	candidateElem.setAttribute("network", "0");
 	candidateElem.setAttribute("priority", QString::number(ACandidate.priority));
+	//XEP-0176 requires the transport protocol, and strict parsers refuse the whole
+	//candidate without it: Snikket/Conversations drops every candidate that lacks
+	//protocol ("ignoring invalid ICE candidate Parameter protocol is missing or empty"),
+	//so the peer never learns our addresses, never creates TURN permissions for them
+	//and the media path stays dead even though signalling succeeds.
+	candidateElem.setAttribute("protocol", "udp");
 	candidateElem.setAttribute("type", ACandidate.type);
 	candidateElem.setAttribute("ip", ACandidate.address);
 	candidateElem.setAttribute("address", ACandidate.address); //XEP-0176 spelling, for older parsers
@@ -796,6 +825,9 @@ void JingleSession::processContentElem(const QDomElement &AContentElem)
 		}
 
 		const QDomNodeList candidateList = transportElem.elementsByTagName("candidate");
+		int hostCount = 0;
+		int srflxCount = 0;
+		int relayCount = 0;
 		for (int i = 0; i < candidateList.count(); ++i)
 		{
 			const QDomElement candidateElem = candidateList.at(i).toElement();
@@ -819,7 +851,24 @@ void JingleSession::processContentElem(const QDomElement &AContentElem)
 			}
 			candidate.relatedAddress = candidateElem.attribute("raddr", candidateElem.attribute("rel-addr"));
 			agent->addRemoteCandidate(candidate);
+			FRemoteCandidateCount++;
+			if (candidate.type == "srflx")
+				srflxCount++;
+			else if (candidate.type == "relay" || candidate.type == "prflx")
+				relayCount++;
+			else
+				hostCount++;
 		}
+		//Peers that advertise the SDP offer/answer model put everything into a single
+		//transport, peers without it trickle every candidate in its own action. Log the
+		//summary of both so a missing candidate on either side is easy to spot.
+		if (candidateList.count() > 0)
+			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': remote transport, content='%2' ufrag='%3' candidates=%4 (host=%5 srflx=%6 relay=%7)").
+				arg(FSid, AContentElem.attribute("name"), transportElem.attribute("ufrag")).
+				arg(candidateList.count()).arg(hostCount).arg(srflxCount).arg(relayCount));
+		else
+			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': remote transport, content='%2' ufrag='%3' carries no candidates").
+				arg(FSid, AContentElem.attribute("name"), transportElem.attribute("ufrag")));
 	}
 }
 

@@ -115,6 +115,7 @@ private:
 	void handleStunRequest(const QByteArray &AData, const QHostAddress &AFrom, quint16 APort, int AComponent, bool AViaRelay);
 	void logErrorCode(const QByteArray &AData);
 	void sendStunError(const QByteArray &ARequest, const QHostAddress &ATo, quint16 APort, int AComponent, int ACode, const QString &AReason, bool AViaRelay);
+	void addPeerReflexiveCandidate(const QHostAddress &AAddress, quint16 APort, int AComponent, bool AViaRelay, quint32 APriority);
 	void handleStunResponse(const QByteArray &AData, int AComponent);
 	void updateNominated(const IceCandidate &ARemote, int AComponent, bool AViaRelay);
 	void tryNominate();
@@ -166,6 +167,10 @@ private:
 	QList<CheckPair> FCheckPairs;
 
 	qint64 FLastActivityMs; //Consent freshness (RFC 7666)
+	qint64 FCheckStartMs;   //When the first check pair appeared, for the stall report
+	qint64 FCheckSentCount;
+	qint64 FStunInboundCount;
+	bool FNoConnectivityReported;
 	int FTrace;             //rate limit for the interop debugging trace
 };
 

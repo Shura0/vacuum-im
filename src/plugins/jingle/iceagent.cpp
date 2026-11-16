@@ -168,6 +168,10 @@ IceAgent::IceAgent(QObject *AParent)
 	FTurnPending = false;
 	FTieBreaker = QRandomGenerator::global()->generate64();
 	FLastActivityMs = 0;
+	FCheckStartMs = 0;
+	FCheckSentCount = 0;
+	FStunInboundCount = 0;
+	FNoConnectivityReported = false;
 	FTrace = 0;
 }
 
@@ -510,6 +514,11 @@ bool IceAgent::sendCheck(CheckPair &APair, bool ANominate)
 	APair.transactionId = transactionId;
 	APair.lastPacket = packet;
 	APair.lastSent = QDateTime::currentMSecsSinceEpoch();
+	FCheckSentCount++;
+	if (APair.attempts == 0 && !ANominate)
+		LOG_INFO(QString("IceAgent: check -> %1:%2 comp=%3 via %4").arg(APair.remote.address).
+			arg(APair.remote.port).arg(APair.local.componentId).
+			arg(APair.local.isRelay() ? "relay" : "direct"));
 	if (FTrace < 80)
 	{
 	{
@@ -547,6 +556,7 @@ void IceAgent::onUdpReadyRead()
 		if (isStunData(data))
 		{
 			const quint16 type = qFromBigEndian<quint16>(data.constData());
+			FStunInboundCount++;
 			if (FTrace < 200)
 				LOG_INFO(QString("IceAgent: STUN %1 type=0x%2 received from %3:%4 comp=%5").
 					arg(type == StunBindingRequest ? "request" : "response").arg(type, 4, 16, QChar('0')).
@@ -729,6 +739,7 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 	int integrityStart = -1;
 	int peerRole = 0; //1 = peer claims ICE-CONTROLLING, -1 = ICE-CONTROLLED, 0 = absent
 	quint64 peerTieBreaker = 0;
+	quint32 peerPriority = 0;
 
 	while (offset + 4 <= dataEnd)
 	{
@@ -750,6 +761,8 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 		}
 		else if (attrType == StunAttrUseCandidate)
 			useCandidate = true;
+		else if (attrType == StunAttrPriority && value.size() == 4)
+			peerPriority = qFromBigEndian<quint32>(value.constData());
 		else if (attrType == StunAttrIceControlling || attrType == StunAttrIceControlled)
 		{
 			peerRole = attrType == StunAttrIceControlling ? 1 : -1;
@@ -819,6 +832,14 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 				arg(QString::fromUtf8(username)));
 		}
 	}
+
+	//RFC 8445 7.3.1.3: a NAT that maps every destination to its own public port
+	//(symmetric NAT - most mobile carriers, many home routers) makes the peer's
+	//checks arrive from an address it never advertised. That pair has to be
+	//created from the check itself and marked valid, otherwise its USE-CANDIDATE
+	//can never be honoured and the session stays in "checking" even though the
+	//path demonstrably works in both directions.
+	addPeerReflexiveCandidate(AFrom, APort, AComponent, AViaRelay, peerPriority);
 
 	//Answer the check in the SAME style the request arrived (classic agents match the
 	//16-byte id region; delineating peers expect the cookie back), with MESSAGE-INTEGRITY
@@ -895,6 +916,70 @@ void IceAgent::handleStunRequest(const QByteArray &AData, const QHostAddress &AF
 		remote.type = AViaRelay ? QStringLiteral("relay") : QStringLiteral("prflx");
 		updateNominated(remote, AComponent, AViaRelay);
 	}
+}
+
+void IceAgent::addPeerReflexiveCandidate(const QHostAddress &AAddress, quint16 APort, int AComponent, bool AViaRelay, quint32 APriority)
+{
+	//In the relay-only test mode a direct path must not be used even when it exists.
+	if (FForceRelay && !AViaRelay)
+		return;
+
+	const QString address = AAddress.toString();
+	for (const IceCandidate &remote : FRemoteCandidates)
+	{
+		if (remote.componentId == AComponent && remote.address == address && remote.port == APort)
+			return; //Known candidate: its pair follows the regular check/response flow
+	}
+
+	//The pair lives on the path the check actually arrived over: the TURN
+	//allocation for a relayed check, the component's media socket for a direct one.
+	IceCandidate local;
+	QUdpSocket *socket = socketForComponent(AComponent);
+	for (const IceCandidate &candidate : FLocalCandidates)
+	{
+		if (candidate.componentId != AComponent || candidate.isRelay() != AViaRelay)
+			continue;
+		if (!AViaRelay && (socket == nullptr || candidate.port != socket->localPort()))
+			continue;
+		local = candidate;
+		break;
+	}
+	if (local.isNull())
+	{
+		if (FTrace < 80)
+			LOG_WARNING(QString("IceAgent: check from unknown %1:%2 comp=%3 has no local %4 candidate to pair with").
+				arg(address).arg(APort).arg(AComponent).arg(AViaRelay ? "relay" : "direct"));
+		return;
+	}
+
+	IceCandidate remote;
+	remote.componentId = AComponent;
+	remote.address = address;
+	remote.port = APort;
+	remote.type = QStringLiteral("prflx");
+	remote.priority = APriority != 0 ? APriority : candidatePriority("prflx", AComponent, 0);
+	remote.ufrag = FRemoteUfrag;
+	FRemoteCandidates.append(remote);
+
+	CheckPair pair;
+	pair.local = local;
+	pair.remote = remote;
+	//RFC 8445 7.2.5.2.1: an authenticated check received on the pair already
+	//proves that both directions work, so the pair is valid without a response
+	//to our own check (the peer selected it right after our answer).
+	pair.verified = true;
+	pair.nominated = false;
+	pair.lastSent = 0;
+	pair.attempts = 0;
+	pair.rtoMs = CheckIntervalMs;
+	FCheckPairs.append(pair);
+
+	LOG_INFO(QString("IceAgent: peer-reflexive remote candidate %1:%2 comp=%3 priority=%4 discovered via %5, pair valid").
+		arg(address).arg(APort).arg(AComponent).arg(remote.priority).
+		arg(AViaRelay ? "relay" : "direct"));
+
+	if (FControlling)
+		tryNominate();
 }
 
 void IceAgent::handleStunResponse(const QByteArray &AData, int AComponent)
@@ -1151,6 +1236,18 @@ void IceAgent::onCheckTimer()
 	if (FRemoteCandidates.isEmpty())
 		return;
 
+	//One line per call explaining why a peer never connects: how many checks actually
+	//left the machine and whether anything at all came back.
+	if (FCheckStartMs == 0 && !FCheckPairs.isEmpty())
+		FCheckStartMs = now;
+	if (FCheckStartMs != 0 && !FNoConnectivityReported && now - FCheckStartMs > 10000)
+	{
+		FNoConnectivityReported = true;
+		LOG_WARNING(QString("IceAgent: no connectivity after 10s, %1 checks sent to %2 remote candidates, %3 STUN messages received, relay=%4, connected=%5").
+			arg(FCheckSentCount).arg(FRemoteCandidates.count()).arg(FStunInboundCount).
+			arg(FTurn != nullptr && FTurn->isAllocated() ? "allocated" : "none").arg(FConnected));
+	}
+
 	for (CheckPair &pair : FCheckPairs)
 	{
 		if (!pair.transactionId.isEmpty())
@@ -1320,8 +1417,19 @@ void IceAgent::onTurnData(const QByteArray &AData, const QHostAddress &APeerAddr
 	if (isStunData(AData))
 	{
 		const quint16 type = qFromBigEndian<quint16>(AData.constData());
+		FStunInboundCount++;
 		if (type == StunBindingRequest)
+		{
+			//The peer may check us from an address we never saw as a candidate (a host
+			//candidate behind the peer's NAT arrives with its public source address), so
+			//allow that exact address for the rest of the session.
+			if (FTurn != nullptr)
+				FTurn->addPermission(APeerAddress);
+			if (FTrace < 200)
+				LOG_INFO(QString("IceAgent: STUN request received from %1:%2 via relay").
+					arg(APeerAddress.toString()).arg(APeerPort));
 			handleStunRequest(AData, APeerAddress, APeerPort, 1, true);
+		}
 		else if (type == StunBindingSuccess || type == StunBindingError)
 			handleStunResponse(AData, 1);
 		return;

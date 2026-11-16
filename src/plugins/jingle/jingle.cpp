@@ -126,6 +126,12 @@ bool Jingle::initObjects()
 		djt.description = tr("Supports DTLS-SRTP key negotiation for Jingle RTP sessions");
 		FDiscovery->insertDiscoFeature(djt);
 
+		//NOTE: urn:ietf:rfc:3264 is deliberately NOT advertised. Snikket/Conversations
+		//then put their whole candidate list into the offer/answer and skip trickle, and
+		//since their inline form is snapshotted before STUN/TURN gathering completes, a
+		//peer reachable only through a relay ends up offering just its host candidates.
+		//Trickle (transport-info) delivers the srflx/relay candidates as they appear.
+
 		FDiscovery->insertFeatureHandler(NS_JINGLE_APPS_RTP, this, DFO_DEFAULT);
 	}
 	if (FOptionsManager)
