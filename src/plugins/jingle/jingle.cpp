@@ -411,16 +411,57 @@ void Jingle::reportCallEvent(const Jid &AStreamJid, const Jid &AContactJid, cons
 {
 	const Jid streamJid = AStreamJid.bare();
 	const Jid contactJid = AContactJid.bare();
+	bool saved = false;
 
 	//Archived as a note: history keeps it next to the messages and the message
 	//handler renders notes as status lines, so the call shows up after a restart
 	//exactly the way it looked during the call.
-	if (FMessageArchiver != nullptr && !FMessageArchiver->saveNote(streamJid, contactJid, AText))
-		LOG_STRM_WARNING(streamJid, QString("Call event not saved to the history archive, with=%1, text=%2").arg(contactJid.bare(), AText));
+	if (FMessageArchiver != nullptr)
+	{
+		const bool allowed = FMessageArchiver->isArchivingAllowed(streamJid, contactJid, QString());
+		if (allowed)
+			saved = FMessageArchiver->saveNote(streamJid, contactJid, AText);
+		if (!saved && allowed)
+		{
+			//The archiver refuses direct saves when the server keeps the messages
+			//itself (MAM) and local duplication is off, which is a rule about
+			//messages: a call note has no server-side copy, so it goes straight
+			//into the local archive that renders notes back into the chat. The
+			//per-contact archiving preference is still respected above.
+			LOG_STRM_INFO(streamJid, QString("Call event: archiver declined (ready=%1 autoSave=%2), writing to the local archive engine").
+				arg(FMessageArchiver->isReady(streamJid)).
+				arg(FMessageArchiver->isArchiveAutoSave(streamJid)));
+			foreach(IArchiveEngine *engine, FMessageArchiver->archiveEngines())
+			{
+				if (engine->isCapable(streamJid, IArchiveEngine::DirectArchiving))
+				{
+					Message note;
+					note.setType(Message::Chat);
+					note.setFrom(contactJid.full());
+					note.setTo(streamJid.full());
+					note.setBody(AText);
+					if (engine->saveNote(streamJid, note, true))
+					{
+						saved = true;
+						break;
+					}
+				}
+			}
+		}
+	}
 
 	if (FMessageWidgets != nullptr)
 	{
-		IMessageChatWindow *window = FMessageWidgets->findChatWindow(streamJid, contactJid);
+		//Match by bare JIDs: the chat window may keep the stream with its resource
+		IMessageChatWindow *window = nullptr;
+		foreach(IMessageChatWindow *candidate, FMessageWidgets->chatWindows())
+		{
+			if (candidate->streamJid().bare() == streamJid.bare() && candidate->contactJid().bare() == contactJid.bare())
+			{
+				window = candidate;
+				break;
+			}
+		}
 		if (window != nullptr)
 		{
 			IMessageStyleContentOptions options;
@@ -428,10 +469,14 @@ void Jingle::reportCallEvent(const Jid &AStreamJid, const Jid &AContactJid, cons
 			options.direction = IMessageStyleContentOptions::DirectionIn;
 			options.time = QDateTime::currentDateTime();
 			window->viewWidget()->appendText(AText, options);
+			LOG_STRM_INFO(streamJid, QString("Call event shown in the open chat window, with=%1").arg(contactJid.bare()));
 		}
 	}
 
-	LOG_STRM_INFO(streamJid, QString("Call event recorded, with=%1, text=%2").arg(contactJid.bare(), AText));
+	if (saved)
+		LOG_STRM_INFO(streamJid, QString("Call event saved to the history, with=%1, text=%2").arg(contactJid.bare(), AText));
+	else if (FMessageArchiver != nullptr)
+		LOG_STRM_WARNING(streamJid, QString("Call event not saved to the history archive, with=%1, text=%2").arg(contactJid.bare(), AText));
 }
 
 //Accepts "host", "host:port", "turn:host:port" and "turn://host:port"; the
