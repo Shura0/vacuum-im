@@ -2032,10 +2032,6 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 			}
 			continue;
 		}
-		// The forced flag lifts the MamArchive veto ("the server archive
-		// already keeps the messages"), otherwise these copies would be
-		// dropped the same way as the live messages.
-		plain.setData(MDR_ARCHIVE_FORCED,true);
 		if (processMessage(AStreamJid,plain,directionIn))
 		{
 			savedIds.insert(message.id());

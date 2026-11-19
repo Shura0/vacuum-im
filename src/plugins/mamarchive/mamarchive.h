@@ -52,12 +52,11 @@ class MamArchive :
 	public QObject,
 	public IPlugin,
 	public IArchiveEngine,
-	public IArchiveHandler,
 	public IStanzaHandler,
 	public IStanzaRequestOwner
 {
 	Q_OBJECT;
-	Q_INTERFACES(IPlugin IArchiveEngine IArchiveHandler IStanzaHandler IStanzaRequestOwner);
+	Q_INTERFACES(IPlugin IArchiveEngine IStanzaHandler IStanzaRequestOwner);
 	Q_PLUGIN_METADATA(IID "org.vacuum-im.plugins.MamArchive");
 public:
 	MamArchive();
@@ -74,8 +73,6 @@ public:
 	virtual bool stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStanza, bool &AAccept);
 	//IStanzaRequestOwner
 	virtual void stanzaRequestResult(const Jid &AStreamJid, const Stanza &AStanza);
-	//IArchiveHandler
-	virtual bool archiveMessageEdit(int AOrder, const Jid &AStreamJid, Message &AMessage, bool ADirectionIn);
 	//IArchiveEngine
 	virtual QUuid engineId() const;
 	virtual QString engineName() const;
@@ -118,8 +115,6 @@ protected:
 	bool findCachedCollection(const Jid &AStreamJid, const IArchiveHeader &AHeader, QList<Message> &AMessages, QDateTime &AEnd) const;
 	QString collectionKey(const Jid &AStreamJid, const IArchiveHeader &AHeader) const;
 	void emitCollectionDeferred(const QString &AId, const IArchiveCollection &ACollection);
-	bool isServerMamActive(const Jid &AStreamJid) const;
-	bool isArchiveDuplicationEnabled(const Jid &AStreamJid) const;
 private:
 	IMessageArchiver *FArchiver;
 	IStanzaProcessor *FStanzaProcessor;

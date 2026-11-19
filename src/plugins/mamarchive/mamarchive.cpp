@@ -6,7 +6,6 @@
 #include <definitions/namespaces.h>
 #include <definitions/stanzahandlerorders.h>
 #include <definitions/archivecapabilityorders.h>
-#include <definitions/archivehandlerorders.h>
 #include <definitions/messagedataroles.h>
 #include <interfaces/imessageprocessor.h>
 #include <utils/datetime.h>
@@ -122,21 +121,8 @@ bool MamArchive::initObjects()
 	if (FArchiver)
 	{
 		FArchiver->registerArchiveEngine(this);
-		// When the server archives everything via MAM there is no need to write
-		// the same messages into the local file archive: the archives overlap
-		// and the chat windows get every message in a double copy.
-		FArchiver->insertArchiveHandler(AHO_DEFAULT,this);
 	}
 	return true;
-}
-
-bool MamArchive::archiveMessageEdit(int AOrder, const Jid &AStreamJid, Message &AMessage, bool ADirectionIn)
-{
-	Q_UNUSED(AOrder); Q_UNUSED(ADirectionIn);
-	// The server archive makes the ordinary direct archiving redundant, so
-	// the message is dropped... unless it is the deliberately forced save
-	// of the messages fetched from the server archive itself.
-	return !AMessage.data(MDR_ARCHIVE_FORCED).toBool() && isServerMamActive(AStreamJid) && !isArchiveDuplicationEnabled(AStreamJid);
 }
 
 bool MamArchive::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStanza, bool &AAccept)
@@ -330,17 +316,6 @@ QString MamArchive::mamNamespace(const Jid &AStreamJid) const
 		}
 	}
 	return QString();
-}
-
-bool MamArchive::isServerMamActive(const Jid &AStreamJid) const
-{
-	return !mamNamespace(AStreamJid).isEmpty() && (FArchiver==NULL || FArchiver->isArchiveEngineEnabled(engineId()));
-}
-
-bool MamArchive::isArchiveDuplicationEnabled(const Jid &AStreamJid) const
-{
-	IAccount *account = FAccountManager!=NULL ? FAccountManager->findAccountByStream(AStreamJid) : NULL;
-	return account!=NULL ? account->optionsNode().value("history-duplicate").toBool() : false;
 }
 
 QString MamArchive::startIq(MamQueryRequest &ARequest)
