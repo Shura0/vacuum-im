@@ -13,8 +13,10 @@
 CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 {
 	FEnabled = new QCheckBox(tr("Enable voice and video calls"), this);
+	FAec = new QCheckBox(tr("Suppress the echo of the speakers (acoustic echo cancellation)"), this);
 	FAllowUnknown = new QCheckBox(tr("Allow calls from not authorized contacts"), this);
 	connect(FEnabled, SIGNAL(toggled(bool)), SIGNAL(modified()));
+	connect(FAec, SIGNAL(toggled(bool)), SIGNAL(modified()));
 	connect(FAllowUnknown, SIGNAL(toggled(bool)), SIGNAL(modified()));
 
 	QGroupBox *natBox = new QGroupBox(tr("NAT traversal"), this);
@@ -49,6 +51,7 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	layout->addWidget(FEnabled);
+	layout->addWidget(FAec);
 	layout->addWidget(FAllowUnknown);
 	layout->addWidget(natBox);
 	layout->addWidget(hint);
@@ -60,6 +63,7 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 void CallsOptionsWidget::apply()
 {
 	Options::node(OPV_JINGLE_ENABLED).setValue(FEnabled->isChecked());
+	Options::node(OPV_JINGLE_AEC).setValue(FAec->isChecked());
 	Options::node(OPV_JINGLE_ALLOWUNKNOWN).setValue(FAllowUnknown->isChecked());
 	Options::node(OPV_JINGLE_USE_DISCOVERY).setValue(FUseDiscovery->isChecked());
 	Options::node(OPV_JINGLE_FORCE_RELAY).setValue(FForceRelay->isChecked());
@@ -73,6 +77,7 @@ void CallsOptionsWidget::apply()
 void CallsOptionsWidget::reset()
 {
 	FEnabled->setChecked(Options::node(OPV_JINGLE_ENABLED).value().toBool());
+	FAec->setChecked(Options::node(OPV_JINGLE_AEC).value().toBool());
 	FAllowUnknown->setChecked(Options::node(OPV_JINGLE_ALLOWUNKNOWN).value().toBool());
 	FUseDiscovery->setChecked(Options::node(OPV_JINGLE_USE_DISCOVERY).value().toBool());
 	FForceRelay->setChecked(Options::node(OPV_JINGLE_FORCE_RELAY).value().toBool());

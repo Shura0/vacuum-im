@@ -9,6 +9,8 @@
 #define NTO_MUC_PRIVATE_MESSAGE                350
 #define NTO_MUC_MENTION_MESSAGE                400
 #define NTO_MUC_INVITE_MESSAGE                 450
+#define NTO_JINGLE_CALL                        480
+#define NTO_JINGLE_CALL_OUTGOING               490
 #define NTO_SUBSCRIPTION_REQUEST               500
 #define NTO_CHATSTATE_NOTIFY                   530
 #define NTO_FILETRANSFER_NOTIFY                550

@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Sounds of the Jingle (voice calls) plugin. The ringtone is the "phone-incoming-call"
+     event of the freedesktop sound theme (the sound Dino plays for an incoming call),
+     the outgoing dial tone is the "phone-outgoing-calling" event of the same theme,
+     both converted to mono WAV (the dial tone keeps a pause appended so that a
+     plain loop repeats it the way a phone does): sound-theme-freedesktop, authors
+     Damien Sandras,
+     Dr. Richard Boulanger et al., Ivica Bukvic, Lucas McCallister, Red Hat, Inc.,
+     The ALSA developers, The Pidgin developers, Tim/corsica_s, freesound user
+     horsthorstensen; licensed CC-BY-3.0, CC-BY-SA-3.0, GPL-2 and GPL-2+.
+     The call-ended tone is generated for this plugin. -->
+<sounddef>
+  <file>
+    <key>jingleRingtone</key>
+    <object mime='sound/wav'>jingle_ringtone.wav</object>
+  </file>
+  <file>
+    <key>jingleHangup</key>
+    <object mime='sound/wav'>jingle_hangup.wav</object>
+  </file>
+  <file>
+    <key>jingleDialtone</key>
+    <object mime='sound/wav'>jingle_dialtone.wav</object>
+  </file>
+</sounddef>

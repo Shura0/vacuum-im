@@ -13,6 +13,11 @@
 #include <QtEndian>
 
 #include <utils/logger.h>
+#include <utils/options.h>
+
+#include <definitions/optionvalues.h>
+
+static double pcmRms(const char *AData, int ABytes);
 
 typedef void (*OpusEncoderDestroyFunc)(void *AEncoder);
 typedef void (*OpusDecoderDestroyFunc)(void *ADecoder);
@@ -49,6 +54,19 @@ MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 	FMediaTimer = nullptr;
 	FRtcpSession = nullptr;
 	FRtcpTimer = nullptr;
+	FEchoCanceller = nullptr;
+
+	FStatCaptureFrames = 0;
+	FStatCaptureInSum = 0;
+	FStatCaptureOutSum = 0;
+	FStatEncodedPackets = 0;
+	FStatEncodedBytes = 0;
+	FStatPlaybackFrames = 0;
+	FStatPlaybackSum = 0;
+	FStatPlaybackBytes = 0;
+	FStatNextLogMs = 0;
+
+	FLastDecodedSamples = OpusFrameSamples;
 
 	FLocalSsrc = QRandomGenerator::global()->generate();
 	FRemotePayloadType = -1;
@@ -370,7 +388,9 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 	if (FRemotePayloadType >= 0 && header.payloadType != FRemotePayloadType)
 		return;
 
-	FJitter.push(extendedSeq, plain.mid(header.payloadOffset, header.payloadLength), now);
+	const QByteArray payload = plain.mid(header.payloadOffset, header.payloadLength);
+
+	FJitter.push(extendedSeq, payload, now);
 }
 
 void MediaEngine::onMediaTick()
@@ -382,6 +402,31 @@ void MediaEngine::onMediaTick()
 
 	drainPlayback();
 	captureAndSend();
+
+	const qint64 now = clockMs();
+	if (FStatNextLogMs == 0)
+		FStatNextLogMs = now + 1000;
+	else if (now >= FStatNextLogMs)
+	{
+		FStatNextLogMs = now + 1000;
+		const double inRms = FStatCaptureFrames>0 ? FStatCaptureInSum/FStatCaptureFrames : -1;
+		const double outRms = FStatCaptureFrames>0 ? FStatCaptureOutSum/FStatCaptureFrames : -1;
+		const double playRms = FStatPlaybackFrames>0 ? FStatPlaybackSum/FStatPlaybackFrames : -1;
+		LOG_DEBUG(QString("MediaEngine: audio stats, capture frames=%1 in-rms=%2 out-rms=%3, sent pkts=%4 bytes=%5, "
+		                 "playback frames=%6 rms=%7 written=%8 B, aec=%9").
+			arg(FStatCaptureFrames).arg(inRms, 0, 'f', 0).arg(outRms, 0, 'f', 0).
+			arg(FStatEncodedPackets).arg(FStatEncodedBytes).
+			arg(FStatPlaybackFrames).arg(playRms, 0, 'f', 0).arg(FStatPlaybackBytes).
+			arg(FEchoCanceller != nullptr ? "on" : "off"));
+		FStatCaptureFrames = 0;
+		FStatCaptureInSum = 0;
+		FStatCaptureOutSum = 0;
+		FStatEncodedPackets = 0;
+		FStatEncodedBytes = 0;
+		FStatPlaybackFrames = 0;
+		FStatPlaybackSum = 0;
+		FStatPlaybackBytes = 0;
+	}
 }
 
 void MediaEngine::drainPlayback()
@@ -415,31 +460,46 @@ void MediaEngine::drainPlayback()
 		}
 
 		const int samples = (result == JitterBuffer::Data) ?
-			decodeOpus(payload.constData(), payload.size()) : decodeOpus(nullptr, 0);
+			decodeOpus(payload.constData(), payload.size(), OpusMaxFrameSamples) :
+			decodeOpus(nullptr, 0, FLastDecodedSamples);
 		if (samples <= 0)
 		{
 			FPlayoutDue = 0;
 			break;
 		}
 
+		//The echo canceller needs the decoded far-end audio before it is played
+		const int pcmBytes = samples * OpusChannels * int(sizeof(short));
+		FStatPlaybackFrames++;
+		FStatPlaybackSum += pcmRms(FPcmBuffer.constData(), pcmBytes);
+		if (FEchoCanceller)
+			FEchoCanceller->processFarEnd(FPcmBuffer.constData(), pcmBytes);
+
 		const QByteArray pcm = FPlaybackConverter.convert(
 			QByteArray(FPcmBuffer.constData(), samples * OpusChannels * int(sizeof(short))));
 		if (!pcm.isEmpty())
+		{
 			FPlaybackIo->write(pcm);
+			FStatPlaybackBytes += pcm.size();
+		}
 		FPlayoutDue -= samples;
 		written += samples;
 	}
 }
 
-int MediaEngine::decodeOpus(const char *AData, int ALength)
+int MediaEngine::decodeOpus(const char *AData, int ALength, int AMaxSamples)
 {
 	if (!FOpusDecode || !FOpusDecoder)
 		return 0;
 
 	//A null payload with a zero length asks libopus for packet loss concealment
 	const int samples = FOpusDecode(FOpusDecoder, reinterpret_cast<const unsigned char *>(AData), ALength,
-		reinterpret_cast<short *>(FPcmBuffer.data()), OpusMaxFrameSamples, 0);
-	return samples > 0 ? samples : 0;
+		reinterpret_cast<short *>(FPcmBuffer.data()), AMaxSamples, 0);
+	if (samples <= 0)
+		return 0;
+
+	FLastDecodedSamples = samples;
+	return samples;
 }
 
 void MediaEngine::captureAndSend()
@@ -455,13 +515,24 @@ void MediaEngine::captureAndSend()
 	static unsigned char payload[OpusMaxPacket];
 	while (FCapturePending.size() >= OpusFrameBytes)
 	{
-		const QByteArray frame = FCapturePending.left(OpusFrameBytes);
+		QByteArray frame = FCapturePending.left(OpusFrameBytes);
 		FCapturePending.remove(0, OpusFrameBytes);
+
+		//Remove the echo of the played audio from the microphone signal before
+		//it reaches the encoder; the frame is 48 kHz stereo in both cases
+		FStatCaptureFrames++;
+		FStatCaptureInSum += pcmRms(frame.constData(), frame.size());
+		if (FEchoCanceller)
+			FEchoCanceller->processNearEnd(frame.data(), frame.size());
+		FStatCaptureOutSum += pcmRms(frame.constData(), frame.size());
 
 		const int payloadSize = FOpusEncode(FOpusEncoder, reinterpret_cast<const short *>(frame.constData()),
 			OpusFrameSamples, payload, sizeof(payload));
 		if (payloadSize <= 0)
 			continue;
+
+		FStatEncodedPackets++;
+		FStatEncodedBytes += payloadSize;
 
 		const quint32 timestamp = FTimestamp;
 		const QByteArray packet = buildRtpPacket(QByteArray(reinterpret_cast<const char *>(payload), payloadSize), FFirstPacket);
@@ -521,6 +592,18 @@ void MediaEngine::sendRtcp(const QByteArray &APacket)
 
 //Picks a format the device accepts, preferring the natural codec format. The
 //sample format is always 16-bit: every conversion below assumes it.
+static double pcmRms(const char *AData, int ABytes)
+{
+	const qint16 *samples = reinterpret_cast<const qint16 *>(AData);
+	const int count = ABytes / int(sizeof(qint16));
+	if (count <= 0)
+		return 0.0;
+	double sum = 0;
+	for (int i = 0; i < count; ++i)
+		sum += double(samples[i]) * samples[i];
+	return qSqrt(sum / count);
+}
+
 static QAudioFormat negotiateFormat(const QAudioDevice &ADevice)
 {
 	QList<int> rates;
@@ -576,6 +659,9 @@ bool MediaEngine::startAudio()
 			arg(FSinkFormat.sampleRate()).arg(FSinkFormat.channelCount()).
 			arg(OpusSampleRate).arg(OpusChannels));
 	}
+	LOG_INFO(QString("MediaEngine: audio devices, input '%1' %2 Hz/%3 ch, output '%4' %5 Hz/%6 ch").
+		arg(inputDevice.description()).arg(FSourceFormat.sampleRate()).arg(FSourceFormat.channelCount()).
+		arg(outputDevice.description()).arg(FSinkFormat.sampleRate()).arg(FSinkFormat.channelCount()));
 	FCaptureConverter.configure(FSourceFormat.sampleRate(), FSourceFormat.channelCount(),
 		OpusSampleRate, OpusChannels);
 	FPlaybackConverter.configure(OpusSampleRate, OpusChannels,
@@ -585,6 +671,30 @@ bool MediaEngine::startAudio()
 	FSink = new QAudioSink(outputDevice, FSinkFormat, this);
 	FSource->setBufferSize(FSourceFormat.bytesForDuration(80000)); //80 ms
 	FSink->setBufferSize(FSinkFormat.bytesForDuration(80000));
+
+	//The canceller filters the microphone with the audio we are playing. It is
+	//optional: without the WebRTC library, or when the user turned it off on the
+	//Calls options page, the call simply has no echo control.
+	delete FEchoCanceller;
+	FEchoCanceller = nullptr;
+	if (Options::node(OPV_JINGLE_AEC).value().toBool())
+	{
+		EchoCanceller *echo = new EchoCanceller;
+		if (echo->initialize())
+		{
+			FEchoCanceller = echo;
+			LOG_INFO(QString("MediaEngine: echo cancellation enabled (%1)").arg(echo->description()));
+		}
+		else
+		{
+			delete echo;
+			LOG_INFO("MediaEngine: echo cancellation is not available, calls have no echo control");
+		}
+	}
+	else
+	{
+		LOG_INFO("MediaEngine: echo cancellation is disabled in the options");
+	}
 
 	FCaptureIo = FSource->start();
 	FPlaybackIo = FSink->start();
@@ -629,4 +739,6 @@ void MediaEngine::stopAudio()
 	FSink = nullptr;
 	FCaptureConverter.reset();
 	FPlaybackConverter.reset();
+	delete FEchoCanceller;
+	FEchoCanceller = nullptr;
 }

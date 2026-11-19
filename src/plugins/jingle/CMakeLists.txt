@@ -14,4 +14,31 @@ if (IS_ENABLED)
 
 	find_package(Qt6Multimedia REQUIRED)
 	target_link_libraries(${PLUGIN_NAME} Qt6::Multimedia)
+
+	#Echo cancellation is optional: without the library the plugin builds and
+	#calls work, just without echo control (the user is warned in the log).
+	find_package(PkgConfig QUIET)
+	if (PkgConfig_FOUND)
+		pkg_check_modules(WEBRTC_APM QUIET webrtc-audio-processing-1)
+	endif()
+	if (WEBRTC_APM_FOUND)
+		message(STATUS "jingle: echo cancellation through ${WEBRTC_APM_LIBRARIES}")
+		target_compile_definitions(${PLUGIN_NAME} PRIVATE HAVE_WEBRTC_AEC)
+		target_include_directories(${PLUGIN_NAME} PRIVATE ${WEBRTC_APM_INCLUDE_DIRS})
+		target_compile_options(${PLUGIN_NAME} PRIVATE ${WEBRTC_APM_CFLAGS_OTHER})
+		target_link_directories(${PLUGIN_NAME} PRIVATE ${WEBRTC_APM_LIBRARY_DIRS})
+		target_link_libraries(${PLUGIN_NAME} ${WEBRTC_APM_LIBRARIES})
+		target_link_options(${PLUGIN_NAME} PRIVATE ${WEBRTC_APM_LDFLAGS_OTHER})
+	else()
+		message(STATUS "jingle: webrtc-audio-processing not found, echo cancellation disabled")
+	endif()
+
+	if (APPLE)
+		file(COPY "${CMAKE_SOURCE_DIR}/resources/sounds"
+			DESTINATION "${CMAKE_BINARY_DIR}/${INSTALL_RESOURCES}")
+	else (APPLE)
+		install(DIRECTORY "${CMAKE_SOURCE_DIR}/resources/sounds"
+			DESTINATION "${INSTALL_RESOURCES}"
+			COMPONENT ${PLUGIN_NAME})
+	endif (APPLE)
 endif (IS_ENABLED)

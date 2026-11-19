@@ -101,6 +101,8 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FWindow->setPeer(FPeerName, FContactJid.full());
 	FWindow->setWindowIcon(IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_JINGLE_CALL));
 
+	FSounds = FJingle->callSounds();
+
 	connect(FWindow, &CallWindow::answerRequested, this, &JingleSession::answer);
 	connect(FWindow, &CallWindow::declineRequested, this, &JingleSession::decline);
 	connect(FWindow, &CallWindow::hangupRequested, this, [this]() { hangup(); });
@@ -382,6 +384,9 @@ void JingleSession::showWindow()
 	FWindow->show();
 	FWindow->raise();
 	FWindow->activateWindow();
+
+	if (FState == IJingle::CallRinging)
+		FSounds->playRingtone();
 }
 
 bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
@@ -512,6 +517,14 @@ void JingleSession::setState(IJingle::CallState AState)
 {
 	FState = AState;
 
+	//The ringtone belongs to the ringing state only; playRingtone() starts it
+	//when the window of an incoming call is shown. The dial tone accompanies an
+	//outgoing call from the first stanza until the peer answers.
+	if (FState != IJingle::CallRinging)
+		FSounds->stopRingtone();
+	if (FState != IJingle::CallOutgoing && FState != IJingle::CallRingback)
+		FSounds->stopDialtone();
+
 	switch (FState)
 	{
 	case IJingle::CallOutgoing:
@@ -520,6 +533,8 @@ void JingleSession::setState(IJingle::CallState AState)
 		FWindow->setDeclineVisible(true);
 		FWindow->setHangupVisible(false);
 		FWindow->setTimerActive(false);
+		if (!FSilent)
+			FSounds->playDialtone();
 		break;
 	case IJingle::CallRinging:
 		FWindow->setStatusText(tr("Incoming voice call"));
@@ -534,6 +549,8 @@ void JingleSession::setState(IJingle::CallState AState)
 		FWindow->setDeclineVisible(true);
 		FWindow->setHangupVisible(false);
 		FWindow->setTimerActive(false);
+		if (!FSilent)
+			FSounds->playDialtone();
 		break;
 	case IJingle::CallActive:
 		if (!FActiveSince.isValid())
@@ -567,6 +584,10 @@ void JingleSession::finishLocally(const QString &AReason, const QString &AText)
 		FMediaEngine->stop();
 
 	setState(IJingle::CallFinished);
+
+	//The call-ended tone is only for a call that was actually established
+	if (FActiveSince.isValid())
+		FSounds->playHangup();
 
 	FJingle->reportCallEvent(FStreamJid, FContactJid, callEventText(AReason));
 

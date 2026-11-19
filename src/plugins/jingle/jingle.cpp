@@ -12,6 +12,9 @@
 #include <definitions/internalerrors.h>
 #include <definitions/menuicons.h>
 #include <definitions/namespaces.h>
+#include <definitions/notificationtypeorders.h>
+#include <definitions/notificationtypes.h>
+#include <definitions/toolbargroups.h>
 #include <definitions/optionnodeorders.h>
 #include <definitions/optionnodes.h>
 #include <definitions/optionvalues.h>
@@ -37,6 +40,7 @@ Jingle::Jingle()
 	FRostersManager = nullptr;
 	FMessageWidgets = nullptr;
 	FMessageArchiver = nullptr;
+	FNotifications = nullptr;
 }
 
 Jingle::~Jingle()
@@ -90,11 +94,19 @@ bool Jingle::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 
 	plugin = APluginManager->pluginInterface("IMessageWidgets").value(0, nullptr);
 	if (plugin)
+	{
 		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
+		if (FMessageWidgets)
+			connect(FMessageWidgets->instance(), SIGNAL(toolBarWidgetCreated(IMessageToolBarWidget *)), SLOT(onToolBarWidgetCreated(IMessageToolBarWidget *)));
+	}
 
 	plugin = APluginManager->pluginInterface("IMessageArchiver").value(0, nullptr);
 	if (plugin)
 		FMessageArchiver = qobject_cast<IMessageArchiver *>(plugin->instance());
+
+	plugin = APluginManager->pluginInterface("INotifications").value(0, nullptr);
+	if (plugin)
+		FNotifications = qobject_cast<INotifications *>(plugin->instance());
 
 	return FStanzaProcessor!=nullptr && FXmppStreamManager!=nullptr && FDiscovery!=nullptr;
 }
@@ -102,6 +114,30 @@ bool Jingle::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 bool Jingle::initObjects()
 {
 	XmppError::registerError(NS_INTERNAL_ERROR, IERR_JINGLE_CALL_FAILED, tr("Failed to start the call"));
+
+	FSounds = new CallSounds(FNotifications, this);
+
+	if (FNotifications)
+	{
+		//Only the sound kind makes sense for a call: the call window itself is
+		//the notification. The ringtone and the dial tone settings thus live on
+		//the Notifications page together with every other notification sound.
+		INotificationType callType;
+		callType.order = NTO_JINGLE_CALL;
+		callType.icon = IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_JINGLE_CALL);
+		callType.title = tr("When receiving an incoming call");
+		callType.kindMask = INotification::SoundPlay;
+		callType.kindDefs = INotification::SoundPlay;
+		FNotifications->registerNotificationType(NNT_JINGLE_CALL, callType);
+
+		INotificationType outgoingType;
+		outgoingType.order = NTO_JINGLE_CALL_OUTGOING;
+		outgoingType.icon = callType.icon;
+		outgoingType.title = tr("When making an outgoing call");
+		outgoingType.kindMask = INotification::SoundPlay;
+		outgoingType.kindDefs = INotification::SoundPlay;
+		FNotifications->registerNotificationType(NNT_JINGLE_CALL_OUTGOING, outgoingType);
+	}
 
 	if (FDiscovery)
 	{
@@ -151,6 +187,15 @@ bool Jingle::initObjects()
 		FOptionsManager->insertOptionsDialogHolder(this);
 	}
 
+	//The call button lives in the toolbar of every chat window and is enabled
+	//only while the contact of that window advertises Jingle RTP audio.
+	if (FDiscovery)
+	{
+		connect(FDiscovery->instance(), SIGNAL(discoInfoReceived(const IDiscoInfo &)), SLOT(updateToolBarActions()));
+		connect(FDiscovery->instance(), SIGNAL(discoInfoRemoved(const IDiscoInfo &)), SLOT(updateToolBarActions()));
+	}
+	connect(Options::instance(), SIGNAL(optionsChanged(const OptionsNode &)), SLOT(updateToolBarActions()));
+
 	connect(FXmppStreamManager->instance(), SIGNAL(streamOpened(IXmppStream *)), SLOT(onStreamOpened(IXmppStream *)));
 	connect(FXmppStreamManager->instance(), SIGNAL(streamClosed(IXmppStream *)), SLOT(onStreamClosed(IXmppStream *)));
 
@@ -160,6 +205,7 @@ bool Jingle::initObjects()
 bool Jingle::initSettings()
 {
 	Options::setDefaultValue(OPV_JINGLE_ENABLED, true);
+	Options::setDefaultValue(OPV_JINGLE_AEC, true);
 	Options::setDefaultValue(OPV_JINGLE_ALLOWUNKNOWN, false);
 	Options::setDefaultValue(OPV_JINGLE_STUN_SERVER, QString());
 	Options::setDefaultValue(OPV_JINGLE_TURN_SERVER, QString());
@@ -765,6 +811,92 @@ void Jingle::onCallByAction(bool AChecked)
 		call(Jid(action->data(ADR_STREAM_JID).toString()), Jid(action->data(ADR_CONTACT_JID).toString()));
 }
 
+void Jingle::onChatCallByAction(bool AChecked)
+{
+	Q_UNUSED(AChecked);
+
+	Action *action = qobject_cast<Action *>(sender());
+	IMessageToolBarWidget *widget = action!=nullptr ? FToolBarActions.key(action, nullptr) : nullptr;
+	if (widget != nullptr)
+	{
+		IMessageChatWindow *chatWindow = qobject_cast<IMessageChatWindow *>(widget->messageWindow()->instance());
+		if (chatWindow != nullptr)
+			call(chatWindow->streamJid(), chatWindow->contactJid());
+	}
+}
+
+void Jingle::onToolBarWidgetCreated(IMessageToolBarWidget *AWidget)
+{
+	if (!FToolBarWidgets.contains(AWidget))
+	{
+		FToolBarWidgets.append(AWidget);
+		connect(AWidget->instance(), SIGNAL(destroyed(QObject *)), SLOT(onToolBarWidgetDestroyed(QObject *)));
+		connect(AWidget->messageWindow()->address()->instance(), SIGNAL(addressChanged(const Jid &, const Jid &)), SLOT(updateToolBarActions()));
+	}
+	updateToolBarAction(AWidget);
+}
+
+void Jingle::onToolBarWidgetDestroyed(QObject *AObject)
+{
+	foreach(IMessageToolBarWidget *widget, FToolBarWidgets)
+	{
+		if (qobject_cast<QObject *>(widget->instance()) == AObject)
+		{
+			FToolBarWidgets.removeAll(widget);
+			FToolBarActions.remove(widget);
+			break;
+		}
+	}
+}
+
+void Jingle::updateToolBarActions()
+{
+	foreach(IMessageToolBarWidget *widget, FToolBarWidgets)
+		updateToolBarAction(widget);
+}
+
+void Jingle::updateToolBarAction(IMessageToolBarWidget *AWidget)
+{
+	IMessageChatWindow *chatWindow = qobject_cast<IMessageChatWindow *>(AWidget->messageWindow()->instance());
+	const Jid streamJid = chatWindow!=nullptr ? chatWindow->streamJid() : Jid::null;
+	const Jid contactJid = chatWindow!=nullptr ? chatWindow->contactJid() : Jid::null;
+
+	Action *action = FToolBarActions.value(AWidget, nullptr);
+	if (chatWindow!=nullptr && contactJid.isValid())
+	{
+		if (action == nullptr)
+		{
+			action = new Action(AWidget->toolBarChanger()->toolBar());
+			action->setText(tr("Call"));
+			action->setIcon(RSR_STORAGE_MENUICONS, MNI_JINGLE_CALL);
+			connect(action, SIGNAL(triggered(bool)), SLOT(onChatCallByAction(bool)));
+			AWidget->toolBarChanger()->insertAction(action, TBG_MWTBW_JINGLE_CALL);
+			FToolBarActions.insert(AWidget, action);
+		}
+
+		const bool supported = isSupported(streamJid, contactJid);
+		if (!supported && FDiscovery && !FDiscovery->hasDiscoInfo(streamJid, contactJid))
+		{
+			//Nothing is known about the peer yet: ask for its features and let
+			//the discoInfoReceived handler update the button when it arrives
+			FDiscovery->requestDiscoInfo(streamJid, contactJid);
+			action->setToolTip(tr("Checking whether the contact supports calls..."));
+		}
+		else
+		{
+			action->setToolTip(supported ? tr("Call") :
+				tr("Voice calls are not supported by the contact"));
+		}
+		action->setEnabled(supported);
+	}
+	else if (action != nullptr)
+	{
+		AWidget->toolBarChanger()->removeItem(AWidget->toolBarChanger()->actionHandle(action));
+		FToolBarActions.remove(AWidget);
+		delete action;
+	}
+}
+
 void Jingle::onSessionStateChanged(JingleSession *ASession, IJingle::CallState AState)
 {
 	emit callStateChanged(ASession->sid(), AState);
@@ -894,6 +1026,25 @@ JingleSession *Jingle::createSession(const Jid &AStreamJid, const Jid &AContactJ
 
 void Jingle::removeSession(JingleSession *ASession)
 {
+	const bool wasRinging = ASession->state()==IJingle::CallRinging;
+
 	FSessions.removeAll(ASession);
 	ASession->deleteLater();
+
+	//The sounds are shared by all sessions, so the ringtone may only stop when
+	//no other call is still waiting for an answer
+	if (wasRinging)
+	{
+		bool stillRinging = false;
+		foreach(JingleSession *session, FSessions)
+		{
+			if (session->state() == IJingle::CallRinging)
+			{
+				stillRinging = true;
+				break;
+			}
+		}
+		if (!stillRinging)
+			FSounds->stopRingtone();
+	}
 }

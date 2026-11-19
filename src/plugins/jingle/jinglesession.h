@@ -10,6 +10,7 @@
 #include <utils/stanza.h>
 
 #include "callwindow.h"
+#include "callsounds.h"
 #include "mediaengine.h"
 
 class Jingle;
@@ -96,6 +97,7 @@ private:
 	IJingle::CallState FState;
 	Jingle *FJingle;
 	CallWindow *FWindow;
+	CallSounds *FSounds;
 	MediaEngine *FMediaEngine;
 	QTimer *FGatherTimer;
 	QTimer *FPeerWaitTimer;

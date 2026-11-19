@@ -32,6 +32,7 @@ signals:
 	void childReset();
 private:
 	QCheckBox *FEnabled;
+	QCheckBox *FAec;
 	QCheckBox *FAllowUnknown;
 	QCheckBox *FUseDiscovery;
 	QCheckBox *FForceRelay;

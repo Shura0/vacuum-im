@@ -8,6 +8,7 @@
 #include <QUuid>
 
 #include "audioconvert.h"
+#include "echocanceller.h"
 #include "iceagent.h"
 #include "jitterbuffer.h"
 #include "rtpdefs.h"
@@ -80,7 +81,7 @@ private:
 	qint64 clockMs() const;
 	void drainPlayback();
 	void captureAndSend();
-	int decodeOpus(const char *AData, int ALength);
+	int decodeOpus(const char *AData, int ALength, int AMaxSamples);
 	void scheduleRtcpReport(int AMs);
 	void sendRtcpReport();
 	void sendRtcp(const QByteArray &APacket);
@@ -123,6 +124,24 @@ private:
 	QAudioFormat FSinkFormat;     //The format the playback device actually accepted
 	AudioConverter FCaptureConverter;  //Device format -> Opus (48 kHz, stereo)
 	AudioConverter FPlaybackConverter; //Opus (48 kHz, stereo) -> device format
+	EchoCanceller *FEchoCanceller;     //WebRTC AEC, null when unavailable
+
+	//Per-second audio diagnostics (debug aid: shows whether the microphone, the
+	//encoder or the playback path is silent during a call)
+	int FStatCaptureFrames;
+	double FStatCaptureInSum;
+	double FStatCaptureOutSum;
+	int FStatEncodedPackets;
+	qint64 FStatEncodedBytes;
+	int FStatPlaybackFrames;
+	double FStatPlaybackSum;
+	qint64 FStatPlaybackBytes;
+	qint64 FStatNextLogMs;
+
+	//Packet loss concealment reuses the duration of the last decoded frame: a
+	//frame size of the maximum 120 ms would insert six times the audio that the
+	//lost packet actually occupied
+	int FLastDecodedSamples;
 
 	bool FAsDtlsClient;
 	bool FRemoteParamsReady;

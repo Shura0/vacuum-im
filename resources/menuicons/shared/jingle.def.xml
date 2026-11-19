@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The voice call icon is the "call-start" icon of the GNOME icon theme
+     (gnome-icon-theme, Copyright 2002-2008 Andreas Nilsson, GPL-2+),
+     used here to have a coloured handset matching the other toolbar icons. -->
 <icondef>
   <icon>
     <key>jingleCall</key>

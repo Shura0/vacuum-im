@@ -8,6 +8,7 @@
 #include <interfaces/ijingle.h>
 #include <interfaces/imessagearchiver.h>
 #include <interfaces/imessagewidgets.h>
+#include <interfaces/inotifications.h>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/istanzaprocessor.h>
@@ -17,6 +18,8 @@
 
 #include "jinglesession.h"
 #include "natservice.h"
+
+class Action;
 
 #define JINGLE_UUID "DB64AD0A-5ED3-450D-AC1A-FC4F7745F8D5"
 
@@ -69,6 +72,9 @@ public:
 	//Records the outcome of a call in the chat with the contact: a one-line note
 	//that the message handler renders as a status line and the archive keeps.
 	void reportCallEvent(const Jid &AStreamJid, const Jid &AContactJid, const QString &AText);
+	//Sounds shared by all sessions (the ringtone must outlive the session that
+	//ends the call, otherwise the call-ended tone is cut by the session deletion)
+	CallSounds *callSounds() const { return FSounds; }
 	//Effective STUN/TURN configuration for a stream: the manual options first,
 	//then the services discovered with XEP-0215.
 	NatConfig natConfig(const Jid &AStreamJid) const;
@@ -82,12 +88,17 @@ private slots:
 	void onStreamOpened(IXmppStream *AXmppStream);
 	void onStreamClosed(IXmppStream *AXmppStream);
 	void onCallByAction(bool AChecked);
+	void onChatCallByAction(bool AChecked);
+	void onToolBarWidgetCreated(IMessageToolBarWidget *AWidget);
+	void onToolBarWidgetDestroyed(QObject *AObject);
+	void updateToolBarActions();
 	void onSessionStateChanged(JingleSession *ASession, IJingle::CallState AState);
 	void onSessionFinished(JingleSession *ASession, const QString &AReason, const QString &AText);
 private:
 	JingleSession *findSession(const QString &ASid) const;
 	JingleSession *findSession(const Jid &AStreamJid, const QString &ASid) const;
 	JingleSession *findActiveSession(const Jid &AStreamJid, const Jid &AContactJid) const;
+	void updateToolBarAction(IMessageToolBarWidget *AWidget);
 	bool processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza, const QDomElement &AJingleElem, bool &AAccept);
 	bool processNatPush(const Jid &AStreamJid, const Stanza &AStanza, bool &AAccept);
 	void requestNatServices(const Jid &AStreamJid);
@@ -105,8 +116,12 @@ private:
 	IRosterManager *FRostersManager;
 	IMessageWidgets *FMessageWidgets;
 	IMessageArchiver *FMessageArchiver;
+	INotifications *FNotifications;
+	QHash<IMessageToolBarWidget *, Action *> FToolBarActions;
+	QList<IMessageToolBarWidget *> FToolBarWidgets;
 	QHash<Jid, QList<int> > FStanzaHandles;    //streamJid -> registered stanza handle ids
 	QList<JingleSession *> FSessions;
+	CallSounds *FSounds;
 	QHash<QString, QString> FPendingRequests;  //iq id -> sid of a pending session-initiate
 	QHash<QString, QList<NatService> > FNatServices; //stream full jid -> known external services
 	QHash<QString, Jid> FNatServiceRequests;   //iq id -> stream full jid of a discovery request
