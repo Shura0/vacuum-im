@@ -2178,6 +2178,8 @@ void MessageArchiver::startNextSyncContact(const Jid &AStreamJid)
 
 	Jid contact = it->contacts.takeFirst();
 	IArchiveEngine *engine = it->engine;
+	it->contact = contact;
+	it->headersId.clear();
 
 	IArchiveRequest request;
 	request.with = contact;
@@ -2831,13 +2833,46 @@ void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError 
 	if (FSyncHeaders.contains(AId))
 	{
 		Jid streamJid = FSyncHeaders.take(AId);
-		finishSyncServerArchive(streamJid,AError);
+		QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(streamJid);
+		if (it == FArchiveSyncs.end())
+			return;
+		// Some servers answer an archive query with no results with
+		// "item-not-found" instead of an empty result set, so for a contact
+		// without messages this is not a synchronization error.
+		if (AError.condition() == "item-not-found")
+		{
+			LOG_STRM_INFO(streamJid,QString("Server history sync: no server archive for contact=%1").arg(it->contact.bare()));
+			startNextSyncContact(streamJid);
+		}
+		else
+		{
+			finishSyncServerArchive(streamJid,AError);
+		}
 		return;
 	}
 	else if (FSyncCollections.contains(AId))
 	{
 		Jid streamJid = FSyncCollections.take(AId);
-		finishSyncServerArchive(streamJid,AError);
+		QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(streamJid);
+		if (it == FArchiveSyncs.end())
+			return;
+		// The same server quirk applies to a collection request whose range
+		// turns out to be empty: skip it and go on with the next one.
+		if (AError.condition() == "item-not-found")
+		{
+			it->pendingCollections--;
+			if (it->pendingCollections <= 0)
+			{
+				if (it->failed)
+					finishSyncServerArchive(streamJid);
+				else
+					startNextSyncContact(streamJid);
+			}
+		}
+		else
+		{
+			finishSyncServerArchive(streamJid,AError);
+		}
 		return;
 	}
 

@@ -68,6 +68,7 @@ struct CollectionRequest {
 struct ArchiveSyncState {
 	IArchiveEngine *engine;
 	QList<Jid> contacts;
+	Jid contact;
 	QString headersId;
 	int pendingCollections;
 	int collectionsCount;
