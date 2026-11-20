@@ -36,6 +36,7 @@ private:
 	static void fillDevices(QComboBox *ACombo, const QList<QAudioDevice> &ADevices);
 private:
 	QCheckBox *FEnabled;
+	QCheckBox *FVideo;
 	QCheckBox *FAec;
 	QCheckBox *FAllowUnknown;
 	QComboBox *FInputDevice;

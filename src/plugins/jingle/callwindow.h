@@ -2,6 +2,7 @@
 #define CALLWINDOW_H
 
 #include <QWidget>
+#include <QImage>
 
 class QLabel;
 class QPushButton;
@@ -21,6 +22,7 @@ public:
 	void setDeclineVisible(bool AVisible);
 	void setHangupVisible(bool AVisible);
 	void setTimerActive(bool AActive);
+	void setRemoteVideoFrame(const QImage &AFrame);
 	void closeBySession();
 
 signals:
@@ -40,6 +42,7 @@ private:
 	QLabel *FNameLabel;
 	QLabel *FStatusLabel;
 	QLabel *FTimeLabel;
+	QLabel *FVideoLabel;
 	QPushButton *FAnswerButton;
 	QPushButton *FDeclineButton;
 	QPushButton *FHangupButton;

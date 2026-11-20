@@ -68,7 +68,8 @@ private:
 	void finishLocally(const QString &AReason, const QString &AText);
 	Stanza makeSessionAction(const QString &AAction, QDomElement *AJingleElem = nullptr);
 	void addContentElement(QDomElement &AJingleElem) const;
-	void addDescription(QDomElement &AContentElem) const;
+	void appendContentElem(QDomElement &AJingleElem, const QString &AName, bool AVideo) const;
+	void addDescription(QDomElement &AContentElem, bool AVideo = false) const;
 	void addTransport(QDomElement &AContentElem) const;
 	void addRestartTransport(QDomElement &AJingleElem) const;
 	void appendCandidateElement(QDomElement &ATransportElem, const IceCandidate &ACandidate) const;
@@ -130,6 +131,9 @@ private:
 	QList<QString> FRemotePayloadNames; //Codec names offered by the peer
 	int FRemoteOpusPayloadType;
 	int FRemoteOpusClockrate;
+	int FRemoteVideoPayloadType;
+	QString FRemoteVideoContentName;
+	QStringList FRemoteContentOrder;
 	QDateTime FActiveSince; //When the call became active, invalid if it never did
 	bool FTerminated;
 };

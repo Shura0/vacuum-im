@@ -8,9 +8,11 @@
 
 #include <definitions/namespaces.h>
 #include <definitions/menuicons.h>
+#include <definitions/optionvalues.h>
 #include <definitions/resources.h>
 #include <utils/iconstorage.h>
 #include <utils/logger.h>
+#include <utils/options.h>
 
 #include "dtlssrtp.h"
 #include "iceagent.h"
@@ -30,6 +32,26 @@ static const RtpPayloadType kPayloadTypes[] = {
 	{111, QStringLiteral("opus"), 48000, 2},
 };
 
+//Receive-only for now: VP8 over the same ICE/DTLS transport as audio.
+static const RtpPayloadType kVideoPayloadTypes[] = {
+	{96, QStringLiteral("VP8"), 90000, 0},
+};
+
+//Only content elements that are direct children of <jingle>; elementsByTagName() would
+//also return the <content> references inside a BUNDLE group.
+static QList<QDomElement> directContents(const QDomElement &AJingleElem)
+{
+	QList<QDomElement> result;
+	QDomNode node = AJingleElem.firstChild();
+	while (!node.isNull())
+	{
+		if (node.isElement() && node.toElement().tagName() == QStringLiteral("content"))
+			result.append(node.toElement());
+		node = node.nextSibling();
+	}
+	return result;
+}
+
 JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const Jid &AContactJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, Jingle *AJingle, const QString &APeerName)
 	: QObject(nullptr)
 {
@@ -48,6 +70,8 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FSilent = false;
 	FRemoteOpusPayloadType = -1;
 	FRemoteOpusClockrate = 48000;
+	FRemoteVideoPayloadType = -1;
+	FRemoteVideoContentName = QStringLiteral("video");
 	FOfferPending = false;
 	FAnswerPending = false;
 	FTransportSent = false;
@@ -104,6 +128,10 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 		});
 		connect(FMediaEngine, &MediaEngine::dtlsConnected, this, [this]() {
 			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1' DTLS established, media secure").arg(FSid));
+		});
+		connect(FMediaEngine, &MediaEngine::videoFrameReceived, this, [this](const QImage &AFrame) {
+			if (!FSilent && FWindow != nullptr)
+				FWindow->setRemoteVideoFrame(AFrame);
 		});
 
 		//The callee binds its ports immediately so that candidates can be offered
@@ -607,9 +635,9 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 	{
 		//Some clients send the Jingle session right after the proposal, before
 		//the user has answered. Keep the transport and let answer() use it.
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
 		for (int i = 0; i < contentList.count(); ++i)
-			processContentElem(contentList.at(i).toElement());
+			processContentElem(contentList.at(i));
 		FJmiTransportReceived = true;
 		if (FMediaEngine)
 		{
@@ -624,9 +652,16 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 	{
 		//XEP-0353: the initiator sends the real session only after we said
 		//proceed. Answer it exactly like a normal incoming session-initiate.
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
+		FRemoteContentOrder.clear();
 		for (int i = 0; i < contentList.count(); ++i)
-			processContentElem(contentList.at(i).toElement());
+		{
+			const QString name = contentList.at(i).attribute("name");
+			if (!name.isEmpty())
+				FRemoteContentOrder.append(name);
+		}
+		for (int i = 0; i < contentList.count(); ++i)
+			processContentElem(contentList.at(i));
 		if (FMediaEngine)
 		{
 			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
@@ -647,9 +682,9 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 
 	if (action == "session-accept")
 	{
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
 		for (int i = 0; i < contentList.count(); ++i)
-			processContentElem(contentList.at(i).toElement());
+			processContentElem(contentList.at(i));
 		if (FMediaEngine)
 		{
 			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
@@ -703,9 +738,9 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 				}
 			}
 		}
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
 		for (int i = 0; i < contentList.count(); ++i)
-			processContentElem(contentList.at(i).toElement());
+			processContentElem(contentList.at(i));
 		if (FMediaEngine)
 			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
 	}
@@ -713,7 +748,7 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 	{
 		//The peer asks for a new ICE generation: restart our side first so the
 		//transport-accept advertises the new credentials and candidates.
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
 		if (!FMediaEngine || contentList.isEmpty() || FTerminated)
 		{
 			QDomElement rejectElem;
@@ -731,7 +766,7 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 			return true;
 		}
 		FMediaEngine->iceAgent()->clearRemoteCandidates();
-		processContentElem(contentList.at(0).toElement());
+		processContentElem(contentList.at(0));
 		FRemoteCandidateCount = 0;
 
 		QDomElement acceptElem;
@@ -752,9 +787,9 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 		//the old generation completely.
 		if (FMediaEngine)
 			FMediaEngine->iceAgent()->clearRemoteCandidates();
-		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		const QList<QDomElement> contentList = directContents(jingleElem);
 		for (int i = 0; i < contentList.count(); ++i)
-			processContentElem(contentList.at(i).toElement());
+			processContentElem(contentList.at(i));
 		FRemoteCandidateCount = 0;
 		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': ICE restart accepted by the peer").arg(FSid));
 	}
@@ -797,15 +832,22 @@ void JingleSession::storeInitiate(const QDomElement &AJingleElem)
 		FTargetJid = Jid(FInitiator);
 	}
 
-	const QDomNodeList contentList = AJingleElem.elementsByTagName("content");
+	const QList<QDomElement> contentList = directContents(AJingleElem);
+	FRemoteContentOrder.clear();
+	for (int i = 0; i < contentList.count(); ++i)
+	{
+		const QString name = contentList.at(i).attribute("name");
+		if (!name.isEmpty())
+			FRemoteContentOrder.append(name);
+	}
 	if (contentList.count() > 0)
 	{
-		const QString contentName = contentList.at(0).toElement().attribute("name");
+		const QString contentName = contentList.at(0).attribute("name");
 		if (!contentName.isEmpty())
 			FContentName = contentName; //Answer must reuse the initiator's content name (e.g. "0")
 	}
 	for (int i = 0; i < contentList.count(); ++i)
-		processContentElem(contentList.at(i).toElement());
+		processContentElem(contentList.at(i));
 
 	if (FMediaEngine)
 		FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
@@ -940,31 +982,73 @@ Stanza JingleSession::makeSessionAction(const QString &AAction, QDomElement *AJi
 
 void JingleSession::addContentElement(QDomElement &AJingleElem) const
 {
+	const bool withVideo = Options::node(OPV_JINGLE_VIDEO).value().toBool() &&
+	                       (FInitiated || FRemoteVideoPayloadType >= 0);
+	QStringList order;
+	if (!FInitiated && !FRemoteContentOrder.isEmpty())
+		order = FRemoteContentOrder;
+	else
+	{
+		order.append(FContentName);
+		if (withVideo)
+			order.append(FRemoteVideoContentName);
+	}
+	for (const QString &name : order)
+		appendContentElem(AJingleElem, name, name == FRemoteVideoContentName && withVideo);
+
+	if (withVideo)
+	{
+		//XEP-0320 BUNDLE: both contents share the single ICE/DTLS transport.
+		//Without this group a WebRTC peer treats them as two independent m-lines
+		//with the same port and fails with "SessionDescription is NULL".
+		QDomDocument doc = AJingleElem.ownerDocument();
+		QDomElement groupElem = doc.createElementNS(NS_JINGLE_APPS_GROUPING, "group");
+		groupElem.setAttribute("semantics", QStringLiteral("BUNDLE"));
+		for (const QString &name : order)
+		{
+			QDomElement contentElem = doc.createElement("content");
+			contentElem.setAttribute("name", name);
+			groupElem.appendChild(contentElem);
+		}
+		AJingleElem.appendChild(groupElem);
+	}
+}
+
+void JingleSession::appendContentElem(QDomElement &AJingleElem, const QString &AName, bool AVideo) const
+{
 	QDomDocument doc = AJingleElem.ownerDocument();
 
 	QDomElement contentElem = doc.createElement("content");
-	contentElem.setAttribute("name", FContentName);
+	contentElem.setAttribute("name", AName);
 	//Siskin/Martin (and XEP-0166) require the creator attribute: without it the
 	//whole <content> is rejected and the phone silently ignores session-initiate.
 	contentElem.setAttribute("creator", FInitiated ? QStringLiteral("initiator") : QStringLiteral("responder"));
+	//We do not send video yet; ask the peer to send it to us only.
+	if (AVideo)
+		contentElem.setAttribute("senders", FInitiated ? QStringLiteral("responder") : QStringLiteral("initiator"));
 
-	addDescription(contentElem);
+	addDescription(contentElem, AVideo);
 	addTransport(contentElem);
 
 	AJingleElem.appendChild(contentElem);
 }
 
-void JingleSession::addDescription(QDomElement &AContentElem) const
+void JingleSession::addDescription(QDomElement &AContentElem, bool AVideo) const
 {
 	QDomDocument doc = AContentElem.ownerDocument();
 
 	QDomElement descriptionElem = doc.createElementNS(NS_JINGLE_APPS_RTP, "description");
-	descriptionElem.setAttribute("media", RTP_CONTENT_NAME);
+	descriptionElem.setAttribute("media", AVideo ? QStringLiteral("video") : QStringLiteral(RTP_CONTENT_NAME));
 
-	for (const RtpPayloadType &pt : kPayloadTypes)
+	const RtpPayloadType *payloads = AVideo ? kVideoPayloadTypes : kPayloadTypes;
+	const int payloadCount = AVideo ? int(sizeof(kVideoPayloadTypes)/sizeof(kVideoPayloadTypes[0])) :
+	                                  int(sizeof(kPayloadTypes)/sizeof(kPayloadTypes[0]));
+	for (int i = 0; i < payloadCount; ++i)
 	{
+		const RtpPayloadType &pt = payloads[i];
 		//When answering, offer only the codecs the peer is able to receive
-		if (!FInitiated && !FRemotePayloadNames.isEmpty() && !FRemotePayloadNames.contains(pt.name.toLower()))
+		//(the remote payload-name list is for audio only; video is separate).
+		if (!AVideo && !FInitiated && !FRemotePayloadNames.isEmpty() && !FRemotePayloadNames.contains(pt.name.toLower()))
 			continue;
 
 		QDomElement payloadElem = doc.createElement("payload-type");
@@ -974,10 +1058,13 @@ void JingleSession::addDescription(QDomElement &AContentElem) const
 		if (pt.channels > 1)
 			payloadElem.setAttribute("channels", QString::number(pt.channels));
 
-		QDomElement paramElem = doc.createElement("parameter");
-		paramElem.setAttribute("name", "minptime");
-		paramElem.setAttribute("value", "20");
-		payloadElem.appendChild(paramElem);
+		if (!AVideo)
+		{
+			QDomElement paramElem = doc.createElement("parameter");
+			paramElem.setAttribute("name", "minptime");
+			paramElem.setAttribute("value", "20");
+			payloadElem.appendChild(paramElem);
+		}
 
 		descriptionElem.appendChild(payloadElem);
 	}
@@ -991,11 +1078,11 @@ void JingleSession::addDescription(QDomElement &AContentElem) const
 		//encryption element, transport carries the single bare fingerprint.
 		QDomElement ssrcElem = doc.createElement("ssrc");
 		ssrcElem.setAttribute("xmlns", NS_JINGLE_APPS_RTP_SSMA);
-		ssrcElem.setAttribute("id", QString::number(FMediaEngine->localSsrc(), 16).rightJustified(8, '0'));
-		ssrcElem.setAttribute("type", RTP_CONTENT_NAME);
+		ssrcElem.setAttribute("id", QString::number(AVideo && FMediaEngine ? FMediaEngine->localVideoSsrc() : (FMediaEngine ? FMediaEngine->localSsrc() : 0), 16).rightJustified(8, '0'));
+		ssrcElem.setAttribute("type", AVideo ? QStringLiteral("video") : QStringLiteral(RTP_CONTENT_NAME));
 		QDomElement cnameElem = doc.createElement("parameter");
 		cnameElem.setAttribute("name", "cname");
-		cnameElem.setAttribute("value", FSid);
+		cnameElem.setAttribute("value", AVideo ? FSid + QStringLiteral("-video") : FSid);
 		ssrcElem.appendChild(cnameElem);
 		descriptionElem.appendChild(ssrcElem);
 
@@ -1126,16 +1213,38 @@ void JingleSession::processContentElem(const QDomElement &AContentElem)
 		return;
 
 	const QDomElement descriptionElem = AContentElem.firstChildElement("description");
+	const QString descriptionMedia = descriptionElem.attribute("media");
 	if (!descriptionElem.isNull())
 	{
-		FRemotePayloadNames.clear();
-		FRemoteOpusPayloadType = -1;
+		const bool videoDescription = descriptionMedia == QStringLiteral("video");
+		if (videoDescription)
+			FRemoteVideoContentName = AContentElem.attribute("name", FRemoteVideoContentName);
+		else if (!FInitiated)
+			//A JMI proposal opens the session before we see the real
+			//session-initiate; learn its audio content name for the answer.
+			FContentName = AContentElem.attribute("name", FContentName);
+		if (!videoDescription)
+		{
+			FRemotePayloadNames.clear();
+			FRemoteOpusPayloadType = -1;
+		}
 
 		const QDomNodeList payloadList = descriptionElem.elementsByTagName("payload-type");
 		for (int i = 0; i < payloadList.count(); ++i)
 		{
 			const QDomElement payloadElem = payloadList.at(i).toElement();
 			const QString name = payloadElem.attribute("name").toLower();
+			if (videoDescription)
+			{
+				if (name == QStringLiteral("vp8"))
+				{
+					FRemoteVideoPayloadType = payloadElem.attribute("id").toInt();
+					if (FMediaEngine)
+						FMediaEngine->setRemoteVideoPayloadType(FRemoteVideoPayloadType);
+					LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': peer offers VP8 video, payload=%2").arg(FSid).arg(FRemoteVideoPayloadType));
+				}
+				continue;
+			}
 			FRemotePayloadNames.append(name);
 			if (name == "opus")
 			{

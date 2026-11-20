@@ -167,6 +167,22 @@ bool Jingle::initObjects()
 		djt.description = tr("Supports audio content in Jingle RTP sessions");
 		FDiscovery->insertDiscoFeature(djt);
 
+		//Snikket/Siskin decides whether it may offer a video call from the
+		//contact's disco features; without this it reports "contact is
+		//inaccessible" before sending any Jingle stanza.
+		if (Options::node(OPV_JINGLE_VIDEO).value().toBool())
+		{
+			djt.var = NS_JINGLE_APPS_RTP_VIDEO;
+			djt.name = tr("Video Call (video)");
+			djt.description = tr("Supports video content in Jingle RTP sessions");
+			FDiscovery->insertDiscoFeature(djt);
+		}
+
+		djt.var = NS_JINGLE_MESSAGE;
+		djt.name = tr("Jingle Message Initiation");
+		djt.description = tr("Supports call proposals in chat messages");
+		FDiscovery->insertDiscoFeature(djt);
+
 		djt.var = NS_JINGLE_TRANSPORTS_ICEUDP;
 		djt.name = tr("Voice Call (ICE-UDP)");
 		djt.description = tr("Supports the ICE-UDP transport for Jingle sessions");
@@ -210,6 +226,7 @@ bool Jingle::initObjects()
 bool Jingle::initSettings()
 {
 	Options::setDefaultValue(OPV_JINGLE_ENABLED, true);
+	Options::setDefaultValue(OPV_JINGLE_VIDEO, true);
 	Options::setDefaultValue(OPV_JINGLE_AEC, true);
 	Options::setDefaultValue(OPV_JINGLE_ALLOWUNKNOWN, false);
 	Options::setDefaultValue(OPV_JINGLE_STUN_SERVER, QString());
@@ -442,6 +459,7 @@ bool Jingle::sendSessionAction(JingleSession *ASession, Stanza &AStanza)
 {
 	QDomElement jingleElem = AStanza.firstElement("jingle", NS_JINGLE);
 	LOG_STRM_INFO(ASession->streamJid(), QString("Jingle action '%1' of session '%2' sent to %3").arg(jingleElem.attribute("action"), jingleElem.attribute("sid"), AStanza.to()));
+	LOG_STRM_DEBUG(ASession->streamJid(), QString("Jingle outgoing stanza: %1").arg(AStanza.toString(0).trimmed()));
 	return FStanzaProcessor->sendStanzaOut(ASession->streamJid(), AStanza);
 }
 

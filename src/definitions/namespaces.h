@@ -122,6 +122,7 @@
 #define NS_JINGLE_APPS_RTP_RTCP_FB                        "urn:xmpp:jingle:apps:rtp:rtcp-fb:0"
 #define NS_JINGLE_APPS_DTLS                               "urn:xmpp:jingle:apps:dtls:0"
 #define NS_JINGLE_TRANSPORTS_ICEUDP                       "urn:xmpp:jingle:transports:ice-udp:1"
+#define NS_JINGLE_APPS_GROUPING                           "urn:xmpp:jingle:apps:grouping:0"
 
 // External services (XEP-0215), used to discover STUN/TURN servers
 #define NS_EXTERNAL_SERVICES                              "urn:xmpp:extdisco:2"

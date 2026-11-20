@@ -1,6 +1,7 @@
 #include "mediaengine.h"
 #include "dtlssrtp.h"
 #include "rtcpsession.h"
+#include "videoreceiver.h"
 
 #include <QAudioDevice>
 #include <QAudioFormat>
@@ -69,8 +70,13 @@ MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 	FLastDecodedSamples = OpusFrameSamples;
 
 	FLocalSsrc = QRandomGenerator::global()->generate();
+	FLocalVideoSsrc = QRandomGenerator::global()->generate();
 	FRemotePayloadType = -1;
 	FRemoteClockrate = OpusSampleRate;
+	FRemoteVideoPayloadType = -1;
+	FVideoReceiver = nullptr;
+	FVideoRtpCount = 0;
+	FVideoDecodedCount = 0;
 	FSeq = QRandomGenerator::global()->bounded(0xFFFF);
 	FTimestamp = QRandomGenerator::global()->generate();
 	FFirstPacket = true;
@@ -161,6 +167,9 @@ bool MediaEngine::initialize()
 		return false;
 	}
 
+	FVideoReceiver = new VideoReceiver(this);
+	FVideoReceiver->initialize();
+
 	FOpusLib = new QLibrary(this);
 	if (!loadOpus())
 	{
@@ -230,11 +239,21 @@ quint32 MediaEngine::localSsrc() const
 	return FLocalSsrc;
 }
 
+quint32 MediaEngine::localVideoSsrc() const
+{
+	return FLocalVideoSsrc;
+}
+
 void MediaEngine::setRemoteCodec(int APayloadType, int AClockrate)
 {
 	FRemotePayloadType = APayloadType;
 	FRemoteClockrate = AClockrate;
 	FRtcpSession->setClockRate(FRemoteClockrate);
+}
+
+void MediaEngine::setRemoteVideoPayloadType(int APayloadType)
+{
+	FRemoteVideoPayloadType = APayloadType;
 }
 
 void MediaEngine::setDtlsClientRole(bool AAsClient)
@@ -372,6 +391,62 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 	const RtpHeader header = parseRtpHeader(plain);
 	if (!header.valid)
 		return;
+
+	if (FRemoteVideoPayloadType >= 0 && header.payloadType == FRemoteVideoPayloadType)
+	{
+		++FVideoRtpCount;
+		if (FVideoReceiver && FVideoReceiver->isReady() && header.payloadLength > 1)
+		{
+			const unsigned char *payload = reinterpret_cast<const unsigned char *>(plain.constData() + header.payloadOffset);
+			const quint8 descriptor = payload[0];
+			const bool startOfFrame = (descriptor & 0x10) != 0; //RFC 7741 S bit
+
+			//Skip the payload descriptor: mandatory octet plus X extension fields
+			int offset = 1;
+			if (descriptor & 0x80)
+			{
+				const quint8 ext = payload[1];
+				offset += 1;
+				if (ext & 0x80) //I (PictureID)
+					offset += (payload[offset] & 0x80) ? 2 : 1;
+				if (ext & 0x40) //L (TL0PICIDX)
+					offset += 1;
+				if (ext & 0x20 || ext & 0x10) //T or K (TID/Y/KEYIDX)
+					offset += 1;
+			}
+			if (offset > 0 && offset < header.payloadLength)
+			{
+				//A frame may be split over several RTP packets: S=1 starts a
+				//new frame, S=0 continues it, the RTP marker ends it.
+				auto decodeFrame = [this]() {
+					QImage frame;
+					if (FVideoReceiver->decode(FVideoFrame, frame))
+					{
+						++FVideoDecodedCount;
+						if (FVideoDecodedCount == 1)
+							LOG_INFO(QString("MediaEngine: first VP8 frame decoded, %1x%2").arg(frame.width()).arg(frame.height()));
+						emit videoFrameReceived(frame);
+					}
+					else if (FVideoDecodedCount == 0 && FVideoRtpCount <= 5)
+						LOG_WARNING(QString("MediaEngine: VP8 decode failed, frame=%1 bytes").arg(FVideoFrame.size()));
+					FVideoFrame.clear();
+				};
+
+				if (startOfFrame && !FVideoFrame.isEmpty())
+					decodeFrame(); //new frame arrived without a marker on the previous one
+				if (startOfFrame)
+					FVideoFrame.clear();
+				FVideoFrame.append(reinterpret_cast<const char *>(payload + offset), header.payloadLength - offset);
+				if (header.marker)
+					decodeFrame();
+			}
+		}
+		if (FVideoRtpCount == 1 || FVideoRtpCount % 100 == 0)
+			LOG_INFO(QString("MediaEngine: video RTP packets=%1 decoded=%2 ssrc=0x%3 receiver=%4").
+				arg(FVideoRtpCount).arg(FVideoDecodedCount).arg(header.ssrc, 8, 16, QChar('0')).
+				arg(FVideoReceiver && FVideoReceiver->isReady()));
+		return;
+	}
 
 	//Every stream packet feeds the reception statistics, including the ones we
 	//do not decode (comfort noise, a payload type that is not the negotiated one)

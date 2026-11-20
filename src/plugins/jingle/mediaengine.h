@@ -4,6 +4,7 @@
 #include <QAudioFormat>
 #include <QByteArray>
 #include <QElapsedTimer>
+#include <QImage>
 #include <QObject>
 #include <QUuid>
 
@@ -20,6 +21,7 @@ class QIODevice;
 class QLibrary;
 class QTimer;
 class RtcpSession;
+class VideoReceiver;
 
 //The subset of the libopus API we use; loaded at runtime to keep the plugin
 //buildable on systems without the codec package.
@@ -48,8 +50,10 @@ public:
 	DtlsSrtp *dtlsSrtp() const;
 
 	quint32 localSsrc() const;
+	quint32 localVideoSsrc() const;
 	//The negotiated payload type/clockrate for the local->remote Opus stream
 	void setRemoteCodec(int APayloadType, int AClockrate);
+	void setRemoteVideoPayloadType(int APayloadType);
 
 	void startIce(bool AControlling);
 	void stop();
@@ -64,6 +68,7 @@ public:
 signals:
 	void iceConnected();
 	void dtlsConnected();
+	void videoFrameReceived(const QImage &AFrame);
 	void failed(const QString &AReason);
 
 private slots:
@@ -97,8 +102,13 @@ private:
 	OpusDecodeFunc FOpusDecode;
 
 	quint32 FLocalSsrc;
+	quint32 FLocalVideoSsrc;
 	int FRemotePayloadType;
 	int FRemoteClockrate;
+	int FRemoteVideoPayloadType;
+	VideoReceiver *FVideoReceiver;
+	int FVideoRtpCount;
+	int FVideoDecodedCount;
 	quint32 FSeq;
 	quint32 FTimestamp;
 	bool FFirstPacket;
@@ -114,6 +124,7 @@ private:
 	qint64 FLastPlayoutMs;
 	QByteArray FCapturePending;
 	QByteArray FPcmBuffer;
+	QByteArray FVideoFrame;
 
 	QAudioSource *FSource;
 	QAudioSink *FSink;

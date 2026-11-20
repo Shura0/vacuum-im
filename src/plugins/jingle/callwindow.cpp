@@ -4,6 +4,7 @@
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPixmap>
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -40,6 +41,13 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 	FTimeLabel->hide();
 	mainLayout->addWidget(FTimeLabel);
 
+	FVideoLabel = new QLabel(this);
+	FVideoLabel->setAlignment(Qt::AlignCenter);
+	FVideoLabel->setMinimumSize(320, 240);
+	FVideoLabel->setScaledContents(true);
+	FVideoLabel->hide();
+	mainLayout->addWidget(FVideoLabel);
+
 	mainLayout->addStretch();
 
 	QHBoxLayout *buttonsLayout = new QHBoxLayout();
@@ -73,6 +81,14 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 CallWindow::~CallWindow()
 {
 
+}
+
+void CallWindow::setRemoteVideoFrame(const QImage &AFrame)
+{
+	if (AFrame.isNull())
+		return;
+	FVideoLabel->setPixmap(QPixmap::fromImage(AFrame));
+	FVideoLabel->show();
 }
 
 void CallWindow::setPeer(const QString &AName, const QString &AJid)
