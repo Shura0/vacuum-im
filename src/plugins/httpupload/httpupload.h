@@ -3,6 +3,7 @@
 
 #include <QMap>
 #include <QList>
+#include <QImage>
 #include <QPointer>
 #include <QSharedPointer>
 #include <QNetworkAccessManager>
@@ -26,10 +27,11 @@ class HttpUploadsManager :
 	public IPlugin,
 	public IHttpUploadsManager,
 	public IRostersDragDropHandler,
-	public IMessageViewDropHandler
+	public IMessageViewDropHandler,
+	public IMessageEditContentsHandler
 {
 	Q_OBJECT;
-	Q_INTERFACES(IPlugin IHttpUploadsManager IRostersDragDropHandler IMessageViewDropHandler);
+	Q_INTERFACES(IPlugin IHttpUploadsManager IRostersDragDropHandler IMessageViewDropHandler IMessageEditContentsHandler);
 	Q_PLUGIN_METADATA(IID "org.vacuum-im.plugins.HttpUpload");
 public:
 	HttpUploadsManager();
@@ -60,6 +62,11 @@ public:
 	virtual bool messageViewDragMove(IMessageViewWidget *AWidget, const QDragMoveEvent *AEvent);
 	virtual void messageViewDragLeave(IMessageViewWidget *AWidget, const QDragLeaveEvent *AEvent);
 	virtual bool messageViewDropAction(IMessageViewWidget *AWidget, const QDropEvent *AEvent, Menu *AMenu);
+	//IMessageEditContentsHandler
+	virtual bool messageEditContentsCreate(int AOrder, IMessageEditWidget *AWidget, QMimeData *AData);
+	virtual bool messageEditContentsCanInsert(int AOrder, IMessageEditWidget *AWidget, const QMimeData *AData);
+	virtual bool messageEditContentsInsert(int AOrder, IMessageEditWidget *AWidget, const QMimeData *AData, QTextDocument *ADocument);
+	virtual bool messageEditContentsChanged(int AOrder, IMessageEditWidget *AWidget, int &APosition, int &ARemoved, int &AAdded);
 signals:
 	void uploadCreated(IHttpUpload *AUpload);
 	void uploadDestroyed(IHttpUpload *AUpload);
@@ -93,7 +100,8 @@ protected:
 	void processDiscoInfo(const IDiscoInfo &AInfo);
 	int messageTypeForWindow(IMessageWindow *AWindow) const;
 	bool startUpload(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
-		const QString &AFileName, IMessageViewWidget *AView = NULL);
+		const QString &AFileName, IMessageViewWidget *AView = NULL,
+		const QSharedPointer<QTemporaryDir> &ATempDir = QSharedPointer<QTemporaryDir>());
 	void updateToolBarAction(IMessageToolBarWidget *AWidget);
 	void updateToolBarActions(const Jid &AStreamJid = Jid::null);
 	void showStatus(IMessageViewWidget *AView, const QString &AHtml) const;

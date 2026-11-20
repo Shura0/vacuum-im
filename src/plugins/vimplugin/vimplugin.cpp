@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QMimeData>
 #include <QScrollBar>
 #include <QKeyEvent>
 #include <QTextBlock>
@@ -2573,6 +2574,22 @@ void VimPlugin::doPasteClipboard()
 	QTextEdit *textEdit = editor->textEdit();
 	if (textEdit==NULL || window==NULL || !window->isActiveTabPage())
 		return;
+
+	// vim p: the content is inserted at the end of the input box and the user
+	// continues in INSERT. An image has no plain text to insert, so let the
+	// editor's normal paste path handle it: that reaches the HTTP upload
+	// handler which asks for confirmation and uploads the picture.
+	const QMimeData *mime = QApplication::clipboard()->mimeData();
+	if (mime!=NULL && mime->hasImage())
+	{
+		QTextCursor cursor = textEdit->textCursor();
+		cursor.movePosition(QTextCursor::End);
+		textEdit->setTextCursor(cursor);
+		textEdit->paste();
+		textEdit->setFocus();
+		return;
+	}
+
 	// vim p: the text is inserted at the cursor (the insert mode entry puts
 	// it at the end of the input box) and the user continues in INSERT
 	QString text = QApplication::clipboard()->text();

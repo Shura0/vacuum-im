@@ -7,8 +7,13 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QDir>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QLabel>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <QMimeData>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -22,6 +27,7 @@
 #include <definitions/notificationtypeorders.h>
 #include <definitions/notificationdataroles.h>
 #include <definitions/actiongroups.h>
+#include <definitions/messageeditcontentshandlerorders.h>
 #include <definitions/rosterindexkinds.h>
 #include <definitions/rosterindexroles.h>
 #include <interfaces/imultiuserchat.h>
@@ -163,6 +169,9 @@ bool HttpUploadsManager::initObjects()
 		notifyType.kindDefs = notifyType.kindMask;
 		FNotifications->registerNotificationType(NNT_HTTPUPLOAD,notifyType);
 	}
+
+	if (FMessageWidgets != NULL)
+		FMessageWidgets->insertEditContentsHandler(MECHO_HTTPUPLOAD_PASTE_IMAGE,this);
 
 	if (!FFileTransferPresent && FMessageWidgets != NULL)
 	{
@@ -320,7 +329,7 @@ int HttpUploadsManager::messageTypeForWindow(IMessageWindow *AWindow) const
 }
 
 bool HttpUploadsManager::startUpload(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
-	const QString &AFileName, IMessageViewWidget *AView)
+	const QString &AFileName, IMessageViewWidget *AView, const QSharedPointer<QTemporaryDir> &ATempDir)
 {
 	if (AFileName.isEmpty())
 		return false;
@@ -352,7 +361,9 @@ bool HttpUploadsManager::startUpload(const Jid &AStreamJid, const Jid &AContactJ
 
 	QString uploadFileName = AFileName;
 	QString encryptionFragment;
-	QSharedPointer<QTemporaryDir> tempDir;
+	// An image pasted from the clipboard lives in a temporary directory that
+	// has to stay alive until the upload task is finished with the file.
+	QSharedPointer<QTemporaryDir> tempDir = ATempDir;
 	if (encrypted)
 	{
 		tempDir = QSharedPointer<QTemporaryDir>(new QTemporaryDir);
@@ -878,4 +889,79 @@ bool HttpUploadsManager::messageViewDropAction(IMessageViewWidget *AWidget, cons
 	AMenu->addAction(uploadAction,AG_DEFAULT,true);
 	AMenu->setDefaultAction(uploadAction);
 	return true;
+}
+
+bool HttpUploadsManager::messageEditContentsCreate(int AOrder, IMessageEditWidget *AWidget, QMimeData *AData)
+{
+	Q_UNUSED(AOrder); Q_UNUSED(AWidget); Q_UNUSED(AData);
+	return false;
+}
+
+bool HttpUploadsManager::messageEditContentsCanInsert(int AOrder, IMessageEditWidget *AWidget, const QMimeData *AData)
+{
+	if (AOrder != MECHO_HTTPUPLOAD_PASTE_IMAGE || AData==NULL || !AData->hasImage() || AWidget==NULL)
+		return false;
+
+	IMessageWindow *window = AWidget->messageWindow();
+	if (window==NULL || !isSupported(window->streamJid()))
+		return false;
+
+	IMultiUserChatWindow *mucWindow = qobject_cast<IMultiUserChatWindow *>(window->instance());
+	return mucWindow==NULL || mucWindow->multiUserChat()->isOpen();
+}
+
+bool HttpUploadsManager::messageEditContentsInsert(int AOrder, IMessageEditWidget *AWidget, const QMimeData *AData, QTextDocument *ADocument)
+{
+	Q_UNUSED(ADocument);
+	if (AOrder != MECHO_HTTPUPLOAD_PASTE_IMAGE || AData==NULL || !AData->hasImage())
+		return false;
+
+	IMessageWindow *window = AWidget!=NULL ? AWidget->messageWindow() : NULL;
+	if (window==NULL || !isSupported(window->streamJid()))
+		return false;
+
+	QImage image = qvariant_cast<QImage>(AData->imageData());
+	if (image.isNull())
+		return false;
+
+	// Ask before uploading: pasting a screenshot must not silently send it.
+	QDialog dialog(AWidget->instance());
+	dialog.setWindowTitle(tr("Send pasted image"));
+	QVBoxLayout *layout = new QVBoxLayout(&dialog);
+	QLabel *preview = new QLabel(&dialog);
+	preview->setPixmap(QPixmap::fromImage(image).scaled(QSize(480,360),Qt::KeepAspectRatio,Qt::SmoothTransformation));
+	preview->setAlignment(Qt::AlignCenter);
+	layout->addWidget(preview);
+	QDialogButtonBox *buttons = new QDialogButtonBox(&dialog);
+	buttons->addButton(tr("Send"),QDialogButtonBox::AcceptRole);
+	buttons->addButton(tr("Cancel"),QDialogButtonBox::RejectRole);
+	layout->addWidget(buttons);
+	connect(buttons,SIGNAL(accepted()),&dialog,SLOT(accept()));
+	connect(buttons,SIGNAL(rejected()),&dialog,SLOT(reject()));
+	if (dialog.exec()!=QDialog::Accepted)
+		return true;
+
+	QSharedPointer<QTemporaryDir> tempDir(new QTemporaryDir);
+	if (!tempDir->isValid() || !image.save(tempDir->filePath(QStringLiteral("pasted-image.png")),"PNG"))
+	{
+		showStatus(window->viewWidget(),tr("Failed to save the pasted image"));
+		return true;
+	}
+
+	int messageType = messageTypeForWindow(window);
+	Jid contactJid = window->contactJid();
+	if (messageType == Message::GroupChat)
+		contactJid = contactJid.bare();
+
+	LOG_STRM_INFO(window->streamJid(),QString("Pasted image upload started, to=%1, size=%2x%3")
+		.arg(contactJid.full()).arg(image.width()).arg(image.height()));
+	startUpload(window->streamJid(),contactJid,messageType,
+		tempDir->filePath(QStringLiteral("pasted-image.png")),window->viewWidget(),tempDir);
+	return true;
+}
+
+bool HttpUploadsManager::messageEditContentsChanged(int AOrder, IMessageEditWidget *AWidget, int &APosition, int &ARemoved, int &AAdded)
+{
+	Q_UNUSED(AOrder); Q_UNUSED(AWidget); Q_UNUSED(APosition); Q_UNUSED(ARemoved); Q_UNUSED(AAdded);
+	return false;
 }
