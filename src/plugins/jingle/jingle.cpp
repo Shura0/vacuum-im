@@ -213,6 +213,8 @@ bool Jingle::initSettings()
 	Options::setDefaultValue(OPV_JINGLE_TURN_PASSWORD, QString());
 	Options::setDefaultValue(OPV_JINGLE_USE_DISCOVERY, true);
 	Options::setDefaultValue(OPV_JINGLE_FORCE_RELAY, false);
+	Options::setDefaultValue(OPV_JINGLE_INPUT_DEVICE, QString());
+	Options::setDefaultValue(OPV_JINGLE_OUTPUT_DEVICE, QString());
 	return true;
 }
 

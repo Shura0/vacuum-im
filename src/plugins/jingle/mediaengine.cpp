@@ -630,13 +630,35 @@ static QAudioFormat negotiateFormat(const QAudioDevice &ADevice)
 	return QAudioFormat();
 }
 
+//A saved device is identified by its id; the options page stores the hex of
+//QAudioDevice::id(). An empty id means "follow the system default", and a
+//missing device (unplugged since the option was saved) falls back to it too.
+static QAudioDevice selectAudioDevice(const QList<QAudioDevice> &ADevices, const QString &AId, const QAudioDevice &ADefault)
+{
+	if (!AId.isEmpty())
+	{
+		foreach (const QAudioDevice &device, ADevices)
+		{
+			if (QString::fromLatin1(device.id().toHex()) == AId)
+				return device;
+		}
+	}
+	return ADefault;
+}
+
 bool MediaEngine::startAudio()
 {
 	if (FAudioActive)
 		return true;
 
-	const QAudioDevice inputDevice = QMediaDevices::defaultAudioInput();
-	const QAudioDevice outputDevice = QMediaDevices::defaultAudioOutput();
+	const QString savedInputId = Options::node(OPV_JINGLE_INPUT_DEVICE).value().toString();
+	const QString savedOutputId = Options::node(OPV_JINGLE_OUTPUT_DEVICE).value().toString();
+	const QAudioDevice inputDevice = selectAudioDevice(QMediaDevices::audioInputs(), savedInputId, QMediaDevices::defaultAudioInput());
+	const QAudioDevice outputDevice = selectAudioDevice(QMediaDevices::audioOutputs(), savedOutputId, QMediaDevices::defaultAudioOutput());
+	if (!savedInputId.isEmpty() && QString::fromLatin1(inputDevice.id().toHex()) != savedInputId)
+		LOG_WARNING(QString("MediaEngine: saved input device is not available, using '%1'").arg(inputDevice.description()));
+	if (!savedOutputId.isEmpty() && QString::fromLatin1(outputDevice.id().toHex()) != savedOutputId)
+		LOG_WARNING(QString("MediaEngine: saved output device is not available, using '%1'").arg(outputDevice.description()));
 	if (inputDevice.isNull() || outputDevice.isNull())
 		return false;
 
@@ -647,7 +669,7 @@ bool MediaEngine::startAudio()
 	FSinkFormat = negotiateFormat(outputDevice);
 	if (!FSourceFormat.isValid() || !FSinkFormat.isValid())
 	{
-		LOG_WARNING(QString("MediaEngine: the default audio devices do not accept any 16-bit format, "
+		LOG_WARNING(QString("MediaEngine: the selected audio devices do not accept any 16-bit format, "
 		                    "input '%1', output '%2'").arg(inputDevice.description(), outputDevice.description()));
 		return false;
 	}

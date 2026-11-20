@@ -2,10 +2,12 @@
 #define CALLSOPTIONSWIDGET_H
 
 #include <QWidget>
+#include <QAudioDevice>
 
 #include <interfaces/ioptionsmanager.h>
 
 class QCheckBox;
+class QComboBox;
 class QLineEdit;
 
 /*
@@ -31,9 +33,13 @@ signals:
 	void childApply();
 	void childReset();
 private:
+	static void fillDevices(QComboBox *ACombo, const QList<QAudioDevice> &ADevices);
+private:
 	QCheckBox *FEnabled;
 	QCheckBox *FAec;
 	QCheckBox *FAllowUnknown;
+	QComboBox *FInputDevice;
+	QComboBox *FOutputDevice;
 	QCheckBox *FUseDiscovery;
 	QCheckBox *FForceRelay;
 	QLineEdit *FStunServer;

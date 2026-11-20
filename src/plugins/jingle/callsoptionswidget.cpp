@@ -1,10 +1,14 @@
 #include "callsoptionswidget.h"
 
+#include <QAudioDevice>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMediaDevices>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 #include <definitions/optionvalues.h>
@@ -18,6 +22,16 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 	connect(FEnabled, SIGNAL(toggled(bool)), SIGNAL(modified()));
 	connect(FAec, SIGNAL(toggled(bool)), SIGNAL(modified()));
 	connect(FAllowUnknown, SIGNAL(toggled(bool)), SIGNAL(modified()));
+
+	QGroupBox *deviceBox = new QGroupBox(tr("Audio devices"), this);
+	FInputDevice = new QComboBox(deviceBox);
+	FOutputDevice = new QComboBox(deviceBox);
+	connect(FInputDevice, SIGNAL(currentIndexChanged(int)), SIGNAL(modified()));
+	connect(FOutputDevice, SIGNAL(currentIndexChanged(int)), SIGNAL(modified()));
+
+	QFormLayout *deviceLayout = new QFormLayout(deviceBox);
+	deviceLayout->addRow(tr("Microphone:"), FInputDevice);
+	deviceLayout->addRow(tr("Speaker:"), FOutputDevice);
 
 	QGroupBox *natBox = new QGroupBox(tr("NAT traversal"), this);
 	FUseDiscovery = new QCheckBox(tr("Use STUN and TURN servers published by the account's server"), natBox);
@@ -53,6 +67,7 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 	layout->addWidget(FEnabled);
 	layout->addWidget(FAec);
 	layout->addWidget(FAllowUnknown);
+	layout->addWidget(deviceBox);
 	layout->addWidget(natBox);
 	layout->addWidget(hint);
 	layout->addStretch();
@@ -65,6 +80,8 @@ void CallsOptionsWidget::apply()
 	Options::node(OPV_JINGLE_ENABLED).setValue(FEnabled->isChecked());
 	Options::node(OPV_JINGLE_AEC).setValue(FAec->isChecked());
 	Options::node(OPV_JINGLE_ALLOWUNKNOWN).setValue(FAllowUnknown->isChecked());
+	Options::node(OPV_JINGLE_INPUT_DEVICE).setValue(FInputDevice->currentData().toString());
+	Options::node(OPV_JINGLE_OUTPUT_DEVICE).setValue(FOutputDevice->currentData().toString());
 	Options::node(OPV_JINGLE_USE_DISCOVERY).setValue(FUseDiscovery->isChecked());
 	Options::node(OPV_JINGLE_FORCE_RELAY).setValue(FForceRelay->isChecked());
 	Options::node(OPV_JINGLE_STUN_SERVER).setValue(FStunServer->text().trimmed());
@@ -79,10 +96,29 @@ void CallsOptionsWidget::reset()
 	FEnabled->setChecked(Options::node(OPV_JINGLE_ENABLED).value().toBool());
 	FAec->setChecked(Options::node(OPV_JINGLE_AEC).value().toBool());
 	FAllowUnknown->setChecked(Options::node(OPV_JINGLE_ALLOWUNKNOWN).value().toBool());
+
+	QSignalBlocker inputBlocker(FInputDevice);
+	QSignalBlocker outputBlocker(FOutputDevice);
+	fillDevices(FInputDevice, QMediaDevices::audioInputs());
+	fillDevices(FOutputDevice, QMediaDevices::audioOutputs());
+	const int inputIndex = FInputDevice->findData(Options::node(OPV_JINGLE_INPUT_DEVICE).value().toString());
+	const int outputIndex = FOutputDevice->findData(Options::node(OPV_JINGLE_OUTPUT_DEVICE).value().toString());
+	FInputDevice->setCurrentIndex(inputIndex>=0 ? inputIndex : 0);
+	FOutputDevice->setCurrentIndex(outputIndex>=0 ? outputIndex : 0);
+
 	FUseDiscovery->setChecked(Options::node(OPV_JINGLE_USE_DISCOVERY).value().toBool());
 	FForceRelay->setChecked(Options::node(OPV_JINGLE_FORCE_RELAY).value().toBool());
 	FStunServer->setText(Options::node(OPV_JINGLE_STUN_SERVER).value().toString());
 	FTurnServer->setText(Options::node(OPV_JINGLE_TURN_SERVER).value().toString());
 	FTurnUsername->setText(Options::node(OPV_JINGLE_TURN_USERNAME).value().toString());
 	FTurnPassword->setText(Options::node(OPV_JINGLE_TURN_PASSWORD).value().toString());
+}
+
+void CallsOptionsWidget::fillDevices(QComboBox *ACombo, const QList<QAudioDevice> &ADevices)
+{
+	ACombo->clear();
+	ACombo->addItem(tr("System default"), QString());
+	foreach (const QAudioDevice &device, ADevices)
+		if (!device.isNull())
+			ACombo->addItem(device.description(), QString::fromLatin1(device.id().toHex()));
 }
