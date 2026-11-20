@@ -421,7 +421,7 @@ void MamArchive::processQueryResult(const Jid &AStreamJid, const Stanza &AStanza
 			return;
 	}
 
-	if (more && limitReached)
+	if (more && limitReached && request.messages.count() >= MAM_MAX_MESSAGES)
 	{
 		LOG_STRM_WARNING(AStreamJid,QString("MAM request stopped at the page limit, with=%1, messages=%2, id=%3")
 			.arg(request.request.with.bare()).arg(request.messages.count()).arg(request.id));

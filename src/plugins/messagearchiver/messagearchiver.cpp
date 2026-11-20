@@ -213,6 +213,10 @@ bool MessageArchiver::initConnections(IPluginManager *APluginManager, int &AInit
 	if (plugin)
 	{
 		FRosterManager = qobject_cast<IRosterManager *>(plugin->instance());
+		if (FRosterManager)
+		{
+			connect(FRosterManager->instance(),SIGNAL(rosterOpened(IRoster *)),SLOT(onRosterOpened(IRoster *)));
+		}
 	}
 
 	plugin = APluginManager->pluginInterface("IMultiUserChatManager").value(0,NULL);
@@ -2131,35 +2135,69 @@ void MessageArchiver::trySyncServerArchive(const Jid &AStreamJid)
 	if (findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving) == NULL)
 		return;
 
+	// The server archive is always queried per contact: some servers reject a
+	// query without "with", while the per-contact form is the one the history
+	// windows already use. The contact list comes from the roster, so the
+	// synchronization has to wait until it is opened.
+	IRoster *roster = FRosterManager!=NULL ? FRosterManager->findRoster(AStreamJid) : NULL;
+	if (roster==NULL || !roster->isOpen())
+		return;
+
 	IArchiveEngine *engine = findServerArchiveEngine(AStreamJid);
 	if (engine == NULL)
 		return;
 
-	QDateTime start = archiveSyncTime(AStreamJid,engine);
+	ArchiveSyncState sync;
+	sync.engine = engine;
+	sync.previous = archiveSyncTime(AStreamJid,engine);
+	foreach(const IRosterItem &item, roster->items())
+	{
+		if (item.itemJid.isValid())
+			sync.contacts.append(Jid(item.itemJid.bare()));
+	}
+	FArchiveSyncs.insert(AStreamJid,sync);
+
+	LOG_STRM_INFO(AStreamJid,QString("Server history sync started, engine=%1, contacts=%2, start=%3")
+		.arg(engine->engineName()).arg(sync.contacts.count())
+		.arg(sync.previous.isValid() ? DateTime(sync.previous).toX85UTC() : QString("all")));
+
+	startNextSyncContact(AStreamJid);
+}
+
+void MessageArchiver::startNextSyncContact(const Jid &AStreamJid)
+{
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it == FArchiveSyncs.end())
+		return;
+
+	if (it->contacts.isEmpty())
+	{
+		finishSyncServerArchive(AStreamJid);
+		return;
+	}
+
+	Jid contact = it->contacts.takeFirst();
+	IArchiveEngine *engine = it->engine;
+
 	IArchiveRequest request;
-	request.with = Jid::null;
-	if (start.isValid())
-		request.start = start.addSecs(-ARCHIVE_SYNC_OVERLAP);
+	request.with = contact;
+	if (it->previous.isValid())
+		request.start = it->previous.addSecs(-ARCHIVE_SYNC_OVERLAP);
 	request.order = Qt::AscendingOrder;
 	request.maxItems = 0xFFFFFFFF;
 
 	QString id = engine->loadHeaders(AStreamJid,request);
 	if (id.isEmpty())
 	{
-		LOG_STRM_WARNING(AStreamJid,QString("Failed to start server history sync, engine=%1").arg(engine->engineName()));
+		LOG_STRM_WARNING(AStreamJid,QString("Failed to start server history sync request, with=%1, engine=%2")
+			.arg(contact.bare()).arg(engine->engineName()));
+		it->failed = true;
+		finishSyncServerArchive(AStreamJid);
 		return;
 	}
 
-	ArchiveSyncState sync;
-	sync.engine = engine;
-	sync.headersId = id;
-	sync.previous = start;
-	FArchiveSyncs.insert(AStreamJid,sync);
+	it->headersId = id;
 	FSyncHeaders.insert(id,AStreamJid);
-
-	LOG_STRM_INFO(AStreamJid,QString("Server history sync started, engine=%1, start=%2")
-		.arg(engine->engineName())
-		.arg(start.isValid() ? DateTime(start).toX85UTC() : QString("all")));
 }
 
 void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArchiveHeader> &AHeaders)
@@ -2170,7 +2208,7 @@ void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArc
 			return;
 
 		it->pendingCollections = AHeaders.count();
-		it->collectionsCount = AHeaders.count();
+		it->collectionsCount += AHeaders.count();
 		IArchiveEngine *engine = it->engine;
 
 		// Every header produced by the server query already carries its
@@ -2200,7 +2238,12 @@ void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArc
 
 	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
 	if (it!=FArchiveSyncs.end() && it->pendingCollections<=0)
-		finishSyncServerArchive(AStreamJid);
+	{
+		if (it->failed)
+			finishSyncServerArchive(AStreamJid);
+		else
+			startNextSyncContact(AStreamJid);
+	}
 }
 
 void MessageArchiver::processSyncCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection)
@@ -2218,7 +2261,12 @@ void MessageArchiver::processSyncCollection(const Jid &AStreamJid, const IArchiv
 
 		it->pendingCollections--;
 		if (it->pendingCollections <= 0)
-			finishSyncServerArchive(AStreamJid);
+		{
+			if (it->failed)
+				finishSyncServerArchive(AStreamJid);
+			else
+				startNextSyncContact(AStreamJid);
+		}
 	}
 }
 
@@ -2253,9 +2301,9 @@ void MessageArchiver::finishSyncServerArchive(const Jid &AStreamJid, const XmppE
 		}
 		else
 		{
-			LOG_STRM_WARNING(AStreamJid,QString("Server history sync failed, engine=%1, collections=%2: %3")
-				.arg(sync.engine->engineName()).arg(sync.collectionsCount)
-				.arg(AError.isNull() ? QString("Collection load failed") : AError.condition()));
+			LOG_STRM_WARNING(AStreamJid,QString("Server history sync failed, engine=%1, collections=%2, contacts-left=%3: %4")
+				.arg(sync.engine->engineName()).arg(sync.collectionsCount).arg(sync.contacts.count())
+				.arg(AError.isNull() ? QString("Request or collection load failed") : AError.condition()));
 		}
 	}
 }
@@ -2768,6 +2816,14 @@ void MessageArchiver::onEngineCapabilitiesChanged(const Jid &AStreamJid)
 	// The server archive becomes known only after service discovery, which
 	// usually finishes after the archive preferences were opened.
 	trySyncServerArchive(AStreamJid);
+}
+
+void MessageArchiver::onRosterOpened(IRoster *ARoster)
+{
+	// The contact list drives the per-contact synchronization of the server
+	// archive, so the sync can start once the roster is there.
+	if (ARoster!=NULL)
+		trySyncServerArchive(ARoster->streamJid());
 }
 
 void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError &AError)

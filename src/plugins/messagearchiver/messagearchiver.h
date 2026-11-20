@@ -67,6 +67,7 @@ struct CollectionRequest {
 
 struct ArchiveSyncState {
 	IArchiveEngine *engine;
+	QList<Jid> contacts;
 	QString headersId;
 	int pendingCollections;
 	int collectionsCount;
@@ -214,6 +215,7 @@ protected:
 private:
 	void saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection, QMap<Jid,QSet<QString> > *AKnownIds = NULL, bool AForceSave = false);
 	void trySyncServerArchive(const Jid &AStreamJid);
+	void startNextSyncContact(const Jid &AStreamJid);
 	void processSyncHeaders(const Jid &AStreamJid, const QList<IArchiveHeader> &AHeaders);
 	void processSyncCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection);
 	void finishSyncServerArchive(const Jid &AStreamJid, const XmppError &AError = XmppError());
@@ -223,6 +225,7 @@ private:
 	void setArchiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine, const QDateTime &ATime) const;
 protected slots:
 	void onEngineCapabilitiesChanged(const Jid &AStreamJid);
+	void onRosterOpened(IRoster *ARoster);
 	void onEngineRequestFailed(const QString &AId, const XmppError &AError);
 	void onEngineHeadersLoaded(const QString &AId, const QList<IArchiveHeader> &AHeaders);
 	void onEngineCollectionLoaded(const QString &AId, const IArchiveCollection &ACollection);
