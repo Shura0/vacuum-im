@@ -67,7 +67,10 @@ bool CallSounds::loadEffect(QSoundEffect *AEffect, const QString &AKey)
 
 void CallSounds::playRingtone()
 {
-	if (isSoundEnabled(NNT_JINGLE_CALL) && loadEffect(FRingtone, QStringLiteral("jingleRingtone")))
+	const bool enabled = isSoundEnabled(NNT_JINGLE_CALL);
+	LOG_DEBUG(QString("CallSounds: play ringtone, enabled=%1, file='%2'").
+		arg(enabled).arg(soundFile(QStringLiteral("jingleRingtone"))));
+	if (enabled && loadEffect(FRingtone, QStringLiteral("jingleRingtone")))
 		FRingtone->play();
 }
 
@@ -81,7 +84,7 @@ void CallSounds::playDialtone()
 	stopRingtone();
 	if (FDialtone->isPlaying())
 		return;
-	if (isSoundEnabled(NNT_JINGLE_CALL_OUTGOING) && loadEffect(FDialtone, QStringLiteral("jingleDialtone")))
+	if (loadEffect(FDialtone, QStringLiteral("jingleDialtone")))
 		FDialtone->play();
 }
 

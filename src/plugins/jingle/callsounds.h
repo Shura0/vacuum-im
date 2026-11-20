@@ -12,8 +12,9 @@ class INotifications;
  * waits for the peer, and the "call ended" tone played when a call that was
  * actually established is over. The WAV files are loaded from the shared
  * "sounds" storage, the same way the notifications plugin loads its sounds.
- * The ringtone and the dial tone obey their events on the Notifications page,
- * while the end-of-call tone always plays; without the storage all stay silent.
+ * The ringtone obeys the incoming-call event on the Notifications page, while
+ * the dial tone and the end-of-call tone always play; without the storage all
+ * stay silent.
  */
 class CallSounds :
 	public QObject

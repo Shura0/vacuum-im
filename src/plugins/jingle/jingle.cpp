@@ -133,9 +133,8 @@ bool Jingle::initObjects()
 
 	if (FNotifications)
 	{
-		//Only the sound kind makes sense for a call: the call window itself is
-		//the notification. The ringtone and the dial tone settings thus live on
-		//the Notifications page together with every other notification sound.
+		//Only the sound kind makes sense for an incoming call: the call window
+		//itself is the notification. The dial tone is not a preference.
 		INotificationType callType;
 		callType.order = NTO_JINGLE_CALL;
 		callType.icon = IconStorage::staticStorage(RSR_STORAGE_MENUICONS)->getIcon(MNI_JINGLE_CALL);
@@ -143,14 +142,6 @@ bool Jingle::initObjects()
 		callType.kindMask = INotification::SoundPlay;
 		callType.kindDefs = INotification::SoundPlay;
 		FNotifications->registerNotificationType(NNT_JINGLE_CALL, callType);
-
-		INotificationType outgoingType;
-		outgoingType.order = NTO_JINGLE_CALL_OUTGOING;
-		outgoingType.icon = callType.icon;
-		outgoingType.title = tr("When making an outgoing call");
-		outgoingType.kindMask = INotification::SoundPlay;
-		outgoingType.kindDefs = INotification::SoundPlay;
-		FNotifications->registerNotificationType(NNT_JINGLE_CALL_OUTGOING, outgoingType);
 	}
 
 	if (FDiscovery)
