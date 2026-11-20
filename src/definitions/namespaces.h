@@ -109,6 +109,9 @@
 
 // Jingle (XEP-0166 and family)
 #define NS_JINGLE                                         "urn:xmpp:jingle:1"
+#define NS_JINGLE_MESSAGE                                 "urn:xmpp:jingle-message:0"
+#define NS_JINGLE_MESSAGE_ALT                             "urn:xmpp:jingle:jingle-message:0"
+#define NS_MESSAGE_HINTS                                  "urn:xmpp:hints"
 #define NS_JINGLE_ERRORS                                  "urn:xmpp:jingle:errors:1"
 #define NS_JINGLE_APPS_RTP                                "urn:xmpp:jingle:apps:rtp:1"
 #define NS_JINGLE_APPS_RTP_AUDIO                          "urn:xmpp:jingle:apps:rtp:audio"

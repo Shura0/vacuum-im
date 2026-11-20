@@ -78,6 +78,9 @@ public:
 	//Effective STUN/TURN configuration for a stream: the manual options first,
 	//then the services discovered with XEP-0215.
 	NatConfig natConfig(const Jid &AStreamJid) const;
+	//XEP-0353 Jingle Message Initiation: <propose>/<proceed>/<finish> messages
+	bool sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString &AAction, const QString &ASid,
+		const QString &AReasonCode = QString(), const QString &AText = QString());
 signals:
 	// IJingle notifications
 	void callStarted(const Jid &AStreamJid, const Jid &AContactJid, const QString &ASid);
@@ -100,6 +103,7 @@ private:
 	JingleSession *findActiveSession(const Jid &AStreamJid, const Jid &AContactJid) const;
 	void updateToolBarAction(IMessageToolBarWidget *AWidget);
 	bool processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza, const QDomElement &AJingleElem, bool &AAccept);
+	bool processJmiMessage(const Jid &AStreamJid, const Stanza &AStanza, const QDomElement &AJmiElem, const QString &AAction);
 	bool processNatPush(const Jid &AStreamJid, const Stanza &AStanza, bool &AAccept);
 	void requestNatServices(const Jid &AStreamJid);
 	void requestNatCredentials(const Jid &AStreamJid, const NatService &AService);

@@ -146,6 +146,20 @@ static bool isDelineatingStun(const QByteArray &AData)
 		qFromBigEndian<quint32>(AData.constData() + 4) == StunMagicCookie;
 }
 
+//A restart helps only when the peer has no usable public address: an ICE
+//restart makes it gather fresh candidates again (e.g. after a network switch).
+static bool onlyPrivateHostCandidates(const QList<IceCandidate> &ACandidates)
+{
+	if (ACandidates.isEmpty())
+		return false;
+	for (const IceCandidate &candidate : ACandidates)
+	{
+		if (candidate.type != QStringLiteral("host") || QHostAddress(candidate.address).isGlobal())
+			return false;
+	}
+	return true;
+}
+
 IceAgent::IceAgent(QObject *AParent)
 	: QObject(AParent)
 {
@@ -171,7 +185,10 @@ IceAgent::IceAgent(QObject *AParent)
 	FCheckStartMs = 0;
 	FCheckSentCount = 0;
 	FStunInboundCount = 0;
+	FStunRequestCount = 0;
 	FNoConnectivityReported = false;
+	FRestartSuggested = false;
+	FGeneration = 0;
 	FTrace = 0;
 }
 
@@ -200,6 +217,11 @@ QString IceAgent::localPwd() const
 	return FLocalPwd;
 }
 
+QString IceAgent::remoteUfrag() const
+{
+	return FRemoteUfrag;
+}
+
 bool IceAgent::start()
 {
 	if (FStarted)
@@ -218,6 +240,12 @@ bool IceAgent::start()
 	FStunPacket.clear();
 	FStunPending = false;
 	FTurnPending = false;
+	FNoConnectivityReported = false;
+	FRestartSuggested = false;
+	FCheckStartMs = 0;
+	FCheckSentCount = 0;
+	FStunInboundCount = 0;
+	FStunRequestCount = 0;
 	FForceRelay = FNatConfig.forceRelay;
 
 	FRtpSocket = new QUdpSocket(this);
@@ -264,6 +292,32 @@ bool IceAgent::start()
 	FStarted = true;
 	startNatGathering();
 	return true;
+}
+
+bool IceAgent::restart()
+{
+	const QString remoteUfrag = FRemoteUfrag;
+	const QString remotePwd = FRemotePwd;
+
+	stop();
+	++FGeneration;
+	if (!start())
+	{
+		LOG_WARNING(QString("IceAgent: failed to restart ICE generation %1").arg(FGeneration));
+		return false;
+	}
+
+	//The peer answers the restart with new credentials, but keep the old ones
+	//until then so a late check on the previous generation still makes sense.
+	FRemoteUfrag = remoteUfrag;
+	FRemotePwd = remotePwd;
+	LOG_INFO(QString("IceAgent: ICE restart, generation=%1 ufrag=%2").arg(FGeneration).arg(FLocalUfrag));
+	return true;
+}
+
+int IceAgent::generation() const
+{
+	return FGeneration;
 }
 
 void IceAgent::stop()
@@ -348,6 +402,15 @@ void IceAgent::setRemoteCredentials(const QString &AUfrag, const QString &APwd)
 
 void IceAgent::addRemoteCandidate(const IceCandidate &ACandidate)
 {
+	//Mobile peers sometimes repeat their whole trickle list; a duplicate would
+	//double every check pair and flood the network with retransmissions.
+	for (const IceCandidate &existing : FRemoteCandidates)
+	{
+		if (existing.componentId == ACandidate.componentId && existing.address == ACandidate.address &&
+		    existing.port == ACandidate.port && existing.type == ACandidate.type)
+			return;
+	}
+
 	FRemoteCandidates.append(ACandidate);
 	if (FTrace < 80)
 		LOG_INFO(QString("IceAgent: remote candidate %1:%2 comp=%3 type=%4 added (ufrag %5)").
@@ -557,6 +620,8 @@ void IceAgent::onUdpReadyRead()
 		{
 			const quint16 type = qFromBigEndian<quint16>(data.constData());
 			FStunInboundCount++;
+			if (type == StunBindingRequest)
+				++FStunRequestCount;
 			if (FTrace < 200)
 				LOG_INFO(QString("IceAgent: STUN %1 type=0x%2 received from %3:%4 comp=%5").
 					arg(type == StunBindingRequest ? "request" : "response").arg(type, 4, 16, QChar('0')).
@@ -1240,12 +1305,22 @@ void IceAgent::onCheckTimer()
 	//left the machine and whether anything at all came back.
 	if (FCheckStartMs == 0 && !FCheckPairs.isEmpty())
 		FCheckStartMs = now;
+
 	if (FCheckStartMs != 0 && !FNoConnectivityReported && now - FCheckStartMs > 10000)
 	{
 		FNoConnectivityReported = true;
-		LOG_WARNING(QString("IceAgent: no connectivity after 10s, %1 checks sent to %2 remote candidates, %3 STUN messages received, relay=%4, connected=%5").
-			arg(FCheckSentCount).arg(FRemoteCandidates.count()).arg(FStunInboundCount).
+		LOG_WARNING(QString("IceAgent: no connectivity after 10s, %1 checks sent to %2 remote candidates, %3 STUN messages received (%4 requests), relay=%5, connected=%6").
+			arg(FCheckSentCount).arg(FRemoteCandidates.count()).arg(FStunInboundCount).arg(FStunRequestCount).
 			arg(FTurn != nullptr && FTurn->isAllocated() ? "allocated" : "none").arg(FConnected));
+		if (!FRestartSuggested && onlyPrivateHostCandidates(FRemoteCandidates))
+		{
+			FRestartSuggested = true;
+			LOG_INFO("IceAgent: the peer offered only private host candidates, an ICE restart is suggested");
+			emit restartNeeded();
+			//The handler may restart the agent and replace the check pair list,
+			//so this timer tick must not continue iterating over the old pairs.
+			return;
+		}
 	}
 
 	for (CheckPair &pair : FCheckPairs)
@@ -1418,6 +1493,8 @@ void IceAgent::onTurnData(const QByteArray &AData, const QHostAddress &APeerAddr
 	{
 		const quint16 type = qFromBigEndian<quint16>(AData.constData());
 		FStunInboundCount++;
+		if (type == StunBindingRequest)
+			++FStunRequestCount;
 		if (type == StunBindingRequest)
 		{
 			//The peer may check us from an address we never saw as a candidate (a host

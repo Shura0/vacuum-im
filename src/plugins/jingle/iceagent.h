@@ -64,9 +64,14 @@ public:
 
 	QString localUfrag() const;
 	QString localPwd() const;
+	QString remoteUfrag() const;
 
 	bool start(); //Binds sockets and gathers candidates
 	void stop();
+	//Starts a new ICE generation: fresh local ufrag/pwd and sockets, keeping
+	//the same object so the media engine's signal connections stay intact.
+	bool restart();
+	int generation() const;
 
 	bool isGatheringFinished() const;
 	QList<IceCandidate> localCandidates() const; //Valid after start()
@@ -85,6 +90,9 @@ signals:
 	//sent to the peer with a transport-info action.
 	void candidateGathered(const IceCandidate &ACandidate);
 	//Gathering is over (immediately when no STUN/TURN servers are configured).
+	//Emitted once per generation when checks have been going out for 10 s
+	//without any response and the peer only offered private host candidates.
+	void restartNeeded();
 	void gatheringFinished();
 
 private slots:
@@ -170,7 +178,10 @@ private:
 	qint64 FCheckStartMs;   //When the first check pair appeared, for the stall report
 	qint64 FCheckSentCount;
 	qint64 FStunInboundCount;
+	int FStunRequestCount;  //Inbound binding requests; zero means an ICE-lite peer
 	bool FNoConnectivityReported;
+	bool FRestartSuggested;
+	int FGeneration;
 	int FTrace;             //rate limit for the interop debugging trace
 };
 

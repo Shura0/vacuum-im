@@ -36,7 +36,7 @@ Main Features
   * Support for avatars with the ability to specify a contact an arbitrary image as an avatar
   * Ability to add annotation to contact
   * Legacy OMEMO 0.3 end-to-end encryption for one-to-one chats
-  * Voice calls over Jingle (XEP-0166/0167/0176/0320), with STUN/TURN NAT traversal, XEP-0215 server discovery, a ringtone for incoming calls, a dial tone for outgoing ones, a call-ended tone, a Call button in chat windows enabled for contacts that support calls, and acoustic echo cancellation through WebRTC AudioProcessing, and microphone/speaker selection on the Calls page; video calls in development
+  * Voice calls over Jingle (XEP-0166/0167/0176/0320) with Jingle Message Initiation (XEP-0353), with STUN/TURN NAT traversal, ICE restart, XEP-0215 server discovery, a ringtone for incoming calls, a dial tone for outgoing ones, a call-ended tone, a Call button in chat windows enabled for contacts that support calls, and acoustic echo cancellation through WebRTC AudioProcessing, and microphone/speaker selection on the Calls page; video calls in development
 
 
 Portable Version

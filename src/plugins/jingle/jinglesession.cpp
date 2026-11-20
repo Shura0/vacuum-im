@@ -52,6 +52,14 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FAnswerPending = false;
 	FTransportSent = false;
 	FRemoteCandidateCount = 0;
+	FIceRestartCount = 0;
+	FIceRestartPending = false;
+	FJmiAwaitingProceed = false;
+	FJmiPending = false;
+	FJmiWaitingInitiate = false;
+	FJmiFinishSent = false;
+	FJmiUsed = false;
+	FJmiTransportReceived = false;
 
 	FState = AInitiated ? IJingle::CallOutgoing : IJingle::CallRinging;
 
@@ -59,6 +67,10 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FGatherTimer->setSingleShot(true);
 	FGatherTimer->setInterval(3000);
 	connect(FGatherTimer, &QTimer::timeout, this, &JingleSession::onGatherWaitTimeout);
+
+	FJmiTimer = new QTimer(this);
+	FJmiTimer->setSingleShot(true);
+	connect(FJmiTimer, &QTimer::timeout, this, &JingleSession::onJmiTimeout);
 
 	FPeerWaitTimer = new QTimer(this);
 	FPeerWaitTimer->setSingleShot(true);
@@ -84,6 +96,11 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 		});
 		connect(FMediaEngine, &MediaEngine::iceConnected, this, [this]() {
 			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1' ICE connected, starting DTLS").arg(FSid));
+			if (FIceRestartPending && !FSilent)
+			{
+				FIceRestartPending = false;
+				FWindow->setStatusText(tr("Connection restored"));
+			}
 		});
 		connect(FMediaEngine, &MediaEngine::dtlsConnected, this, [this]() {
 			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1' DTLS established, media secure").arg(FSid));
@@ -93,6 +110,7 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 		FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
 		connect(FMediaEngine->iceAgent(), &IceAgent::gatheringFinished, this, &JingleSession::onGatheringFinished);
 		connect(FMediaEngine->iceAgent(), &IceAgent::candidateGathered, this, &JingleSession::onCandidateGathered);
+		connect(FMediaEngine->iceAgent(), &IceAgent::restartNeeded, this, &JingleSession::onIceRestartNeeded);
 		if (!FInitiated)
 			FMediaEngine->startIce(false);
 	}
@@ -174,7 +192,21 @@ void JingleSession::initiate()
 	}
 
 	FOfferPending = true;
-	continueInitiate();
+
+	//XEP-0353: announce the call in a message first so that all of the peer's
+	//devices (and push services) can show it before the Jingle IQ arrives.
+	if (!FJmiAwaitingProceed && !FJmiFinishSent)
+	{
+		FJmiAwaitingProceed = true;
+		FJmiUsed = true;
+		sendJmiMessage(QStringLiteral("propose"));
+		FJmiTimer->setInterval(3000);
+		FJmiTimer->start();
+	}
+	else
+	{
+		continueInitiate();
+	}
 
 	if (!FSilent)
 	{
@@ -186,7 +218,7 @@ void JingleSession::initiate()
 
 void JingleSession::continueInitiate(bool AForce)
 {
-	if (!FOfferPending || FTerminated)
+	if (!FOfferPending || FTerminated || (FJmiAwaitingProceed && !AForce))
 		return;
 
 	if (!AForce && FMediaEngine && !FMediaEngine->iceAgent()->isGatheringFinished())
@@ -211,6 +243,18 @@ void JingleSession::continueInitiate(bool AForce)
 	FJingle->sendSessionRequest(this, initiate);
 }
 
+void JingleSession::resendInitiate()
+{
+	if (FTerminated || !FMediaEngine)
+		return;
+
+	QDomElement jingleElem;
+	Stanza initiate = makeSessionAction("session-initiate", &jingleElem);
+	addContentElement(jingleElem);
+	FJingle->sendSessionRequest(this, initiate);
+	LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': session-initiate resent after JMI proceed").arg(FSid));
+}
+
 void JingleSession::answer()
 {
 	if (FState != IJingle::CallRinging || FTerminated || FAnswerPending)
@@ -221,6 +265,29 @@ void JingleSession::answer()
 		finishLocally("unsupported-applications", tr("The media engine is not available"));
 		return;
 	}
+
+	if (FJmiPending)
+	{
+		//XEP-0353: the responder accepts the proposal first; the initiator then
+		//sends the real session-initiate, which we answer as usual.
+		sendJmiMessage(QStringLiteral("proceed"));
+		FJmiPending = false;
+		if (FJmiTransportReceived)
+		{
+			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
+			applyDtlsClientRole();
+			FAnswerPending = true;
+			continueAnswer();
+			return;
+		}
+		FJmiWaitingInitiate = true;
+		FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
+		FMediaEngine->startIce(false);
+		FJmiTimer->setInterval(30000);
+		FJmiTimer->start();
+		return;
+	}
+
 	if (FRemoteOpusPayloadType < 0 || FPeerFingerprint.isEmpty())
 	{
 		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1' offers no common codec/fingerprint, declining").arg(FSid));
@@ -289,7 +356,7 @@ void JingleSession::onGatherWaitTimeout()
 	if (FTerminated)
 		return;
 	LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': candidate gathering is still running, sending the transport with the candidates known so far").arg(FSid));
-	if (FOfferPending)
+	if (FOfferPending && !FJmiAwaitingProceed)
 		continueInitiate(true);
 	if (FAnswerPending)
 		continueAnswer(true);
@@ -326,10 +393,43 @@ void JingleSession::onCandidateGathered(const IceCandidate &ACandidate)
 		arg(FSid, ACandidate.type, ACandidate.address).arg(ACandidate.port));
 }
 
+void JingleSession::onIceRestartNeeded()
+{
+	if (FTerminated || FMediaEngine == nullptr || FIceRestartCount >= 2)
+		return;
+
+	IceAgent *agent = FMediaEngine->iceAgent();
+	if (!agent->restart())
+	{
+		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': ICE restart failed").arg(FSid));
+		FIceRestartCount = 2;
+		return;
+	}
+
+	QDomElement jingleElem;
+	Stanza replace = makeSessionAction("transport-replace", &jingleElem);
+	addRestartTransport(jingleElem);
+	FJingle->sendSessionAction(this, replace);
+
+	++FIceRestartCount;
+	FIceRestartPending = true;
+	LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': ICE restart requested, generation=%2, attempt=%3").
+		arg(FSid).arg(agent->generation()).arg(FIceRestartCount));
+	if (!FSilent)
+		FWindow->setStatusText(tr("Reconnecting..."));
+}
+
 void JingleSession::decline()
 {
 	if (FTerminated)
 		return;
+
+	if (FJmiPending)
+	{
+		sendJmiMessage(QStringLiteral("reject"), QStringLiteral("busy"), tr("Call declined"));
+		finishLocally("decline", tr("Call declined"));
+		return;
+	}
 
 	QDomElement jingleElem;
 	Stanza terminate = makeSessionAction("session-terminate", &jingleElem);
@@ -337,6 +437,104 @@ void JingleSession::decline()
 	FJingle->sendSessionAction(this, terminate);
 
 	finishLocally("decline", tr("Call declined"));
+}
+
+void JingleSession::storeJmiPropose(const QDomElement &ADescriptionElem)
+{
+	Q_UNUSED(ADescriptionElem);
+	//The call window already shows the incoming ringing state from the
+	//constructor. The real Jingle transport arrives only after we send proceed.
+	FJmiUsed = true;
+	FJmiPending = true;
+}
+
+bool JingleSession::processJmiMessage(const QString &AAction, const QDomElement &AJmiElem)
+{
+	Q_UNUSED(AJmiElem);
+
+	if (AAction == QStringLiteral("ringing"))
+	{
+		if (FJmiAwaitingProceed)
+		{
+			FJmiTimer->stop();
+			FJmiTimer->setInterval(60000); //wait for the user to answer
+			FJmiTimer->start();
+			if (!FSilent)
+				FWindow->setStatusText(tr("Peer is ringing..."));
+		}
+	}
+	else if (AAction == QStringLiteral("proceed") || AAction == QStringLiteral("accept"))
+	{
+		if (FJmiAwaitingProceed)
+		{
+			FJmiAwaitingProceed = false;
+			FJmiTimer->stop();
+			LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': JMI call accepted by the peer (%2)").arg(FSid, AAction));
+			if (FOfferPending)
+				continueInitiate();
+			else if (FTransportSent && (FState==IJingle::CallOutgoing || FState==IJingle::CallRingback))
+				resendInitiate();
+		}
+	}
+	else if (AAction == QStringLiteral("reject") || AAction == QStringLiteral("retract"))
+	{
+		FJmiAwaitingProceed = false;
+		FJmiTimer->stop();
+		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': call proposal was rejected").arg(FSid));
+		finishLocally("decline", tr("Call declined"));
+	}
+	else if (AAction == QStringLiteral("finish"))
+	{
+		FJmiFinishSent = true; //do not echo the finish back
+		finishLocally("success", QString());
+	}
+	return true;
+}
+
+void JingleSession::sendJmiMessage(const QString &AAction, const QString &AReasonCode, const QString &AText)
+{
+	const Jid peer = FInitiated ? FTargetJid : Jid(FInitiator);
+	const Jid to = (AAction==QStringLiteral("propose") || AAction==QStringLiteral("finish") ||
+	                AAction==QStringLiteral("retract")) ? Jid(peer.bare()) : peer;
+	FJingle->sendJmiMessage(FStreamJid, to, AAction, FSid, AReasonCode, AText);
+}
+
+void JingleSession::finishJmiSession(const QString &AReason, const QString &AText)
+{
+	FJmiFinishSent = true;
+	QString code = QStringLiteral("success");
+	if (AReason == QStringLiteral("no-answer") || AReason == QStringLiteral("expired") || AReason == QStringLiteral("cancel"))
+		code = QStringLiteral("expired");
+	else if (AReason == QStringLiteral("failed") || AReason == QStringLiteral("failed-application") ||
+	         AReason == QStringLiteral("connectivity-error"))
+		code = QStringLiteral("connectivity-error");
+	sendJmiMessage(QStringLiteral("finish"), code, AText.isEmpty() ? reasonText(AReason) : AText);
+}
+
+void JingleSession::onJmiTimeout()
+{
+	if (FTerminated)
+		return;
+
+	if (FJmiAwaitingProceed)
+	{
+		//A peer without JMI support will never answer the proposal: fall back
+		//to the plain session-initiate we have always sent.
+		FJmiAwaitingProceed = false;
+		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': no JMI ringing/proceed, falling back to session-initiate").arg(FSid));
+		continueInitiate();
+	}
+	else if (FJmiWaitingInitiate)
+	{
+		FJmiWaitingInitiate = false;
+		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': the peer did not send session-initiate after proceed").arg(FSid));
+		finishLocally("no-answer", tr("The peer did not start the call"));
+	}
+	else
+	{
+		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': the peer did not answer the call").arg(FSid));
+		finishLocally("no-answer", tr("No answer"));
+	}
 }
 
 void JingleSession::hangup(const QString &AText)
@@ -405,6 +603,48 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 	const QString action = jingleElem.attribute("action");
 	AReply = FJingle->makeResultReply(AStanza);
 
+	if (action == "session-initiate" && FJmiPending)
+	{
+		//Some clients send the Jingle session right after the proposal, before
+		//the user has answered. Keep the transport and let answer() use it.
+		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		for (int i = 0; i < contentList.count(); ++i)
+			processContentElem(contentList.at(i).toElement());
+		FJmiTransportReceived = true;
+		if (FMediaEngine)
+		{
+			FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
+			FMediaEngine->startIce(false);
+		}
+		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': session-initiate arrived with the JMI proposal").arg(FSid));
+		return true;
+	}
+
+	if (action == "session-initiate" && FJmiWaitingInitiate)
+	{
+		//XEP-0353: the initiator sends the real session only after we said
+		//proceed. Answer it exactly like a normal incoming session-initiate.
+		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		for (int i = 0; i < contentList.count(); ++i)
+			processContentElem(contentList.at(i).toElement());
+		if (FMediaEngine)
+		{
+			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
+			applyDtlsClientRole();
+		}
+		FJmiWaitingInitiate = false;
+		FJmiTimer->stop();
+
+		QDomElement acceptElem;
+		Stanza accept = makeSessionAction("session-accept", &acceptElem);
+		addContentElement(acceptElem);
+		FTransportSent = true;
+		FJingle->sendSessionAction(this, accept);
+		setState(IJingle::CallActive);
+		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': JMI proposal completed with session-initiate").arg(FSid));
+		return true;
+	}
+
 	if (action == "session-accept")
 	{
 		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
@@ -446,11 +686,83 @@ bool JingleSession::processStanza(const Stanza &AStanza, Stanza &AReply)
 	}
 	else if (action == "transport-info" || action == "description-info" || action == "content-accept" || action == "content-modify")
 	{
+		if (action == "transport-info" && FMediaEngine)
+		{
+			//After an ICE restart a trickle from the old generation must not
+			//replace the fresh remote credentials with stale ones.
+			const QString currentUfrag = FMediaEngine->iceAgent()->remoteUfrag();
+			const QDomNodeList transports = jingleElem.elementsByTagName("transport");
+			for (int i = 0; i < transports.count(); ++i)
+			{
+				const QString ufrag = transports.at(i).toElement().attribute("ufrag");
+				if (!currentUfrag.isEmpty() && !ufrag.isEmpty() && ufrag != currentUfrag)
+				{
+					LOG_STRM_DEBUG(FStreamJid, QString("Jingle session '%1': ignoring transport-info from generation '%2', current remote ufrag is '%3").
+						arg(FSid, ufrag, currentUfrag));
+					return true;
+				}
+			}
+		}
 		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
 		for (int i = 0; i < contentList.count(); ++i)
 			processContentElem(contentList.at(i).toElement());
 		if (FMediaEngine)
 			FMediaEngine->setRemoteCodec(FRemoteOpusPayloadType, FRemoteOpusClockrate);
+	}
+	else if (action == "transport-replace")
+	{
+		//The peer asks for a new ICE generation: restart our side first so the
+		//transport-accept advertises the new credentials and candidates.
+		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		if (!FMediaEngine || contentList.isEmpty() || FTerminated)
+		{
+			QDomElement rejectElem;
+			Stanza reject = makeSessionAction("transport-reject", &rejectElem);
+			addReason(rejectElem, "out-of-order", tr("ICE restart is not possible"));
+			FJingle->sendSessionAction(this, reject);
+			return true;
+		}
+		if (!FMediaEngine->iceAgent()->restart())
+		{
+			QDomElement rejectElem;
+			Stanza reject = makeSessionAction("transport-reject", &rejectElem);
+			addReason(rejectElem, "failed-application", tr("Failed to restart ICE"));
+			FJingle->sendSessionAction(this, reject);
+			return true;
+		}
+		FMediaEngine->iceAgent()->clearRemoteCandidates();
+		processContentElem(contentList.at(0).toElement());
+		FRemoteCandidateCount = 0;
+
+		QDomElement acceptElem;
+		Stanza accept = makeSessionAction("transport-accept", &acceptElem);
+		addRestartTransport(acceptElem);
+		FJingle->sendSessionAction(this, accept);
+
+		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': accepted ICE restart, generation=%2").
+			arg(FSid).arg(FMediaEngine->iceAgent()->generation()));
+		if (!FSilent)
+			FWindow->setStatusText(tr("Reconnecting..."));
+		FIceRestartPending = true;
+		FIceRestartCount = qMax(FIceRestartCount, 1);
+	}
+	else if (action == "transport-accept")
+	{
+		//Our restart was accepted; the peer's new credentials/candidates replace
+		//the old generation completely.
+		if (FMediaEngine)
+			FMediaEngine->iceAgent()->clearRemoteCandidates();
+		const QDomNodeList contentList = jingleElem.elementsByTagName("content");
+		for (int i = 0; i < contentList.count(); ++i)
+			processContentElem(contentList.at(i).toElement());
+		FRemoteCandidateCount = 0;
+		LOG_STRM_INFO(FStreamJid, QString("Jingle session '%1': ICE restart accepted by the peer").arg(FSid));
+	}
+	else if (action == "transport-reject")
+	{
+		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': peer rejected the ICE restart").arg(FSid));
+		FIceRestartCount = 2;
+		FIceRestartPending = false;
 	}
 	else if (action == "session-info")
 	{
@@ -579,6 +891,10 @@ void JingleSession::finishLocally(const QString &AReason, const QString &AText)
 	if (FTerminated)
 		return;
 	FTerminated = true;
+	FJmiTimer->stop();
+
+	if (FJmiUsed && !FJmiFinishSent)
+		finishJmiSession(AReason, AText);
 
 	if (FMediaEngine)
 		FMediaEngine->stop();
@@ -628,6 +944,9 @@ void JingleSession::addContentElement(QDomElement &AJingleElem) const
 
 	QDomElement contentElem = doc.createElement("content");
 	contentElem.setAttribute("name", FContentName);
+	//Siskin/Martin (and XEP-0166) require the creator attribute: without it the
+	//whole <content> is rejected and the phone silently ignores session-initiate.
+	contentElem.setAttribute("creator", FInitiated ? QStringLiteral("initiator") : QStringLiteral("responder"));
 
 	addDescription(contentElem);
 	addTransport(contentElem);
@@ -718,6 +1037,18 @@ void JingleSession::addTransport(QDomElement &AContentElem) const
 	AContentElem.appendChild(transportElem);
 }
 
+//A transport-replace/transport-accept carries a fresh transport definition in
+//its own content element; unlike session-initiate it has no description part.
+void JingleSession::addRestartTransport(QDomElement &AJingleElem) const
+{
+	QDomDocument doc = AJingleElem.ownerDocument();
+	QDomElement contentElem = doc.createElement("content");
+	contentElem.setAttribute("name", FContentName);
+	contentElem.setAttribute("creator", FInitiated ? QStringLiteral("initiator") : QStringLiteral("responder"));
+	addTransport(contentElem);
+	AJingleElem.appendChild(contentElem);
+}
+
 void JingleSession::appendCandidateElement(QDomElement &ATransportElem, const IceCandidate &ACandidate) const
 {
 	QDomDocument doc = ATransportElem.ownerDocument();
@@ -725,7 +1056,7 @@ void JingleSession::appendCandidateElement(QDomElement &ATransportElem, const Ic
 	QDomElement candidateElem = doc.createElement("candidate");
 	candidateElem.setAttribute("foundation", QString::number(ACandidate.componentId));
 	candidateElem.setAttribute("component", QString::number(ACandidate.componentId));
-	candidateElem.setAttribute("generation", "0");
+	candidateElem.setAttribute("generation", QString::number(FMediaEngine ? FMediaEngine->iceAgent()->generation() : 0));
 	candidateElem.setAttribute("id", QString("v%1c%2").arg(ACandidate.port).arg(ACandidate.componentId));
 	candidateElem.setAttribute("network", "0");
 	candidateElem.setAttribute("priority", QString::number(ACandidate.priority));

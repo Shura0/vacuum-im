@@ -24,6 +24,20 @@
 
 #define SHC_JINGLE_IQ  "/iq[@type='set']/jingle[@xmlns='" NS_JINGLE "']"
 #define SHC_EXTDISCO_IQ  "/iq[@type='set']/services[@xmlns='" NS_EXTERNAL_SERVICES "']"
+#define SHC_JMI_PROPOSE  "/message/propose[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_RINGING  "/message/ringing[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_PROCEED  "/message/proceed[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_ACCEPT   "/message/accept[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_REJECT   "/message/reject[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_RETRACT  "/message/retract[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_FINISH   "/message/finish[@xmlns='" NS_JINGLE_MESSAGE "']"
+#define SHC_JMI_PROPOSE_ALT  "/message/propose[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_RINGING_ALT  "/message/ringing[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_PROCEED_ALT  "/message/proceed[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_ACCEPT_ALT   "/message/accept[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_REJECT_ALT   "/message/reject[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_RETRACT_ALT  "/message/retract[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
+#define SHC_JMI_FINISH_ALT   "/message/finish[@xmlns='" NS_JINGLE_MESSAGE_ALT "']"
 
 #define ADR_STREAM_JID            Action::DR_StreamJid
 #define ADR_CONTACT_JID           Action::DR_Parametr1
@@ -299,6 +313,25 @@ bool Jingle::stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStan
 	QList<int> *streamHandles = FStanzaHandles.contains(AStreamJid) ? &FStanzaHandles[AStreamJid] : nullptr;
 	if (!streamHandles || !streamHandles->contains(AHandleId))
 		return false;
+
+	if (AStanza.kind()==STANZA_KIND_MESSAGE)
+	{
+		static const char *jmiActions[] = { "propose", "ringing", "proceed", "accept", "reject", "retract", "finish" };
+		static const char *jmiNamespaces[] = { NS_JINGLE_MESSAGE, NS_JINGLE_MESSAGE_ALT };
+		for (const char *jmiNamespace : jmiNamespaces)
+		{
+			for (const char *jmiAction : jmiActions)
+			{
+				const QDomElement jmiElem = AStanza.firstElement(QString::fromLatin1(jmiAction), QString::fromLatin1(jmiNamespace));
+				if (!jmiElem.isNull())
+				{
+					AAccept = true;
+					return processJmiMessage(AStreamJid, AStanza, jmiElem, QString::fromLatin1(jmiAction));
+				}
+			}
+		}
+		return false;
+	}
 
 	QDomElement jingleElem = AStanza.firstElement("jingle", NS_JINGLE);
 	if (jingleElem.isNull())
@@ -769,6 +802,20 @@ void Jingle::onStreamOpened(IXmppStream *AXmppStream)
 	shandle.streamJid = AXmppStream->streamJid();
 	shandle.conditions.append(SHC_JINGLE_IQ);
 	shandle.conditions.append(SHC_EXTDISCO_IQ);
+	shandle.conditions.append(SHC_JMI_PROPOSE);
+	shandle.conditions.append(SHC_JMI_RINGING);
+	shandle.conditions.append(SHC_JMI_PROCEED);
+	shandle.conditions.append(SHC_JMI_ACCEPT);
+	shandle.conditions.append(SHC_JMI_REJECT);
+	shandle.conditions.append(SHC_JMI_RETRACT);
+	shandle.conditions.append(SHC_JMI_FINISH);
+	shandle.conditions.append(SHC_JMI_PROPOSE_ALT);
+	shandle.conditions.append(SHC_JMI_RINGING_ALT);
+	shandle.conditions.append(SHC_JMI_PROCEED_ALT);
+	shandle.conditions.append(SHC_JMI_ACCEPT_ALT);
+	shandle.conditions.append(SHC_JMI_REJECT_ALT);
+	shandle.conditions.append(SHC_JMI_RETRACT_ALT);
+	shandle.conditions.append(SHC_JMI_FINISH_ALT);
 
 	FStanzaHandles[shandle.streamJid].append(FStanzaProcessor->insertStanzaHandle(shandle));
 
@@ -909,6 +956,87 @@ void Jingle::onSessionFinished(JingleSession *ASession, const QString &AReason, 
 	LOG_STRM_INFO(ASession->streamJid(), QString("Jingle session '%1' finished, reason=%2, text=%3").arg(ASession->sid(), AReason, AText));
 	emit callFinished(ASession->sid(), AReason);
 	removeSession(ASession);
+}
+
+bool Jingle::sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString &AAction,
+	const QString &ASid, const QString &AReasonCode, const QString &AText)
+{
+	if (!FStanzaProcessor || !ATo.isValid())
+		return false;
+
+	Stanza message(STANZA_KIND_MESSAGE);
+	message.setType(QStringLiteral("chat"));
+	message.setTo(ATo.full());
+
+	QDomElement actionElem = message.addElement(AAction, NS_JINGLE_MESSAGE);
+	actionElem.setAttribute("id", ASid);
+	if (AAction == QStringLiteral("propose"))
+	{
+		QDomElement descriptionElem = message.createElement("description", NS_JINGLE_APPS_RTP);
+		descriptionElem.setAttribute("media", "audio");
+		actionElem.appendChild(descriptionElem);
+	}
+	if (!AReasonCode.isEmpty())
+	{
+		QDomElement reasonElem = message.createElement("reason", NS_JINGLE);
+		QDomElement codeElem = message.createElement(AReasonCode, NS_JINGLE);
+		reasonElem.appendChild(codeElem);
+		if (!AText.isEmpty())
+		{
+			QDomElement textElem = message.createElement("text", NS_JINGLE);
+			textElem.appendChild(message.createTextNode(AText));
+			reasonElem.appendChild(textElem);
+		}
+		actionElem.appendChild(reasonElem);
+	}
+	message.addElement("store", NS_MESSAGE_HINTS);
+
+	LOG_STRM_DEBUG(AStreamJid, QString("JMI stanza: %1").arg(message.toString(0).trimmed()));
+	LOG_STRM_INFO(AStreamJid, QString("JMI action '%1' for session '%2' sent to %3").arg(AAction, ASid, ATo.full()));
+	return FStanzaProcessor->sendStanzaOut(AStreamJid, message);
+}
+
+bool Jingle::processJmiMessage(const Jid &AStreamJid, const Stanza &AStanza,
+	const QDomElement &AJmiElem, const QString &AAction)
+{
+	const QString sid = AJmiElem.attribute("id");
+	const Jid from = AStanza.fromJid();
+	if (sid.isEmpty() || !from.isValid())
+		return true;
+
+	JingleSession *session = findSession(AStreamJid, sid);
+	if (AAction == QStringLiteral("propose"))
+	{
+		if (!Options::node(OPV_JINGLE_ENABLED).value().toBool())
+		{
+			sendJmiMessage(AStreamJid, from, QStringLiteral("reject"), sid, QStringLiteral("cancel"), tr("Calls are disabled"));
+			return true;
+		}
+		if (session)
+		{
+			LOG_STRM_DEBUG(AStreamJid, QString("JMI propose for an existing session '%1' ignored").arg(sid));
+			return true;
+		}
+		IXmppStream *xmppStream = FXmppStreamManager->findXmppStream(AStreamJid);
+		if (!xmppStream)
+			return true;
+
+		const Jid contactJid = Jid(from.bare());
+		session = createSession(AStreamJid, contactJid, xmppStream->streamJid(), from.full(), sid, false);
+		session->storeJmiPropose(AJmiElem.firstChildElement("description", NS_JINGLE_APPS_RTP));
+		session->showWindow();
+		LOG_STRM_INFO(AStreamJid, QString("JMI call proposal received from %1").arg(from.full()));
+		emit callReceived(AStreamJid, contactJid, sid);
+		return true;
+	}
+
+	if (!session)
+	{
+		LOG_STRM_DEBUG(AStreamJid, QString("JMI action '%1' for unknown session '%2' ignored").arg(AAction, sid));
+		return true;
+	}
+	session->processJmiMessage(AAction, AJmiElem);
+	return true;
 }
 
 bool Jingle::processSessionInitiate(const Jid &AStreamJid, const Stanza &AStanza, const QDomElement &AJingleElem, bool &AAccept)
