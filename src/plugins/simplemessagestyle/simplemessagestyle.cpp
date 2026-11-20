@@ -7,6 +7,8 @@
 #include <QDomDocument>
 #include <QTextBlock>
 #include <QScrollBar>
+#include <QPointer>
+#include <QAbstractTextDocumentLayout>
 #include <interfaces/imessagedocumentcontext.h>
 #include <utils/options.h>
 #include <utils/pluginhelper.h>
@@ -175,6 +177,8 @@ bool SimpleMessageStyle::changeOptions(QWidget *AWidget, const IMessageStyleOpti
 			wstatus.lastId = QString();
 			wstatus.lastTime = QDateTime();
 			wstatus.scrollStarted = false;
+			wstatus.stickToBottom = true;
+			wstatus.settingScroll = false;
 			wstatus.content.clear();
 			wstatus.options = AOptions.extended;
 
@@ -183,6 +187,16 @@ bool SimpleMessageStyle::changeOptions(QWidget *AWidget, const IMessageStyleOpti
 				view->installEventFilter(this);
 				connect(view,SIGNAL(anchorClicked(const QUrl &)),SLOT(onStyleWidgetLinkClicked(const QUrl &)));
 				connect(view,SIGNAL(destroyed(QObject *)),SLOT(onStyleWidgetDestroyed(QObject *)));
+
+				// The document keeps growing after the history is shown when
+				// inline images are loaded asynchronously. Follow that growth
+				// while the user is still at the end of the view.
+				QPointer<StyleViewer> viewGuard = view;
+				connect(view->document()->documentLayout(),&QAbstractTextDocumentLayout::documentSizeChanged,
+					this,[this,viewGuard]() { keepViewAtBottom(viewGuard.data()); });
+				connect(view->verticalScrollBar(),&QScrollBar::valueChanged,
+					this,[this,viewGuard](int AValue) { trackViewScroll(viewGuard.data(),AValue); });
+
 				emit widgetAdded(view);
 			}
 
@@ -227,7 +241,7 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 	if (view)
 	{
 		WidgetStatus &wstatus = FWidgetStatus[AWidget];
-		bool scrollAtEnd = !AOptions.noScroll && view->verticalScrollBar()->sliderPosition()==view->verticalScrollBar()->maximum();
+		bool scrollAtEnd = wstatus.stickToBottom && !AOptions.noScroll;
 
 		QTextCursor cursor(view->document());
 		int maxMessages = Options::node(OPV_MESSAGES_MAXMESSAGESINWINDOW).value().toInt();
@@ -257,7 +271,11 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 			if (!scrollAtEnd)
 			{
 				int newScrollPos = qMax(view->verticalScrollBar()->sliderPosition()-(scrollMax-view->verticalScrollBar()->maximum()),0);
+				// This is a programmatic adjustment to keep the view at the
+				// same place; it must not look like the user scrolled away.
+				wstatus.settingScroll = true;
 				view->verticalScrollBar()->setSliderPosition(newScrollPos);
+				wstatus.settingScroll = false;
 			}
 		}
 		cursor.movePosition(QTextCursor::End);
@@ -275,7 +293,7 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 		item.size = cursor.position()-startPos;
 
 		if (scrollAtEnd)
-			view->verticalScrollBar()->setSliderPosition(view->verticalScrollBar()->maximum());
+			keepViewAtBottom(view);
 
 		wstatus.lastKind = AOptions.kind;
 		wstatus.lastId = AOptions.senderId;
@@ -761,6 +779,32 @@ bool SimpleMessageStyle::eventFilter(QObject *AWatched, QEvent *AEvent)
 	return QObject::eventFilter(AWatched,AEvent);
 }
 
+void SimpleMessageStyle::keepViewAtBottom(StyleViewer *AView)
+{
+	if (AView==NULL || !FWidgetStatus.contains(AView))
+		return;
+
+	WidgetStatus &wstatus = FWidgetStatus[AView];
+	if (!wstatus.stickToBottom)
+		return;
+
+	wstatus.settingScroll = true;
+	AView->verticalScrollBar()->setSliderPosition(AView->verticalScrollBar()->maximum());
+	wstatus.settingScroll = false;
+}
+
+void SimpleMessageStyle::trackViewScroll(StyleViewer *AView, int AValue)
+{
+	if (AView==NULL || !FWidgetStatus.contains(AView))
+		return;
+
+	WidgetStatus &wstatus = FWidgetStatus[AView];
+	if (wstatus.settingScroll)
+		return;
+
+	wstatus.stickToBottom = (AValue >= AView->verticalScrollBar()->maximum());
+}
+
 void SimpleMessageStyle::onScrollAfterResize()
 {
 	for (QMap<QWidget*,WidgetStatus>::iterator it = FWidgetStatus.begin(); it!= FWidgetStatus.end(); ++it)
@@ -768,8 +812,8 @@ void SimpleMessageStyle::onScrollAfterResize()
 		if (it->scrollStarted)
 		{
 			StyleViewer *view = qobject_cast<StyleViewer *>(it.key());
-			QScrollBar *scrollBar = view->verticalScrollBar();
-			scrollBar->setSliderPosition(scrollBar->maximum());
+			if (view!=NULL)
+				keepViewAtBottom(view);
 			it->scrollStarted = false;
 		}
 	}

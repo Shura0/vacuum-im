@@ -5,6 +5,11 @@
 #include <QMouseEvent>
 #include <QApplication>
 #include <QPointer>
+#include <QTextBrowser>
+#include <QTextDocument>
+#include <QTextBlock>
+#include <QAbstractTextDocumentLayout>
+#include <QScrollBar>
 #include <definitions/actiongroups.h>
 #include <definitions/toolbargroups.h>
 #include <definitions/resources.h>
@@ -71,15 +76,42 @@ static bool isSameMessage(const Message &AMessage, const Message &AOther)
 		&& qAbs(AMessage.dateTime().secsTo(AOther.dateTime()))<HISTORY_DUBLICATE_DELTA;
 }
 
-// Consecutive copies of the same message (from different archive engines, or
-// from the live stream) collapse into a single entry.
+// Copies of the same message from different archive engines are not necessarily
+// adjacent after sorting: the file archive gives its messages synthetic +1 ms
+// timestamps while the server archive keeps the original delay stamps. Compare
+// with every kept message, using the stanza id as a fast path.
 static void collapseSameMessages(QList<Message> &AMessages)
 {
 	QList<Message> collapsed;
+	QSet<QString> ids;
+	QHash<QString,QList<int> > bodies;
 	foreach(const Message &message, AMessages)
 	{
-		if (collapsed.isEmpty() || !isSameMessage(collapsed.last(),message))
-			collapsed.append(message);
+		bool duplicate = false;
+		if (!message.id().isEmpty() && ids.contains(message.id()))
+		{
+			duplicate = true;
+		}
+		else
+		{
+			// The content fallback of isSameMessage() requires an equal body,
+			// so only the messages with the same text can be duplicates.
+			foreach(int index, bodies.value(message.body()))
+			{
+				if (isSameMessage(collapsed.at(index),message))
+				{
+					duplicate = true;
+					break;
+				}
+			}
+		}
+		if (duplicate)
+			continue;
+
+		if (!message.id().isEmpty())
+			ids.insert(message.id());
+		bodies[message.body()].append(collapsed.count());
+		collapsed.append(message);
 	}
 	AMessages = collapsed;
 }
@@ -443,6 +475,16 @@ INotification ChatMessageHandler::messageNotify(INotifications *ANotifications, 
 					notify.data.insert(NDR_POPUP_TEXT,AMessage.body());
 				}
 
+				// A notification means the message was not read yet. Remember
+				// the oldest one so the view can be scrolled to it when the
+				// chat is opened later in this session.
+				if (!window->isActiveTabPage())
+				{
+					WindowStatus &wstatus = FWindowStatus[window];
+					if (!wstatus.firstUnreadTime.isValid() || AMessage.dateTime()<wstatus.firstUnreadTime)
+						wstatus.firstUnreadTime = AMessage.dateTime();
+				}
+
 				FNotifiedMessages.insert(window, AMessage.data(MDR_MESSAGE_ID).toInt());
 			}
 		}
@@ -716,6 +758,9 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 	if (!FHistoryRequests.values().contains(AWindow))
 	{
 		AWindow->viewWidget()->clearContent();
+		// The document was recreated, so all recorded message positions are
+		// stale until the history and the pending messages are shown again.
+		FWindowStatus[AWindow].messagePositions.clear();
 
 		QList<Message> pending = FPendingMessages.take(AWindow);
 		IArchiveCollectionBody history = FHistoryMessages.take(AWindow);
@@ -786,6 +831,7 @@ void ChatMessageHandler::showHistory(IMessageChatWindow *AWindow)
 
 		WindowStatus &wstatus = FWindowStatus[AWindow];
 		wstatus.startTime = !history.messages.isEmpty() ? history.messages.last().dateTime() : QDateTime();
+		scrollToFirstUnread(AWindow);
 	}
 }
 
@@ -1023,19 +1069,58 @@ void ChatMessageHandler::showStyledMessage(IMessageChatWindow *AWindow, const Me
 	if (message.body().isEmpty() && wasEncrypted)
 		message.setBody(tr("[This message is OMEMO encrypted]"));
 
+	WindowStatus &wstatus = FWindowStatus[AWindow];
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(AWindow->viewWidget()!=NULL ? AWindow->viewWidget()->styleWidget() : NULL);
+	if (browser!=NULL)
+		wstatus.messagePositions.append(qMakePair(message.dateTime(),browser->document()->characterCount()));
+
 	// Note: deliberately no "message did not render -> append a raw copy"
 	// fallback here.  Style handlers are allowed to transform the rendered
 	// content (e.g. imageviewer replaces image URLs with thumbnails), so text
 	// disappearing from toPlainText() must not produce a second copy.
 	AWindow->viewWidget()->appendMessage(message,options);
 
-	WindowStatus &wstatus = FWindowStatus[AWindow];
 	if (!wstatus.lastMessageTime.isValid() || message.dateTime()>wstatus.lastMessageTime)
 		wstatus.lastMessageTime = message.dateTime();
 
 	wstatus.lastMessages.append(message);
 	while (wstatus.lastMessages.count() > HISTORY_DUPLICATE_MESSAGES)
 		wstatus.lastMessages.removeFirst();
+}
+
+void ChatMessageHandler::scrollToFirstUnread(IMessageChatWindow *AWindow)
+{
+	WindowStatus &wstatus = FWindowStatus[AWindow];
+	if (!wstatus.firstUnreadTime.isValid())
+		return;
+
+	QWidget *styleWidget = AWindow->viewWidget()!=NULL ? AWindow->viewWidget()->styleWidget() : NULL;
+	QTextBrowser *browser = qobject_cast<QTextBrowser *>(styleWidget);
+	if (browser==NULL || wstatus.messagePositions.isEmpty())
+		return;
+
+	QTextDocument *document = browser->document();
+	const int docSize = document->characterCount();
+	for (const QPair<QDateTime,int> &pos : wstatus.messagePositions)
+	{
+		if (pos.first<wstatus.firstUnreadTime || pos.second>=docSize)
+			continue;
+
+		QTextBlock block = document->findBlock(pos.second);
+		if (!block.isValid())
+			continue;
+
+		// The scroll bar value of a text view is the top document coordinate,
+		// so put the first unread message just below the top of the viewport.
+		qreal top = document->documentLayout()->blockBoundingRect(block).top();
+		browser->verticalScrollBar()->setValue(qMax(0,qRound(top)-4));
+		LOG_STRM_INFO(AWindow->streamJid(),QString("Scrolled to first unread message, with=%1, time=%2")
+			.arg(AWindow->contactJid().bare()).arg(pos.first.toString(Qt::ISODate)));
+
+		wstatus.firstUnreadTime = QDateTime();
+		wstatus.messagePositions.clear();
+		return;
+	}
 }
 
 bool ChatMessageHandler::isSelectionAccepted(const QList<IRosterIndex *> &ASelected) const
@@ -1088,6 +1173,21 @@ void ChatMessageHandler::onWindowActivated()
 		saveLastChatWindow(window);
 		if (FDestroyTimers.contains(window))
 			delete FDestroyTimers.take(window);
+
+		// The messages may still be in the view from the time they arrived,
+		// or the history request may still be in flight; retry after the event
+		// loop and again from showHistory() when the history is displayed.
+		WindowStatus &wstatus = FWindowStatus[window];
+		if (wstatus.firstUnreadTime.isValid())
+		{
+			QPointer<QObject> guard = window->instance();
+			QTimer::singleShot(0,this,[this,guard]() {
+				IMessageChatWindow *w = qobject_cast<IMessageChatWindow *>(guard.data());
+				if (w!=NULL && FWindows.contains(w))
+					scrollToFirstUnread(w);
+			});
+		}
+
 		removeNotifiedMessages(window);
 	}
 }
@@ -1274,6 +1374,18 @@ void ChatMessageHandler::onWindowContentAppended(const QString &AHtml, const IMe
 	IMessageChatWindow *window = viewWidget!=NULL ? qobject_cast<IMessageChatWindow *>(viewWidget->messageWindow()->instance()) : NULL;
 	if (window && FHistoryRequests.values().contains(window))
 	{
+		// A live message arriving during a history request is already kept in
+		// FPendingMessages and shown again by showHistory() after the archive
+		// (unless the archive returned the same message). Its rendered HTML
+		// must not be replayed as pending content too, or the very same
+		// message appears twice in the chat view.
+		if (AOptions.kind == IMessageStyleContentOptions::KindMessage)
+		{
+			LOG_STRM_INFO(window->streamJid(),QString("Skipping pending chat content for live message, with=%1, id=%2")
+				.arg(window->contactJid().bare()).arg(AOptions.messageId));
+			return;
+		}
+
 		WindowContent content;
 		content.html = AHtml;
 		content.options = AOptions;

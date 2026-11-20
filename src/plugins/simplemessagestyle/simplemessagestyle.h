@@ -78,6 +78,11 @@ public:
 		QString lastId;
 		QDateTime lastTime;
 		bool scrollStarted;
+		// Whether the view is kept at the end while its document grows
+		// (images loading after the history was shown), and a guard for the
+		// programmatic scrollbar changes made by that logic.
+		bool stickToBottom;
+		bool settingScroll;
 		int contentStartPosition;
 		QList<ContentItem> content;
 		QMap<QString, QVariant> options;
@@ -119,6 +124,8 @@ protected:
 	QString makeStyleTemplate() const;
 	void fillStyleKeywords(QString &AHtml, const IMessageStyleOptions &AOptions) const;
 	void setVariant(StyleViewer *AView, const QString  &AVariant);
+	void keepViewAtBottom(StyleViewer *AView);
+	void trackViewScroll(StyleViewer *AView, int AValue);
 protected:
 	bool isConsecutive(const IMessageStyleContentOptions &AOptions, const WidgetStatus &AStatus) const;
 	QString makeContentTemplate(const IMessageStyleContentOptions &AOptions, const WidgetStatus &AStatus) const;

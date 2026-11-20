@@ -35,6 +35,11 @@ struct WindowStatus {
 	// Recently displayed messages, used to filter out the copies returned by
 	// the server archive after a reconnection that were already shown live.
 	QList<Message> lastMessages;
+	// Oldest message that arrived while the window was inactive and produced
+	// a notification. It is kept until the view is scrolled to it.
+	QDateTime firstUnreadTime;
+	// Document position where each shown message starts, in display order.
+	QList<QPair<QDateTime,int> > messagePositions;
 };
 
 struct WindowContent {
@@ -95,6 +100,7 @@ protected:
 	void fillContentOptions(const Jid &AStreamJid, const Jid &AContactJid, IMessageStyleContentOptions &AOptions) const;
 	void showStyledStatus(IMessageChatWindow *AWindow, const QString &AMessage, bool ADontSave=false, const QDateTime &ATime=QDateTime::currentDateTime());
 	void showStyledMessage(IMessageChatWindow *AWindow, const Message &AMessage);
+	void scrollToFirstUnread(IMessageChatWindow *AWindow);
 	bool isSelectionAccepted(const QList<IRosterIndex *> &ASelected) const;
 	QMap<Jid, QList<Jid> > getSortedAddresses(const QMultiMap<Jid,Jid> &AAddresses) const;
 protected slots:
