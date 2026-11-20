@@ -32,12 +32,14 @@ struct MamQueryRequest {
 	QString first;
 	QString last;
 	bool complete;
+	bool noAfter;
 	int pages;
 	int maxPages;
 	QString iqId;
 	MamQueryRequest() {
 		headers = true;
 		complete = false;
+		noAfter = false;
 		pages = 0;
 		maxPages = 0;
 	}
@@ -125,6 +127,10 @@ private:
 	QMap<Jid,int> FSHIResults;
 	QMap<Jid,bool> FSupported;
 	QSet<Jid> FAccountDiscoRequested;
+	// Streams whose server answers a first ascending page marked with an empty
+	// <after/> with item-not-found; for them the first page is requested
+	// without any RSM paging element.
+	QSet<Jid> FNoAfterFirstPage;
 private:
 	QMap<QString,MamQueryRequest> FQueries;
 private:

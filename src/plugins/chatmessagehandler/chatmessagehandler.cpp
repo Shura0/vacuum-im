@@ -483,8 +483,16 @@ bool ChatMessageHandler::rosterIndexSingleClicked(int AOrder, IRosterIndex *AInd
 
 bool ChatMessageHandler::rosterIndexDoubleClicked(int AOrder, IRosterIndex *AIndex, const QMouseEvent *AEvent)
 {
-	if (AOrder==RCHO_CHATMESSAGEHANDLER && AEvent->modifiers()==Qt::NoModifier && ChatHandlerRosterKinds.contains(AIndex->kind()) && AIndex->kind()!=RIK_AGENT)
-		return showWindow(AIndex->data(RDR_STREAM_JID).toString(), AIndex->data(RDR_FULL_JID).toString()) != NULL;
+	if (AOrder==RCHO_CHATMESSAGEHANDLER && AEvent->modifiers()==Qt::NoModifier)
+	{
+		// A recent contact that is not in the roster has no contact index for
+		// the recent contacts plugin to forward the click to, so open the chat
+		// directly from the recent item.
+		if (AIndex->kind()==RIK_RECENT_ITEM && AIndex->data(RDR_RECENT_TYPE).toString()==REIT_CONTACT)
+			return showWindow(AIndex->data(RDR_STREAM_JID).toString(),AIndex->data(RDR_RECENT_REFERENCE).toString()) != NULL;
+		if (ChatHandlerRosterKinds.contains(AIndex->kind()) && AIndex->kind()!=RIK_AGENT)
+			return showWindow(AIndex->data(RDR_STREAM_JID).toString(), AIndex->data(RDR_FULL_JID).toString()) != NULL;
+	}
 	return false;
 }
 

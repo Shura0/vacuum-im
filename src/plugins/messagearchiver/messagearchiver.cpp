@@ -22,6 +22,7 @@
 #include <definitions/sessionnegotiatororders.h>
 #include <definitions/shortcutgrouporders.h>
 #include <definitions/statisticsparams.h>
+#include <definitions/recentitemtypes.h>
 #include <interfaces/ifilemessagearchive.h>
 #include <utils/widgetmanager.h>
 #include <utils/xmpperror.h>
@@ -33,12 +34,29 @@
 #define PENDING_FILE_NAME          "pending.xml"
 #define SESSIONS_FILE_NAME         "sessions.xml"
 #define ARCHIVE_REQUEST_TIMEOUT    30000
-// Seconds of overlap between two server archive synchronizations. Messages at
-// the boundary may be downloaded twice, but the local archive drops the copies
-// by their stanza id, so a clock skew can not swallow a message.
+// Seconds of overlap between the newest server archive message and a forward
+// catch-up pass. Messages at the boundary may be downloaded twice, but the
+// local archive drops the copies by their stanza id, so a clock skew can not
+// swallow a message.
 #define ARCHIVE_SYNC_OVERLAP       120
-// Account option that keeps the last synchronized server archive timestamp.
+// Number of messages downloaded in one server archive pass. A shorter pass
+// means the beginning of the archive was reached.
+#define ARCHIVE_SYNC_BATCH         10000
+// The MAM engine may drop the repeated boundary results of two pages before
+// the archiver sees them, so a pass that hit the batch limit can arrive a few
+// messages short of it.
+#define ARCHIVE_SYNC_SLACK         100
+// Safety limit of passes per connect: the full archive is downloaded right
+// after connecting, but a broken server must not keep the client busy forever.
+#define ARCHIVE_SYNC_MAX_PASSES    100
+// Account option that keeps the server archive synchronization markers: the
+// newest and the oldest synchronized message, and whether the beginning of the
+// archive was reached.
 #define ARCHIVE_SYNC_OPTION        "history-sync"
+// Format version of the stored markers. Values without it were written by a
+// build that synchronized per contact, so they are ignored and the next
+// synchronization is a full archive-wide one.
+#define ARCHIVE_SYNC_VERSION       "v3"
 
 #define SHC_MESSAGE_BODY           "/message/body"
 #define SHC_PREFS                  "/iq[@type='set']/pref[@xmlns=" NS_ARCHIVE "]"
@@ -81,9 +99,9 @@ MessageArchiver::MessageArchiver()
 	FDataForms = NULL;
 	FMessageWidgets = NULL;
 	FSessionNegotiation = NULL;
-	FRosterManager = NULL;
 	FMultiChatManager = NULL;
 	FEndToEndEncryption = NULL;
+	FRecentContacts = NULL;
 }
 
 MessageArchiver::~MessageArchiver()
@@ -209,16 +227,6 @@ bool MessageArchiver::initConnections(IPluginManager *APluginManager, int &AInit
 		}
 	}
 
-	plugin = APluginManager->pluginInterface("IRosterManager").value(0,NULL);
-	if (plugin)
-	{
-		FRosterManager = qobject_cast<IRosterManager *>(plugin->instance());
-		if (FRosterManager)
-		{
-			connect(FRosterManager->instance(),SIGNAL(rosterOpened(IRoster *)),SLOT(onRosterOpened(IRoster *)));
-		}
-	}
-
 	plugin = APluginManager->pluginInterface("IMultiUserChatManager").value(0,NULL);
 	if (plugin)
 	{
@@ -229,6 +237,10 @@ bool MessageArchiver::initConnections(IPluginManager *APluginManager, int &AInit
 				SLOT(onMultiUserContextMenu(IMultiUserChatWindow *, IMultiUser *, Menu *)));
 		}
 	}
+
+	plugin = APluginManager->pluginInterface("IRecentContacts").value(0,NULL);
+	if (plugin)
+		FRecentContacts = qobject_cast<IRecentContacts *>(plugin->instance());
 
 	connect(this,SIGNAL(requestFailed(const QString &, const XmppError &)),
 		SLOT(onSelfRequestFailed(const QString &, const XmppError &)));
@@ -2096,31 +2108,41 @@ IArchiveEngine *MessageArchiver::findServerArchiveEngine(const Jid &AStreamJid) 
 	return NULL;
 }
 
-QDateTime MessageArchiver::archiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine) const
+bool MessageArchiver::loadArchiveSyncState(const Jid &AStreamJid, IArchiveEngine *AEngine, QDateTime &ANewest, QDateTime &AOldest, bool &AEndReached) const
 {
 	if (AEngine!=NULL && FAccountManager!=NULL)
 	{
 		IAccount *account = FAccountManager->findAccountByStream(AStreamJid);
 		if (account!=NULL)
 		{
-			QString prefix = AEngine->engineId().toString() + '|';
-			QString value = account->optionsNode().value(ARCHIVE_SYNC_OPTION).toString();
-			if (value.startsWith(prefix))
-				return DateTime(value.mid(prefix.length())).toLocal();
+			QStringList parts = account->optionsNode().value(ARCHIVE_SYNC_OPTION).toString().split('|');
+			if (parts.count()==5 && parts.first()==AEngine->engineId().toString()
+				&& parts.last()==QString::fromLatin1(ARCHIVE_SYNC_VERSION))
+			{
+				ANewest = parts.at(1).isEmpty() ? QDateTime() : DateTime(parts.at(1)).toLocal();
+				AOldest = parts.at(2).isEmpty() ? QDateTime() : DateTime(parts.at(2)).toLocal();
+				AEndReached = (parts.at(3) == "1");
+				return true;
+			}
 		}
 	}
-	return QDateTime();
+	return false;
 }
 
-void MessageArchiver::setArchiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine, const QDateTime &ATime) const
+void MessageArchiver::saveArchiveSyncState(const Jid &AStreamJid, IArchiveEngine *AEngine, const ArchiveSyncState &ASync) const
 {
-	if (AEngine!=NULL && FAccountManager!=NULL && ATime.isValid())
+	if (AEngine!=NULL && FAccountManager!=NULL)
 	{
 		IAccount *account = FAccountManager->findAccountByStream(AStreamJid);
 		if (account!=NULL)
 		{
-			QString value = AEngine->engineId().toString() + '|' + DateTime(ATime).toX85UTC();
-			account->optionsNode().setValue(value,ARCHIVE_SYNC_OPTION);
+			QStringList parts;
+			parts << AEngine->engineId().toString();
+			parts << (ASync.newest.isValid() ? DateTime(ASync.newest).toX85UTC() : QString());
+			parts << (ASync.oldest.isValid() ? DateTime(ASync.oldest).toX85UTC() : QString());
+			parts << (ASync.endReached ? "1" : "0");
+			parts << QString::fromLatin1(ARCHIVE_SYNC_VERSION);
+			account->optionsNode().setValue(parts.join('|'),ARCHIVE_SYNC_OPTION);
 		}
 	}
 }
@@ -2131,68 +2153,76 @@ void MessageArchiver::trySyncServerArchive(const Jid &AStreamJid)
 		return;
 
 	// Without a local archive the fetched messages would have nowhere to go,
-	// and the synchronization watermark would then skip them forever.
+	// and the synchronization markers would then skip them forever.
 	if (findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving) == NULL)
-		return;
-
-	// The server archive is always queried per contact: some servers reject a
-	// query without "with", while the per-contact form is the one the history
-	// windows already use. The contact list comes from the roster, so the
-	// synchronization has to wait until it is opened.
-	IRoster *roster = FRosterManager!=NULL ? FRosterManager->findRoster(AStreamJid) : NULL;
-	if (roster==NULL || !roster->isOpen())
 		return;
 
 	IArchiveEngine *engine = findServerArchiveEngine(AStreamJid);
 	if (engine == NULL)
 		return;
 
+	// The whole account archive is downloaded, not one contact after another:
+	// the local archive is the history source, and it must contain the
+	// messages of the people that are not in the roster as well.
 	ArchiveSyncState sync;
 	sync.engine = engine;
-	sync.previous = archiveSyncTime(AStreamJid,engine);
-	foreach(const IRosterItem &item, roster->items())
+	loadArchiveSyncState(AStreamJid,engine,sync.previousNewest,sync.previousOldest,sync.endReached);
+	sync.newest = sync.previousNewest;
+	sync.oldest = sync.previousOldest;
+	if (sync.previousNewest.isValid())
 	{
-		if (item.itemJid.isValid())
-			sync.contacts.append(Jid(item.itemJid.bare()));
+		sync.phase = ArchiveSyncState::Forward;
+	}
+	else
+	{
+		// No newest marker yet: the backward walk starts at the newest message
+		// of the server archive and also downloads it.
+		sync.phase = ArchiveSyncState::Backfill;
+		sync.passEnd = QDateTime();
 	}
 	FArchiveSyncs.insert(AStreamJid,sync);
 
-	LOG_STRM_INFO(AStreamJid,QString("Server history sync started, engine=%1, contacts=%2, start=%3")
-		.arg(engine->engineName()).arg(sync.contacts.count())
-		.arg(sync.previous.isValid() ? DateTime(sync.previous).toX85UTC() : QString("all")));
+	LOG_STRM_INFO(AStreamJid,QString("Server history sync started, engine=%1, newest=%2, oldest=%3, end=%4")
+		.arg(engine->engineName())
+		.arg(sync.previousNewest.isValid() ? DateTime(sync.previousNewest).toX85UTC() : QString("none"))
+		.arg(sync.previousOldest.isValid() ? DateTime(sync.previousOldest).toX85UTC() : QString("none"))
+		.arg(sync.endReached ? "reached" : "not-reached"));
 
-	startNextSyncContact(AStreamJid);
+	startSyncPass(AStreamJid);
 }
 
-void MessageArchiver::startNextSyncContact(const Jid &AStreamJid)
+void MessageArchiver::startSyncPass(const Jid &AStreamJid)
 {
 	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
 	if (it == FArchiveSyncs.end())
 		return;
 
-	if (it->contacts.isEmpty())
-	{
-		finishSyncServerArchive(AStreamJid);
-		return;
-	}
-
-	Jid contact = it->contacts.takeFirst();
 	IArchiveEngine *engine = it->engine;
-	it->contact = contact;
-	it->headersId.clear();
 
+	// The server archive is always walked backwards: the newest messages come
+	// first and every next page is requested with the rsm item of the oldest
+	// message already received. Forward paging is not used at all, because some
+	// servers reject the empty <after/> that a first ascending page needs.
 	IArchiveRequest request;
-	request.with = contact;
-	if (it->previous.isValid())
-		request.start = it->previous.addSecs(-ARCHIVE_SYNC_OVERLAP);
-	request.order = Qt::AscendingOrder;
-	request.maxItems = 0xFFFFFFFF;
+	request.order = Qt::DescendingOrder;
+	request.maxItems = ARCHIVE_SYNC_BATCH;
+	request.end = it->passEnd;
+	if (it->phase == ArchiveSyncState::Forward && it->passesCount == 0)
+		request.start = it->previousNewest.addSecs(-ARCHIVE_SYNC_OVERLAP);
+
+	it->passesCount++;
+	it->messagesCount = 0;
+	it->passNewest = QDateTime();
+	it->passOldest = QDateTime();
+	it->pendingCollections = 0;
+	it->headersId.clear();
 
 	QString id = engine->loadHeaders(AStreamJid,request);
 	if (id.isEmpty())
 	{
-		LOG_STRM_WARNING(AStreamJid,QString("Failed to start server history sync request, with=%1, engine=%2")
-			.arg(contact.bare()).arg(engine->engineName()));
+		LOG_STRM_WARNING(AStreamJid,QString("Failed to start server history sync pass, engine=%1, end=%2")
+			.arg(engine->engineName())
+			.arg(request.end.isValid() ? DateTime(request.end).toX85UTC() : QString("none")));
 		it->failed = true;
 		finishSyncServerArchive(AStreamJid);
 		return;
@@ -2209,7 +2239,7 @@ void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArc
 		if (it == FArchiveSyncs.end())
 			return;
 
-		it->pendingCollections = AHeaders.count();
+		it->pendingCollections += AHeaders.count();
 		it->collectionsCount += AHeaders.count();
 		IArchiveEngine *engine = it->engine;
 
@@ -2244,7 +2274,7 @@ void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArc
 		if (it->failed)
 			finishSyncServerArchive(AStreamJid);
 		else
-			startNextSyncContact(AStreamJid);
+			syncPassFinished(AStreamJid);
 	}
 }
 
@@ -2253,10 +2283,29 @@ void MessageArchiver::processSyncCollection(const Jid &AStreamJid, const IArchiv
 	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
 	if (it != FArchiveSyncs.end())
 	{
+		it->messagesCount += ACollection.body.messages.count();
+		it->totalMessages += ACollection.body.messages.count();
+		QDateTime collectionNewest;
 		foreach(const Message &message, ACollection.body.messages)
 		{
-			if (message.dateTime().isValid() && (!it->newest.isValid() || message.dateTime()>it->newest))
-				it->newest = message.dateTime();
+			if (message.dateTime().isValid())
+			{
+				if (!it->passNewest.isValid() || message.dateTime()>it->passNewest)
+					it->passNewest = message.dateTime();
+				if (!it->passOldest.isValid() || message.dateTime()<it->passOldest)
+					it->passOldest = message.dateTime();
+				if (!collectionNewest.isValid() || message.dateTime()>collectionNewest)
+					collectionNewest = message.dateTime();
+			}
+		}
+
+		// The server archive knows contacts that are not in the roster. Keep
+		// their last message time so they can be added to the recent contacts.
+		if (collectionNewest.isValid() && ACollection.header.with.isValid())
+		{
+			QMap<Jid,QDateTime>::iterator recent = it->recentContacts.find(ACollection.header.with);
+			if (recent==it->recentContacts.end() || recent.value()<collectionNewest)
+				it->recentContacts.insert(ACollection.header.with,collectionNewest);
 		}
 
 		saveCollectionMessages(AStreamJid,ACollection,&it->knownIds,true);
@@ -2267,8 +2316,113 @@ void MessageArchiver::processSyncCollection(const Jid &AStreamJid, const IArchiv
 			if (it->failed)
 				finishSyncServerArchive(AStreamJid);
 			else
-				startNextSyncContact(AStreamJid);
+				syncPassFinished(AStreamJid);
 		}
+	}
+}
+
+void MessageArchiver::syncPassFinished(const Jid &AStreamJid)
+{
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it == FArchiveSyncs.end())
+		return;
+
+	// A full batch means the engine stopped at its message limit and there may
+	// be more messages behind the oldest one of the pass.
+	bool truncated = (it->messagesCount >= ARCHIVE_SYNC_BATCH - ARCHIVE_SYNC_SLACK);
+	bool progressed = !it->passEnd.isValid()
+		|| (it->passOldest.isValid() && it->passOldest < it->passEnd);
+
+	LOG_STRM_INFO(AStreamJid,QString("Server history sync pass finished, phase=%1, end=%2, collections=%3, messages=%4")
+		.arg(it->phase==ArchiveSyncState::Forward ? "forward" : "backfill")
+		.arg(it->passEnd.isValid() ? DateTime(it->passEnd).toX85UTC() : QString("none"))
+		.arg(it->collectionsCount).arg(it->messagesCount));
+
+	if (it->phase == ArchiveSyncState::Forward)
+	{
+		if (truncated && it->passOldest.isValid())
+		{
+			// More messages arrived than one pass can hold, so the newest marker
+			// can not be moved yet: the walk first closes the gap down to the
+			// newest message of the previous synchronization.
+			it->pendingNewest = it->passNewest;
+			it->gapStop = it->previousNewest.addSecs(-ARCHIVE_SYNC_OVERLAP);
+			it->phase = ArchiveSyncState::Backfill;
+			it->passEnd = it->passOldest;
+			startSyncPass(AStreamJid);
+			return;
+		}
+
+		if (it->passNewest.isValid() && (!it->newest.isValid() || it->passNewest>it->newest))
+			it->newest = it->passNewest;
+		it->pendingNewest = QDateTime();
+		saveArchiveSyncState(AStreamJid,it->engine,it.value());
+
+		if (it->endReached)
+		{
+			finishSyncServerArchive(AStreamJid);
+			return;
+		}
+
+		it->phase = ArchiveSyncState::Backfill;
+		it->passEnd = it->oldest;
+		startSyncPass(AStreamJid);
+		return;
+	}
+
+	// Backfill: the pass walked down to its oldest message.
+	if (it->passOldest.isValid() && (!it->oldest.isValid() || it->passOldest<it->oldest))
+		it->oldest = it->passOldest;
+
+	// The first pass of a session without a newest marker starts at the newest
+	// message of the archive, so it also provides the newest marker.
+	if (!it->newest.isValid() && it->passesCount==1 && it->passNewest.isValid())
+		it->newest = it->passNewest;
+
+	// A truncated forward pass leaves a gap between its oldest message and the
+	// previous synchronization: that gap is filled by the following backfill
+	// passes and the newest marker stays untouched until it is closed.
+	bool gapFill = it->pendingNewest.isValid();
+	bool gapClosed = gapFill && it->passOldest.isValid() && it->passOldest <= it->gapStop;
+	if (gapClosed || (gapFill && !truncated))
+	{
+		if (!it->newest.isValid() || it->pendingNewest>it->newest)
+			it->newest = it->pendingNewest;
+		it->pendingNewest = QDateTime();
+		gapClosed = true;
+	}
+
+	if (!truncated)
+	{
+		// A short batch means the walk reached the beginning of the archive.
+		it->endReached = true;
+	}
+	else if (!gapClosed && !progressed)
+	{
+		// The server keeps returning the same messages: stop here, but do not
+		// claim the archive beginning was reached, so the walk is retried.
+		saveArchiveSyncState(AStreamJid,it->engine,it.value());
+		finishSyncServerArchive(AStreamJid);
+		return;
+	}
+
+	bool haveState = it->newest.isValid() || it->oldest.isValid();
+	if (haveState)
+		saveArchiveSyncState(AStreamJid,it->engine,it.value());
+
+	if (it->endReached)
+	{
+		finishSyncServerArchive(AStreamJid);
+	}
+	else if (it->passesCount >= ARCHIVE_SYNC_MAX_PASSES)
+	{
+		LOG_STRM_INFO(AStreamJid,QString("Server history sync paused after %1 passes, it continues on the next connect").arg(it->passesCount));
+		finishSyncServerArchive(AStreamJid);
+	}
+	else
+	{
+		it->passEnd = it->oldest;
+		startSyncPass(AStreamJid);
 	}
 }
 
@@ -2289,22 +2443,41 @@ void MessageArchiver::finishSyncServerArchive(const Jid &AStreamJid, const XmppE
 				++colIt;
 		}
 
+		// Contacts discovered in the server archive may be absent from the
+		// roster, so put them into the recent contacts with the time of their
+		// last archived message. The recent contacts plugin keeps the ones
+		// that were active later and persists the new ones in private storage.
+		if (FRecentContacts!=NULL && FRecentContacts->isReady(AStreamJid) && !sync.recentContacts.isEmpty())
+		{
+			int updated = 0;
+			for (QMap<Jid,QDateTime>::const_iterator recent=sync.recentContacts.constBegin(); recent!=sync.recentContacts.constEnd(); ++recent)
+			{
+				IRecentItem item;
+				item.type = REIT_CONTACT;
+				item.streamJid = AStreamJid;
+				item.reference = recent.key().pBare();
+				if (FRecentContacts->isValidItem(item))
+				{
+					FRecentContacts->setItemActiveTime(item,recent.value());
+					updated++;
+				}
+			}
+			LOG_STRM_INFO(AStreamJid,QString("Server history sync updated %1 recent contacts").arg(updated));
+		}
+
 		if (AError.isNull() && !sync.failed)
 		{
-			QDateTime newest = sync.newest;
-			if (sync.previous.isValid() && (!newest.isValid() || newest<sync.previous))
-				newest = sync.previous;
-			if (!newest.isValid())
-				newest = QDateTime::currentDateTime();
-			setArchiveSyncTime(AStreamJid,sync.engine,newest);
-			LOG_STRM_INFO(AStreamJid,QString("Server history sync finished, engine=%1, collections=%2, newest=%3")
-				.arg(sync.engine->engineName()).arg(sync.collectionsCount)
-				.arg(DateTime(newest).toX85UTC()));
+			LOG_STRM_INFO(AStreamJid,QString("Server history sync finished, engine=%1, collections=%2, messages=%3, passes=%4, newest=%5, oldest=%6, end=%7")
+				.arg(sync.engine->engineName()).arg(sync.collectionsCount).arg(sync.totalMessages).arg(sync.passesCount)
+				.arg(sync.newest.isValid() ? DateTime(sync.newest).toX85UTC() : QString("none"))
+				.arg(sync.oldest.isValid() ? DateTime(sync.oldest).toX85UTC() : QString("none"))
+				.arg(sync.endReached ? "reached" : "not-reached"));
 		}
 		else
 		{
-			LOG_STRM_WARNING(AStreamJid,QString("Server history sync failed, engine=%1, collections=%2, contacts-left=%3: %4")
-				.arg(sync.engine->engineName()).arg(sync.collectionsCount).arg(sync.contacts.count())
+			LOG_STRM_WARNING(AStreamJid,QString("Server history sync failed, engine=%1, collections=%2, messages=%3, passes=%4, oldest=%5: %6")
+				.arg(sync.engine->engineName()).arg(sync.collectionsCount).arg(sync.totalMessages).arg(sync.passesCount)
+				.arg(sync.oldest.isValid() ? DateTime(sync.oldest).toX85UTC() : QString("none"))
 				.arg(AError.isNull() ? QString("Request or collection load failed") : AError.condition()));
 		}
 	}
@@ -2820,14 +2993,6 @@ void MessageArchiver::onEngineCapabilitiesChanged(const Jid &AStreamJid)
 	trySyncServerArchive(AStreamJid);
 }
 
-void MessageArchiver::onRosterOpened(IRoster *ARoster)
-{
-	// The contact list drives the per-contact synchronization of the server
-	// archive, so the sync can start once the roster is there.
-	if (ARoster!=NULL)
-		trySyncServerArchive(ARoster->streamJid());
-}
-
 void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError &AError)
 {
 	if (FSyncHeaders.contains(AId))
@@ -2837,12 +3002,15 @@ void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError 
 		if (it == FArchiveSyncs.end())
 			return;
 		// Some servers answer an archive query with no results with
-		// "item-not-found" instead of an empty result set, so for a contact
-		// without messages this is not a synchronization error.
+		// "item-not-found" instead of an empty result set, so a pass without
+		// messages is not a synchronization error.
 		if (AError.condition() == "item-not-found")
 		{
-			LOG_STRM_INFO(streamJid,QString("Server history sync: no server archive for contact=%1").arg(it->contact.bare()));
-			startNextSyncContact(streamJid);
+			LOG_STRM_INFO(streamJid,QString("Server history sync: no messages in the requested range, end=%1")
+				.arg(it->passEnd.isValid() ? DateTime(it->passEnd).toX85UTC() : QString("none")));
+			it->messagesCount = 0;
+			it->pendingCollections = 0;
+			syncPassFinished(streamJid);
 		}
 		else
 		{
@@ -2866,7 +3034,7 @@ void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError 
 				if (it->failed)
 					finishSyncServerArchive(streamJid);
 				else
-					startNextSyncContact(streamJid);
+					syncPassFinished(streamJid);
 			}
 		}
 		else

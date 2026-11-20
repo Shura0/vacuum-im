@@ -15,20 +15,23 @@
 // Prosody (and most servers) cap this internally (max_archive_query_results).
 #define MAM_RESULT_PAGE           50
 // Safety limit for the number of pages fetched to satisfy a single request.
-// A background synchronization of the whole server archive can need many
-// pages, so the cap is large enough for 10000 messages while still bounding a
-// broken server which never reports "complete".
-#define MAM_MAX_PAGES             200
-#define MAM_MAX_MESSAGES          (MAM_RESULT_PAGE*MAM_MAX_PAGES)
+// A background synchronization of the whole server archive needs many pages,
+// so the cap is large enough that the message cap below is always reached
+// first (even for a server that returns one result per page) while still
+// bounding a broken server which never reports "complete".
+#define MAM_MAX_PAGES             10000
+#define MAM_MAX_MESSAGES          (MAM_RESULT_PAGE*200)
 // Gap between two messages that starts a new conversation (matches the local
 // file archive collection timeout used by ChatMessageHandler).
 #define MAM_SESSION_TIMEOUT       (20*60)
-// Maximum number of cached conversation bodies kept in memory.
-#define MAM_MAX_CACHE             1000
+// Maximum number of cached conversation bodies kept in memory. One server
+// archive pass can produce one collection per message, so the cache has to
+// hold a whole pass plus the leftovers of the previous one.
+#define MAM_MAX_CACHE             20000
 // Maximum number of session end timestamps kept in memory. The background
 // synchronization may produce one session per chat, and every session needs
 // its end date to load the exact collection without over-fetching.
-#define MAM_MAX_SESSION_ENDS      10000
+#define MAM_MAX_SESSION_ENDS      20000
 
 #define MAM_QUERY_TIMEOUT         30000
 
@@ -226,7 +229,12 @@ QString MamArchive::loadHeaders(const Jid &AStreamJid, const IArchiveRequest &AR
 	request.namespaceUri = ns;
 	request.headers = true;
 	request.request = ARequest;
-	request.maxPages = ARequest.maxItems <= MAM_RESULT_PAGE ? 1 : MAM_MAX_PAGES;
+	// One page for a single page request, otherwise never fewer pages than the
+	// requested messages, so the message cap is what ends a long request.
+	qint64 pages = ((qint64)ARequest.maxItems + MAM_RESULT_PAGE - 1) / MAM_RESULT_PAGE;
+	request.maxPages = ARequest.maxItems <= MAM_RESULT_PAGE
+		? 1
+		: (int)qMin<qint64>(qMax<qint64>(pages,1), MAM_MAX_PAGES);
 
 	if (startIq(request).isEmpty())
 	{
@@ -360,10 +368,12 @@ QString MamArchive::startIq(MamQueryRequest &ARequest)
 		// both directions request their first page explicitly: 'before' for
 		// the newest messages, 'after' for the oldest ones. This is what makes
 		// an ascending synchronization really walk the whole archive instead
-		// of stopping after the newest page.
+		// of stopping after the newest page. A server that rejects the empty
+		// 'after' is remembered and asked without any paging element, which is
+		// its own way of returning the first page.
 		if (descending)
 			set.appendChild(doc.createElement("before"));
-		else
+		else if (!ARequest.noAfter && !FNoAfterFirstPage.contains(ARequest.streamJid))
 			set.appendChild(doc.createElement("after"));
 	}
 	else if (descending && !ARequest.first.isEmpty())
@@ -397,6 +407,20 @@ void MamArchive::processQueryResult(const Jid &AStreamJid, const Stanza &AStanza
 	if (AStanza.isError())
 	{
 		XmppStanzaError err(AStanza);
+		// Some servers answer the empty <after/> that requests the first
+		// ascending page with item-not-found. Ask the same query again without
+		// any paging element and remember the stream, so its next queries use
+		// that form straight away.
+		if (err.condition()=="item-not-found" && !request.noAfter && request.pages==1
+			&& request.request.order==Qt::AscendingOrder)
+		{
+			LOG_STRM_INFO(AStreamJid,QString("MAM first page request rejected, retrying without RSM paging, id=%1").arg(request.id));
+			FNoAfterFirstPage.insert(AStreamJid);
+			request.noAfter = true;
+			request.pages = 0;
+			if (!startIq(request).isEmpty())
+				return;
+		}
 		LOG_STRM_WARNING(AStreamJid,QString("MAM request failed, id=%1: %2").arg(request.id,err.condition()));
 		finishQuery(request,err);
 		return;
@@ -643,6 +667,7 @@ void MamArchive::onXmppStreamClosed(IXmppStream *AXmppStream)
 
 	FSupported.remove(AXmppStream->streamJid());
 	FAccountDiscoRequested.remove(AXmppStream->streamJid());
+	FNoAfterFirstPage.remove(AXmppStream->streamJid());
 }
 
 void MamArchive::onDiscoInfoReceived(const IDiscoInfo &AInfo)

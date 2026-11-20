@@ -24,6 +24,7 @@
 #include <interfaces/isessionnegotiation.h>
 #include <interfaces/irostermanager.h>
 #include <interfaces/iendtoendencryption.h>
+#include <interfaces/irecentcontacts.h>
 #include "chatwindowmenu.h"
 #include "archiveviewwindow.h"
 #include "archivereplicator.h"
@@ -66,20 +67,43 @@ struct CollectionRequest {
 };
 
 struct ArchiveSyncState {
+	// The forward pass catches up with the messages that arrived since the last
+	// synchronization, the backfill walk goes backwards through the older part
+	// of the server archive and resumes where the previous session stopped.
+	enum Phase {
+		Forward,
+		Backfill
+	};
 	IArchiveEngine *engine;
-	QList<Jid> contacts;
-	Jid contact;
+	Phase phase;
 	QString headersId;
 	int pendingCollections;
 	int collectionsCount;
-	QDateTime previous;
+	int messagesCount;
+	int totalMessages;
+	int passesCount;
+	QDateTime previousNewest;
+	QDateTime previousOldest;
 	QDateTime newest;
-	QMap<Jid,QSet<QString> > knownIds;
+	QDateTime oldest;
+	QDateTime passNewest;
+	QDateTime passOldest;
+	QDateTime passEnd;
+	QDateTime gapStop;
+	QDateTime pendingNewest;
+	bool endReached;
 	bool failed;
+	QMap<Jid,QDateTime> recentContacts;
+	QMap<Jid,QSet<QString> > knownIds;
 	ArchiveSyncState() {
 		engine = NULL;
+		phase = Backfill;
 		pendingCollections = 0;
 		collectionsCount = 0;
+		messagesCount = 0;
+		totalMessages = 0;
+		passesCount = 0;
+		endReached = false;
 		failed = false;
 	}
 };
@@ -216,17 +240,17 @@ protected:
 private:
 	void saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection, QMap<Jid,QSet<QString> > *AKnownIds = NULL, bool AForceSave = false);
 	void trySyncServerArchive(const Jid &AStreamJid);
-	void startNextSyncContact(const Jid &AStreamJid);
+	void startSyncPass(const Jid &AStreamJid);
 	void processSyncHeaders(const Jid &AStreamJid, const QList<IArchiveHeader> &AHeaders);
 	void processSyncCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection);
+	void syncPassFinished(const Jid &AStreamJid);
 	void finishSyncServerArchive(const Jid &AStreamJid, const XmppError &AError = XmppError());
 	void clearSyncServerArchive(const Jid &AStreamJid);
 	IArchiveEngine *findServerArchiveEngine(const Jid &AStreamJid) const;
-	QDateTime archiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine) const;
-	void setArchiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine, const QDateTime &ATime) const;
+	bool loadArchiveSyncState(const Jid &AStreamJid, IArchiveEngine *AEngine, QDateTime &ANewest, QDateTime &AOldest, bool &AEndReached) const;
+	void saveArchiveSyncState(const Jid &AStreamJid, IArchiveEngine *AEngine, const ArchiveSyncState &ASync) const;
 protected slots:
 	void onEngineCapabilitiesChanged(const Jid &AStreamJid);
-	void onRosterOpened(IRoster *ARoster);
 	void onEngineRequestFailed(const QString &AId, const XmppError &AError);
 	void onEngineHeadersLoaded(const QString &AId, const QList<IArchiveHeader> &AHeaders);
 	void onEngineCollectionLoaded(const QString &AId, const IArchiveCollection &ACollection);
@@ -265,7 +289,6 @@ private:
 	IOptionsManager *FOptionsManager;
 	IPrivateStorage *FPrivateStorage;
 	IAccountManager *FAccountManager;
-	IRosterManager *FRosterManager;
 	IRostersViewPlugin *FRostersViewPlugin;
 	IServiceDiscovery *FDiscovery;
 	IDataForms *FDataForms;
@@ -273,6 +296,7 @@ private:
 	ISessionNegotiation *FSessionNegotiation;
 	IMultiUserChatManager *FMultiChatManager;
 	IEndToEndEncryption *FEndToEndEncryption;
+	IRecentContacts *FRecentContacts;
 private:
 	QMap<Jid,int> FSHIPrefs;
 	QMap<Jid,int> FSHIMessageIn;
