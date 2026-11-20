@@ -15,15 +15,20 @@
 // Prosody (and most servers) cap this internally (max_archive_query_results).
 #define MAM_RESULT_PAGE           50
 // Safety limit for the number of pages fetched to satisfy a single request.
-#define MAM_MAX_PAGES             10
+// A background synchronization of the whole server archive can need many
+// pages, so the cap is large enough for 10000 messages while still bounding a
+// broken server which never reports "complete".
+#define MAM_MAX_PAGES             200
 #define MAM_MAX_MESSAGES          (MAM_RESULT_PAGE*MAM_MAX_PAGES)
 // Gap between two messages that starts a new conversation (matches the local
 // file archive collection timeout used by ChatMessageHandler).
 #define MAM_SESSION_TIMEOUT       (20*60)
 // Maximum number of cached conversation bodies kept in memory.
-#define MAM_MAX_CACHE             300
-// Maximum number of session end timestamps kept in memory.
-#define MAM_MAX_SESSION_ENDS      1000
+#define MAM_MAX_CACHE             1000
+// Maximum number of session end timestamps kept in memory. The background
+// synchronization may produce one session per chat, and every session needs
+// its end date to load the exact collection without over-fetching.
+#define MAM_MAX_SESSION_ENDS      10000
 
 #define MAM_QUERY_TIMEOUT         30000
 
@@ -351,8 +356,15 @@ QString MamArchive::startIq(MamQueryRequest &ARequest)
 
 	if (ARequest.pages == 0)
 	{
+		// Without RSM most servers return the last page of the archive, so
+		// both directions request their first page explicitly: 'before' for
+		// the newest messages, 'after' for the oldest ones. This is what makes
+		// an ascending synchronization really walk the whole archive instead
+		// of stopping after the newest page.
 		if (descending)
 			set.appendChild(doc.createElement("before"));
+		else
+			set.appendChild(doc.createElement("after"));
 	}
 	else if (descending && !ARequest.first.isEmpty())
 	{
@@ -407,6 +419,12 @@ void MamArchive::processQueryResult(const Jid &AStreamJid, const Stanza &AStanza
 	{
 		if (!startIq(request).isEmpty())
 			return;
+	}
+
+	if (more && limitReached)
+	{
+		LOG_STRM_WARNING(AStreamJid,QString("MAM request stopped at the page limit, with=%1, messages=%2, id=%3")
+			.arg(request.request.with.bare()).arg(request.messages.count()).arg(request.id));
 	}
 
 	LOG_STRM_INFO(AStreamJid,QString("MAM request completed, with=%1, messages=%2, id=%3")

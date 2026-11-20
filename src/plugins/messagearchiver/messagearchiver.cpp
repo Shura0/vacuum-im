@@ -33,6 +33,12 @@
 #define PENDING_FILE_NAME          "pending.xml"
 #define SESSIONS_FILE_NAME         "sessions.xml"
 #define ARCHIVE_REQUEST_TIMEOUT    30000
+// Seconds of overlap between two server archive synchronizations. Messages at
+// the boundary may be downloaded twice, but the local archive drops the copies
+// by their stanza id, so a clock skew can not swallow a message.
+#define ARCHIVE_SYNC_OVERLAP       120
+// Account option that keeps the last synchronized server archive timestamp.
+#define ARCHIVE_SYNC_OPTION        "history-sync"
 
 #define SHC_MESSAGE_BODY           "/message/body"
 #define SHC_PREFS                  "/iq[@type='set']/pref[@xmlns=" NS_ARCHIVE "]"
@@ -1061,9 +1067,17 @@ QString MessageArchiver::removeArchiveSessionPrefs(const Jid &AStreamJid, const 
 
 bool MessageArchiver::saveMessage(const Jid &AStreamJid, const Jid &AItemJid, const Message &AMessage)
 {
+	return saveMessageInternal(AStreamJid,AItemJid,AMessage,false);
+}
+
+bool MessageArchiver::saveMessageInternal(const Jid &AStreamJid, const Jid &AItemJid, const Message &AMessage, bool AForceSave)
+{
 	bool saved = false;
 	QString reason;
-	const bool autoSave = isArchiveAutoSave(AStreamJid);
+	// A server archive synchronization has to land in the local archive even
+	// when the server itself keeps a copy, otherwise the history would stay
+	// remote-only and opening a chat would still query the server.
+	const bool autoSave = !AForceSave && isArchiveAutoSave(AStreamJid);
 	const bool duplication = isArchiveDuplicationEnabled(AStreamJid);
 	const bool archivingAllowed = isArchivingAllowed(AStreamJid,AItemJid,AMessage.threadId());
 	IArchiveEngine *engine = archivingAllowed ? findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving) : NULL;
@@ -1684,6 +1698,10 @@ void MessageArchiver::applyArchivePrefs(const Jid &AStreamJid, const QDomElement
 
 			emit archivePrefsOpened(AStreamJid);
 			processPendingMessages(AStreamJid);
+			// Bring the local file archive up to date right after the stream
+			// becomes usable, so opening a chat does not have to wait for the
+			// server archive first.
+			trySyncServerArchive(AStreamJid);
 		}
 		else
 		{
@@ -1830,7 +1848,7 @@ bool MessageArchiver::prepareMessage(const Jid &AStreamJid, Message &AMessage, b
 	return true;
 }
 
-bool MessageArchiver::processMessage(const Jid &AStreamJid, const Message &AMessage, bool ADirectionIn)
+bool MessageArchiver::processMessage(const Jid &AStreamJid, const Message &AMessage, bool ADirectionIn, bool AForceSave)
 {
 	Jid itemJid = ADirectionIn ? (!AMessage.from().isEmpty() ? AMessage.from() : AStreamJid.domain()) : AMessage.to();
 	if (!isReady(AStreamJid))
@@ -1838,7 +1856,7 @@ bool MessageArchiver::processMessage(const Jid &AStreamJid, const Message &AMess
 		FPendingMessages[AStreamJid].append(QPair<Message,bool>(AMessage,ADirectionIn));
 		return true;
 	}
-	return saveMessage(AStreamJid,itemJid,AMessage);
+	return saveMessageInternal(AStreamJid,itemJid,AMessage,AForceSave);
 }
 
 IArchiveEngine *MessageArchiver::findEngineByCapability(const Jid &AStreamJid, quint32 ACapability) const
@@ -1963,7 +1981,7 @@ void MessageArchiver::processCollectionRequest(const QString &ALocalId, Collecti
 	FCollectionRequests.remove(ALocalId);
 }
 
-void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection)
+void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection, QMap<Jid,QSet<QString> > *AKnownIds, bool AForceSave)
 {
 	if (ACollection.body.messages.isEmpty() || !ACollection.header.with.isValid())
 	{
@@ -1976,13 +1994,19 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 	// A copy of the same message may already be in the file archive: the live
 	// messages are saved on handle, and their storage keeps the stanza id.
 	// Skip such messages, because every history load would otherwise add one
-	// more copy of the recent messages into the collection files.
+	// more copy of the recent messages into the collection files. A background
+	// synchronization passes its per-contact cache, so the collection files
+	// are scanned once per contact instead of once per collection.
 	QSet<QString> savedIds;
 	IArchiveEngine *engine = findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving);
 	IFileMessageArchive *fileArchive = engine!=NULL ? qobject_cast<IFileMessageArchive *>(engine->instance()) : NULL;
 	if (fileArchive)
 	{
-		QSet<QString> fileIds = fileArchive->loadFileMessageIds(AStreamJid,ACollection.header.with);
+		QSet<QString> fileIds;
+		if (AKnownIds!=NULL && AKnownIds->contains(ACollection.header.with))
+			fileIds = AKnownIds->value(ACollection.header.with);
+		else
+			fileIds = fileArchive->loadFileMessageIds(AStreamJid,ACollection.header.with);
 		if (!fileIds.isEmpty())
 		{
 			foreach(const Message &message, ACollection.body.messages)
@@ -2032,7 +2056,7 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 			}
 			continue;
 		}
-		if (processMessage(AStreamJid,plain,directionIn))
+		if (processMessage(AStreamJid,plain,directionIn,AForceSave))
 		{
 			savedIds.insert(message.id());
 			savedCount++;
@@ -2043,9 +2067,215 @@ void MessageArchiver::saveCollectionMessages(const Jid &AStreamJid, const IArchi
 		}
 	}
 
+	if (AKnownIds != NULL)
+	{
+		QSet<QString> &knownIds = (*AKnownIds)[ACollection.header.with];
+		knownIds.unite(savedIds);
+	}
+
 	LOG_STRM_INFO(AStreamJid,QString("Fetched history save to local archive finished, with=%1, total=%2, saved=%3, duplicates=%4, decrypt-failed=%5, empty-body=%6, engine-refused=%7")
 		.arg(ACollection.header.with.bare()).arg(ACollection.body.messages.count()).arg(savedCount)
 		.arg(skipDuplicate).arg(skipDecrypt).arg(skipBody).arg(skipEngine));
+}
+
+IArchiveEngine *MessageArchiver::findServerArchiveEngine(const Jid &AStreamJid) const
+{
+	// The server engines are the archive management engines that are not the
+	// local file archive. The ordering keeps XEP-0136 ahead of MAM when a
+	// server advertises both, which avoids downloading the same history twice.
+	QMultiMap<int, IArchiveEngine *> order = engineOrderByCapability(AStreamJid,IArchiveEngine::ArchiveManagement);
+	for (QMultiMap<int, IArchiveEngine *>::const_iterator it=order.constBegin(); it!=order.constEnd(); ++it)
+	{
+		if (qobject_cast<IFileMessageArchive *>(it.value()->instance()) == NULL)
+			return it.value();
+	}
+	return NULL;
+}
+
+QDateTime MessageArchiver::archiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine) const
+{
+	if (AEngine!=NULL && FAccountManager!=NULL)
+	{
+		IAccount *account = FAccountManager->findAccountByStream(AStreamJid);
+		if (account!=NULL)
+		{
+			QString prefix = AEngine->engineId().toString() + '|';
+			QString value = account->optionsNode().value(ARCHIVE_SYNC_OPTION).toString();
+			if (value.startsWith(prefix))
+				return DateTime(value.mid(prefix.length())).toLocal();
+		}
+	}
+	return QDateTime();
+}
+
+void MessageArchiver::setArchiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine, const QDateTime &ATime) const
+{
+	if (AEngine!=NULL && FAccountManager!=NULL && ATime.isValid())
+	{
+		IAccount *account = FAccountManager->findAccountByStream(AStreamJid);
+		if (account!=NULL)
+		{
+			QString value = AEngine->engineId().toString() + '|' + DateTime(ATime).toX85UTC();
+			account->optionsNode().setValue(value,ARCHIVE_SYNC_OPTION);
+		}
+	}
+}
+
+void MessageArchiver::trySyncServerArchive(const Jid &AStreamJid)
+{
+	if (!isReady(AStreamJid) || FArchiveSyncs.contains(AStreamJid))
+		return;
+
+	// Without a local archive the fetched messages would have nowhere to go,
+	// and the synchronization watermark would then skip them forever.
+	if (findEngineByCapability(AStreamJid,IArchiveEngine::DirectArchiving) == NULL)
+		return;
+
+	IArchiveEngine *engine = findServerArchiveEngine(AStreamJid);
+	if (engine == NULL)
+		return;
+
+	QDateTime start = archiveSyncTime(AStreamJid,engine);
+	IArchiveRequest request;
+	request.with = Jid::null;
+	if (start.isValid())
+		request.start = start.addSecs(-ARCHIVE_SYNC_OVERLAP);
+	request.order = Qt::AscendingOrder;
+	request.maxItems = 0xFFFFFFFF;
+
+	QString id = engine->loadHeaders(AStreamJid,request);
+	if (id.isEmpty())
+	{
+		LOG_STRM_WARNING(AStreamJid,QString("Failed to start server history sync, engine=%1").arg(engine->engineName()));
+		return;
+	}
+
+	ArchiveSyncState sync;
+	sync.engine = engine;
+	sync.headersId = id;
+	sync.previous = start;
+	FArchiveSyncs.insert(AStreamJid,sync);
+	FSyncHeaders.insert(id,AStreamJid);
+
+	LOG_STRM_INFO(AStreamJid,QString("Server history sync started, engine=%1, start=%2")
+		.arg(engine->engineName())
+		.arg(start.isValid() ? DateTime(start).toX85UTC() : QString("all")));
+}
+
+void MessageArchiver::processSyncHeaders(const Jid &AStreamJid, const QList<IArchiveHeader> &AHeaders)
+{
+	{
+		QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+		if (it == FArchiveSyncs.end())
+			return;
+
+		it->pendingCollections = AHeaders.count();
+		it->collectionsCount = AHeaders.count();
+		IArchiveEngine *engine = it->engine;
+
+		// Every header produced by the server query already carries its
+		// messages in the MAM engine cache, so the collections normally load
+		// without another round trip.
+		foreach(const IArchiveHeader &header, AHeaders)
+		{
+			QString id = engine->loadCollection(AStreamJid,header);
+			if (!id.isEmpty())
+			{
+				FSyncCollections.insert(id,AStreamJid);
+			}
+			else
+			{
+				// The state may already be gone if a synchronous emission
+				// completed the whole synchronization.
+				QMap<Jid,ArchiveSyncState>::iterator cur = FArchiveSyncs.find(AStreamJid);
+				if (cur == FArchiveSyncs.end())
+					return;
+				cur->failed = true;
+				cur->pendingCollections--;
+				LOG_STRM_WARNING(AStreamJid,QString("Failed to load server history collection, with=%1, start=%2")
+					.arg(header.with.bare()).arg(DateTime(header.start).toX85UTC()));
+			}
+		}
+	}
+
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it!=FArchiveSyncs.end() && it->pendingCollections<=0)
+		finishSyncServerArchive(AStreamJid);
+}
+
+void MessageArchiver::processSyncCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection)
+{
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it != FArchiveSyncs.end())
+	{
+		foreach(const Message &message, ACollection.body.messages)
+		{
+			if (message.dateTime().isValid() && (!it->newest.isValid() || message.dateTime()>it->newest))
+				it->newest = message.dateTime();
+		}
+
+		saveCollectionMessages(AStreamJid,ACollection,&it->knownIds,true);
+
+		it->pendingCollections--;
+		if (it->pendingCollections <= 0)
+			finishSyncServerArchive(AStreamJid);
+	}
+}
+
+void MessageArchiver::finishSyncServerArchive(const Jid &AStreamJid, const XmppError &AError)
+{
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it != FArchiveSyncs.end())
+	{
+		ArchiveSyncState sync = it.value();
+		FArchiveSyncs.erase(it);
+		FSyncHeaders.remove(sync.headersId);
+
+		for (QMap<QString,Jid>::iterator colIt=FSyncCollections.begin(); colIt!=FSyncCollections.end(); )
+		{
+			if (colIt.value() == AStreamJid)
+				colIt = FSyncCollections.erase(colIt);
+			else
+				++colIt;
+		}
+
+		if (AError.isNull() && !sync.failed)
+		{
+			QDateTime newest = sync.newest;
+			if (sync.previous.isValid() && (!newest.isValid() || newest<sync.previous))
+				newest = sync.previous;
+			if (!newest.isValid())
+				newest = QDateTime::currentDateTime();
+			setArchiveSyncTime(AStreamJid,sync.engine,newest);
+			LOG_STRM_INFO(AStreamJid,QString("Server history sync finished, engine=%1, collections=%2, newest=%3")
+				.arg(sync.engine->engineName()).arg(sync.collectionsCount)
+				.arg(DateTime(newest).toX85UTC()));
+		}
+		else
+		{
+			LOG_STRM_WARNING(AStreamJid,QString("Server history sync failed, engine=%1, collections=%2: %3")
+				.arg(sync.engine->engineName()).arg(sync.collectionsCount)
+				.arg(AError.isNull() ? QString("Collection load failed") : AError.condition()));
+		}
+	}
+}
+
+void MessageArchiver::clearSyncServerArchive(const Jid &AStreamJid)
+{
+	QMap<Jid,ArchiveSyncState>::iterator it = FArchiveSyncs.find(AStreamJid);
+	if (it != FArchiveSyncs.end())
+	{
+		FSyncHeaders.remove(it->headersId);
+		FArchiveSyncs.erase(it);
+	}
+
+	for (QMap<QString,Jid>::iterator colIt=FSyncCollections.begin(); colIt!=FSyncCollections.end(); )
+	{
+		if (colIt.value() == AStreamJid)
+			colIt = FSyncCollections.erase(colIt);
+		else
+			++colIt;
+	}
 }
 
 void MessageArchiver::processRemoveRequest(const QString &ALocalId, RemoveRequest &ARequest)
@@ -2535,10 +2765,26 @@ void MessageArchiver::notifyInChatWindow(const Jid &AStreamJid, const Jid &ACont
 void MessageArchiver::onEngineCapabilitiesChanged(const Jid &AStreamJid)
 {
 	emit totalCapabilitiesChanged(AStreamJid);
+	// The server archive becomes known only after service discovery, which
+	// usually finishes after the archive preferences were opened.
+	trySyncServerArchive(AStreamJid);
 }
 
 void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError &AError)
 {
+	if (FSyncHeaders.contains(AId))
+	{
+		Jid streamJid = FSyncHeaders.take(AId);
+		finishSyncServerArchive(streamJid,AError);
+		return;
+	}
+	else if (FSyncCollections.contains(AId))
+	{
+		Jid streamJid = FSyncCollections.take(AId);
+		finishSyncServerArchive(streamJid,AError);
+		return;
+	}
+
 	if (FRequestId2LocalId.contains(AId))
 	{
 		QString localId = FRequestId2LocalId.take(AId);
@@ -2568,6 +2814,13 @@ void MessageArchiver::onEngineRequestFailed(const QString &AId, const XmppError 
 
 void MessageArchiver::onEngineHeadersLoaded(const QString &AId, const QList<IArchiveHeader> &AHeaders)
 {
+	if (FSyncHeaders.contains(AId))
+	{
+		Jid streamJid = FSyncHeaders.take(AId);
+		processSyncHeaders(streamJid,AHeaders);
+		return;
+	}
+
 	if (FRequestId2LocalId.contains(AId))
 	{
 		QString localId = FRequestId2LocalId.take(AId);
@@ -2583,6 +2836,13 @@ void MessageArchiver::onEngineHeadersLoaded(const QString &AId, const QList<IArc
 
 void MessageArchiver::onEngineCollectionLoaded(const QString &AId, const IArchiveCollection &ACollection)
 {
+	if (FSyncCollections.contains(AId))
+	{
+		Jid streamJid = FSyncCollections.take(AId);
+		processSyncCollection(streamJid,ACollection);
+		return;
+	}
+
 	if (FRequestId2LocalId.contains(AId))
 	{
 		QString localId = FRequestId2LocalId.take(AId);
@@ -2727,6 +2987,7 @@ void MessageArchiver::onXmppStreamClosed(IXmppStream *AXmppStream)
 	FArchivePrefs.remove(AXmppStream->streamJid());
 	FInStoragePrefs.removeAll(AXmppStream->streamJid());
 	FSessions.remove(AXmppStream->streamJid());
+	clearSyncServerArchive(AXmppStream->streamJid());
 
 	emit archivePrefsChanged(AXmppStream->streamJid());
 	emit archivePrefsClosed(AXmppStream->streamJid());

@@ -4,6 +4,7 @@
 #include <QPair>
 #include <QObject>
 #include <QList>
+#include <QSet>
 #include <QUuid>
 #include <QMultiMap>
 #include <interfaces/ipluginmanager.h>
@@ -62,6 +63,23 @@ struct CollectionRequest {
 	IArchiveEngine *engine;
 	XmppError lastError;
 	IArchiveCollection collection;
+};
+
+struct ArchiveSyncState {
+	IArchiveEngine *engine;
+	QString headersId;
+	int pendingCollections;
+	int collectionsCount;
+	QDateTime previous;
+	QDateTime newest;
+	QMap<Jid,QSet<QString> > knownIds;
+	bool failed;
+	ArchiveSyncState() {
+		engine = NULL;
+		pendingCollections = 0;
+		collectionsCount = 0;
+		failed = false;
+	}
 };
 
 class MessageArchiver :
@@ -164,7 +182,8 @@ protected:
 	void savePendingMessages(const Jid &AStreamJid);
 	void processPendingMessages(const Jid &AStreamJid);
 	bool prepareMessage(const Jid &AStreamJid, Message &AMessage, bool ADirectionIn);
-	bool processMessage(const Jid &AStreamJid, const Message &AMessage, bool ADirectionIn);
+	bool processMessage(const Jid &AStreamJid, const Message &AMessage, bool ADirectionIn, bool AForceSave = false);
+	bool saveMessageInternal(const Jid &AStreamJid, const Jid &AItemJid, const Message &AMessage, bool AForceSave);
 protected:
 	IArchiveEngine *findEngineByCapability(const Jid &AStreamJid, quint32 ACapability) const;
 	QMultiMap<int, IArchiveEngine *> engineOrderByCapability(const Jid &AStreamJid, quint32 ACapability) const;
@@ -193,7 +212,15 @@ protected:
 	Menu *createContextMenu(const QStringList &AStreams, const QStringList &AContacts, QWidget *AParent) const;
 	void notifyInChatWindow(const Jid &AStreamJid, const Jid &AContactJid, const QString &AMessage) const;
 private:
-	void saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection);
+	void saveCollectionMessages(const Jid &AStreamJid, const IArchiveCollection &ACollection, QMap<Jid,QSet<QString> > *AKnownIds = NULL, bool AForceSave = false);
+	void trySyncServerArchive(const Jid &AStreamJid);
+	void processSyncHeaders(const Jid &AStreamJid, const QList<IArchiveHeader> &AHeaders);
+	void processSyncCollection(const Jid &AStreamJid, const IArchiveCollection &ACollection);
+	void finishSyncServerArchive(const Jid &AStreamJid, const XmppError &AError = XmppError());
+	void clearSyncServerArchive(const Jid &AStreamJid);
+	IArchiveEngine *findServerArchiveEngine(const Jid &AStreamJid) const;
+	QDateTime archiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine) const;
+	void setArchiveSyncTime(const Jid &AStreamJid, IArchiveEngine *AEngine, const QDateTime &ATime) const;
 protected slots:
 	void onEngineCapabilitiesChanged(const Jid &AStreamJid);
 	void onEngineRequestFailed(const QString &AId, const XmppError &AError);
@@ -273,6 +300,10 @@ private:
 	QMap<Jid, ArchiveReplicator *> FReplicators;
 	QMap<QUuid,IArchiveEngine *> FArchiveEngines;
 	QMultiMap<int,IArchiveHandler *> FArchiveHandlers;
+private:
+	QMap<Jid,ArchiveSyncState> FArchiveSyncs;
+	QMap<QString,Jid> FSyncHeaders;
+	QMap<QString,Jid> FSyncCollections;
 };
 
 #endif // MESSAGEARCHIVER_H
