@@ -1,6 +1,7 @@
 #include "callwindow.h"
 
 #include <QCloseEvent>
+#include <QResizeEvent>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -45,14 +46,14 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 	FVideoLabel = new QLabel(this);
 	FVideoLabel->setAlignment(Qt::AlignCenter);
 	FVideoLabel->setMinimumSize(320, 240);
-	FVideoLabel->setScaledContents(true);
+	FVideoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	FVideoLabel->hide();
 	mainLayout->addWidget(FVideoLabel);
+	mainLayout->setStretchFactor(FVideoLabel, 1);
 
 	FLocalVideoLabel = new QLabel(this);
 	FLocalVideoLabel->setAlignment(Qt::AlignCenter);
 	FLocalVideoLabel->setFixedSize(160, 120);
-	FLocalVideoLabel->setScaledContents(true);
 	FLocalVideoLabel->hide();
 	mainLayout->addWidget(FLocalVideoLabel, 0, Qt::AlignRight);
 
@@ -60,8 +61,6 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 	FNoCameraLabel->setAlignment(Qt::AlignCenter);
 	FNoCameraLabel->hide();
 	mainLayout->addWidget(FNoCameraLabel);
-
-	mainLayout->addStretch();
 
 	QHBoxLayout *buttonsLayout = new QHBoxLayout();
 	buttonsLayout->setContentsMargins(0, 0, 0, 0);
@@ -128,7 +127,8 @@ void CallWindow::setRemoteVideoFrame(const QImage &AFrame)
 {
 	if (AFrame.isNull())
 		return;
-	FVideoLabel->setPixmap(QPixmap::fromImage(AFrame));
+	FRemoteFrame = AFrame;
+	updateVideoPixmaps();
 	FVideoLabel->show();
 }
 
@@ -136,8 +136,27 @@ void CallWindow::setLocalVideoFrame(const QImage &AFrame)
 {
 	if (AFrame.isNull())
 		return;
-	FLocalVideoLabel->setPixmap(QPixmap::fromImage(AFrame));
+	FLocalFrame = AFrame;
+	updateVideoPixmaps();
 	FLocalVideoLabel->show();
+}
+
+void CallWindow::updateVideoPixmaps()
+{
+	auto updateLabel = [](QLabel *ALabel, const QImage &AFrame) {
+		if (ALabel->isHidden() || AFrame.isNull() || ALabel->width() < 1 || ALabel->height() < 1)
+			return;
+		const QSize scaled = AFrame.size().scaled(ALabel->size(), Qt::KeepAspectRatio);
+		ALabel->setPixmap(QPixmap::fromImage(AFrame.scaled(scaled, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)));
+	};
+	updateLabel(FVideoLabel, FRemoteFrame);
+	updateLabel(FLocalVideoLabel, FLocalFrame);
+}
+
+void CallWindow::resizeEvent(QResizeEvent *AEvent)
+{
+	QWidget::resizeEvent(AEvent);
+	updateVideoPixmaps();
 }
 
 void CallWindow::setMuteVisible(bool AVisible)

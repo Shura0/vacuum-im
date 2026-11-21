@@ -4,6 +4,8 @@
 #include <QWidget>
 #include <QImage>
 
+class QCloseEvent;
+class QResizeEvent;
 class QLabel;
 class QPushButton;
 class QTimer;
@@ -44,9 +46,13 @@ signals:
 
 protected:
 	virtual void closeEvent(QCloseEvent *ACloseEvent);
+	virtual void resizeEvent(QResizeEvent *AEvent);
 
 private slots:
 	void onTimerTick();
+
+private:
+	void updateVideoPixmaps();
 
 private:
 	QString FSid;
@@ -62,6 +68,8 @@ private:
 	QPushButton *FCameraButton;
 	QPushButton *FScreenButton;
 	QLabel *FNoCameraLabel;
+	QImage FRemoteFrame;
+	QImage FLocalFrame;
 	QTimer *FTimer;
 	qint64 FSeconds;
 	bool FProgrammaticClose;
