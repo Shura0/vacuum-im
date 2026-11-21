@@ -227,6 +227,7 @@ bool Jingle::initSettings()
 {
 	Options::setDefaultValue(OPV_JINGLE_ENABLED, true);
 	Options::setDefaultValue(OPV_JINGLE_VIDEO, true);
+	Options::setDefaultValue(OPV_JINGLE_VIDEO_QUALITY, 0);
 	Options::setDefaultValue(OPV_JINGLE_AEC, true);
 	Options::setDefaultValue(OPV_JINGLE_ALLOWUNKNOWN, false);
 	Options::setDefaultValue(OPV_JINGLE_STUN_SERVER, QString());
@@ -984,6 +985,14 @@ bool Jingle::sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString
 		QDomElement descriptionElem = message.createElement("description", NS_JINGLE_APPS_RTP);
 		descriptionElem.setAttribute("media", "audio");
 		actionElem.appendChild(descriptionElem);
+		if (Options::node(OPV_JINGLE_VIDEO).value().toBool())
+		{
+			//XEP-0353 requires the media list in <propose> to match the
+			//contents of the following session-initiate exactly.
+			QDomElement videoElem = message.createElement("description", NS_JINGLE_APPS_RTP);
+			videoElem.setAttribute("media", "video");
+			actionElem.appendChild(videoElem);
+		}
 	}
 	if (!AReasonCode.isEmpty())
 	{

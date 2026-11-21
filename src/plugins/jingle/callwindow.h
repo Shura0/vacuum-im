@@ -23,12 +23,23 @@ public:
 	void setHangupVisible(bool AVisible);
 	void setTimerActive(bool AActive);
 	void setRemoteVideoFrame(const QImage &AFrame);
+	void setLocalVideoFrame(const QImage &AFrame);
+	void setMuteVisible(bool AVisible);
+	void setCameraVisible(bool AVisible);
+	void setScreenVisible(bool AVisible);
+	void setScreenSharing(bool AEnabled);
+	void setMuted(bool AMuted);
+	void setCameraEnabled(bool AEnabled);
+	void setNoCameraVisible(bool AVisible);
 	void closeBySession();
 
 signals:
 	void answerRequested();
 	void declineRequested();
 	void hangupRequested();
+	void muteToggled(bool AMuted);
+	void cameraToggled(bool AEnabled);
+	void screenToggled(bool AEnabled);
 	void userClosed();
 
 protected:
@@ -43,9 +54,14 @@ private:
 	QLabel *FStatusLabel;
 	QLabel *FTimeLabel;
 	QLabel *FVideoLabel;
+	QLabel *FLocalVideoLabel;
 	QPushButton *FAnswerButton;
 	QPushButton *FDeclineButton;
 	QPushButton *FHangupButton;
+	QPushButton *FMuteButton;
+	QPushButton *FCameraButton;
+	QPushButton *FScreenButton;
+	QLabel *FNoCameraLabel;
 	QTimer *FTimer;
 	qint64 FSeconds;
 	bool FProgrammaticClose;

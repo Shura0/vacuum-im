@@ -2,6 +2,8 @@
 #include "dtlssrtp.h"
 #include "rtcpsession.h"
 #include "videoreceiver.h"
+#include "videotransmitter.h"
+#include "screenshare.h"
 
 #include <QAudioDevice>
 #include <QAudioFormat>
@@ -75,12 +77,18 @@ MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 	FRemoteClockrate = OpusSampleRate;
 	FRemoteVideoPayloadType = -1;
 	FVideoReceiver = nullptr;
+	FVideoTransmitter = nullptr;
+	FScreenShare = nullptr;
+	FVideoSeq = QRandomGenerator::global()->bounded(0xFFFF);
+	FVideoTimestamp = QRandomGenerator::global()->generate();
 	FVideoRtpCount = 0;
 	FVideoDecodedCount = 0;
 	FSeq = QRandomGenerator::global()->bounded(0xFFFF);
 	FTimestamp = QRandomGenerator::global()->generate();
 	FFirstPacket = true;
 	FAudioActive = false;
+	FMuted = false;
+	FVideoEnabled = false;
 	FAsDtlsClient = true;
 	FRemoteParamsReady = false;
 	FIceConnected = false;
@@ -169,6 +177,25 @@ bool MediaEngine::initialize()
 
 	FVideoReceiver = new VideoReceiver(this);
 	FVideoReceiver->initialize();
+
+	FVideoTransmitter = new VideoTransmitter(this);
+	connect(FVideoTransmitter, &VideoTransmitter::encodedFrame, this, &MediaEngine::sendVideoFrame);
+	connect(FVideoTransmitter, &VideoTransmitter::localFrame, this, &MediaEngine::localVideoFrame);
+	connect(FRtcpSession, &RtcpSession::peerReportReceived, this, [this]() {
+		if (!FVideoTransmitter)
+			return;
+		const RtcpSession::PeerReport report = FRtcpSession->peerReport();
+		FVideoTransmitter->adaptToNetwork(report.fractionLost * 100 / 256, report.roundTripMs);
+	});
+
+	FScreenShare = new ScreenShare(this);
+	connect(FScreenShare, &ScreenShare::frameReady, this, [this](const QImage &AFrame) {
+		if (FVideoTransmitter)
+			FVideoTransmitter->submitFrame(AFrame);
+	});
+	connect(FScreenShare, &ScreenShare::failed, this, [this](const QString &AError) {
+		LOG_WARNING(QString("MediaEngine: screen sharing failed: %1").arg(AError));
+	});
 
 	FOpusLib = new QLibrary(this);
 	if (!loadOpus())
@@ -310,6 +337,49 @@ void MediaEngine::stop()
 bool MediaEngine::isAudioActive() const
 {
 	return FAudioActive;
+}
+
+void MediaEngine::setAudioMuted(bool AMuted)
+{
+	FMuted = AMuted;
+}
+
+void MediaEngine::setVideoEnabled(bool AEnabled)
+{
+	FVideoEnabled = AEnabled;
+	if (FVideoTransmitter)
+	{
+		if (AEnabled && FAudioActive)
+			FVideoTransmitter->start();
+		else
+			FVideoTransmitter->stop();
+	}
+}
+
+bool MediaEngine::hasVideoCamera() const
+{
+	return FVideoTransmitter != nullptr && FVideoTransmitter->hasCamera();
+}
+
+void MediaEngine::setScreenSharing(bool AEnabled)
+{
+	if (!FScreenShare)
+		return;
+	if (AEnabled)
+	{
+		if (FVideoTransmitter)
+			FVideoTransmitter->stop();
+		FScreenShare->start();
+	}
+	else
+	{
+		FScreenShare->stop();
+	}
+}
+
+bool MediaEngine::hasScreenShare()
+{
+	return ScreenShare::isAvailable();
 }
 
 qint64 MediaEngine::clockMs() const
@@ -582,6 +652,14 @@ void MediaEngine::captureAndSend()
 	if (!FCaptureIo || !FOpusEncode || !FOpusEncoder)
 		return;
 
+	if (FMuted)
+	{
+		//Keep reading so the device buffer does not fill up, but send nothing
+		FCaptureIo->readAll();
+		FCapturePending.clear();
+		return;
+	}
+
 	FCapturePending.append(FCaptureConverter.convert(FCaptureIo->readAll()));
 	//Keep at most 200 ms of captured audio; the timer normally drains every frame
 	if (FCapturePending.size() > OpusFrameBytes * 10)
@@ -620,6 +698,50 @@ void MediaEngine::captureAndSend()
 		if (!protectedPacket.isEmpty())
 			FIceAgent->writeMedia(protectedPacket, 1);
 	}
+}
+
+void MediaEngine::sendVideoFrame(const QByteArray &AData, quint32 ADuration90k)
+{
+	if (!FAudioActive || !FIceConnected || FDtlsSrtp == nullptr ||
+	    FDtlsSrtp->state() != DtlsSrtp::StateConnected || AData.isEmpty())
+		return;
+
+	const int payloadType = FRemoteVideoPayloadType >= 0 ? FRemoteVideoPayloadType : 96;
+	const int maxFragment = 1000; //VP8 data bytes per RTP packet
+	int offset = 0;
+	bool first = true;
+	while (offset < AData.size())
+	{
+		const int chunk = qMin(maxFragment, AData.size() - offset);
+		const bool last = offset + chunk >= AData.size();
+
+		QByteArray packet;
+		packet.reserve(RtpHeaderSize + 1 + chunk);
+		quint8 rtpHeader[RtpHeaderSize];
+		rtpHeader[0] = 0x80;
+		rtpHeader[1] = quint8(payloadType & 0x7F) | (last ? 0x80 : 0x00);
+		quint16 seqBE = qToBigEndian<quint16>(quint16(FVideoSeq++));
+		memcpy(rtpHeader + 2, &seqBE, 2);
+		quint32 tsBE = qToBigEndian<quint32>(FVideoTimestamp);
+		memcpy(rtpHeader + 4, &tsBE, 4);
+		quint32 ssrcBE = qToBigEndian<quint32>(FLocalVideoSsrc);
+		memcpy(rtpHeader + 8, &ssrcBE, 4);
+		packet.append(reinterpret_cast<const char *>(rtpHeader), RtpHeaderSize);
+		//RFC 7741 payload descriptor: S=1 on the first fragment, 0 afterwards
+		packet.append(char(first ? 0x10 : 0x00));
+		packet.append(AData.constData() + offset, chunk);
+
+		const QByteArray protectedPacket = FDtlsSrtp->protectRtp(packet);
+		if (!protectedPacket.isEmpty())
+			FIceAgent->writeMedia(protectedPacket, 1);
+		else if (FVideoRtpCount == 0)
+			LOG_WARNING("MediaEngine: failed to protect an outgoing video RTP packet");
+
+		++FVideoRtpCount;
+		offset += chunk;
+		first = false;
+	}
+	FVideoTimestamp += ADuration90k;
 }
 
 QByteArray MediaEngine::buildRtpPacket(const QByteArray &AOpusPayload, bool AMarker)
@@ -814,6 +936,12 @@ bool MediaEngine::startAudio()
 	scheduleRtcpReport(RtcpMinIntervalMs / 2 + int(QRandomGenerator::global()->bounded(RtcpMinIntervalMs / 2)));
 
 	FMediaTimer->start();
+	FVideoEnabled = FRemoteVideoPayloadType >= 0 && Options::node(OPV_JINGLE_VIDEO).value().toBool();
+	if (FVideoEnabled)
+	{
+		FVideoTransmitter->setQualityMode(Options::node(OPV_JINGLE_VIDEO_QUALITY).value().toInt());
+		FVideoTransmitter->start();
+	}
 	return true;
 }
 
@@ -821,6 +949,10 @@ void MediaEngine::stopAudio()
 {
 	FMediaTimer->stop();
 	FAudioActive = false;
+	if (FScreenShare)
+		FScreenShare->stop();
+	if (FVideoTransmitter)
+		FVideoTransmitter->stop();
 	FRtcpTimer->stop();
 	FRtcpSession->stop();
 

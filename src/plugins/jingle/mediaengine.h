@@ -22,6 +22,8 @@ class QLibrary;
 class QTimer;
 class RtcpSession;
 class VideoReceiver;
+class VideoTransmitter;
+class ScreenShare;
 
 //The subset of the libopus API we use; loaded at runtime to keep the plugin
 //buildable on systems without the codec package.
@@ -59,6 +61,11 @@ public:
 	void stop();
 
 	bool isAudioActive() const;
+	void setAudioMuted(bool AMuted);
+	void setVideoEnabled(bool AEnabled);
+	void setScreenSharing(bool AEnabled);
+	bool hasVideoCamera() const;
+	static bool hasScreenShare();
 	//DTLS role: we are the client when our advertised/adopted setup attribute is "active"
 	void setDtlsClientRole(bool AAsClient);
 	//Peer DTLS parameters from the session-accept: the handshake cannot start without
@@ -69,6 +76,7 @@ signals:
 	void iceConnected();
 	void dtlsConnected();
 	void videoFrameReceived(const QImage &AFrame);
+	void localVideoFrame(const QImage &AFrame);
 	void failed(const QString &AReason);
 
 private slots:
@@ -76,6 +84,7 @@ private slots:
 	void onDtlsStateChanged(int AState);
 	void onMediaDatagram(const QByteArray &AData, int AComponent);
 	void onMediaTick();
+	void sendVideoFrame(const QByteArray &AData, quint32 ADuration90k);
 
 private:
 	bool loadOpus();
@@ -107,6 +116,10 @@ private:
 	int FRemoteClockrate;
 	int FRemoteVideoPayloadType;
 	VideoReceiver *FVideoReceiver;
+	VideoTransmitter *FVideoTransmitter;
+	ScreenShare *FScreenShare;
+	quint32 FVideoSeq;
+	quint32 FVideoTimestamp;
 	int FVideoRtpCount;
 	int FVideoDecodedCount;
 	quint32 FSeq;
@@ -158,6 +171,8 @@ private:
 	bool FRemoteParamsReady;
 	bool FIceConnected;
 	bool FAudioActive;
+	bool FMuted;
+	bool FVideoEnabled;
 	bool FFailPending;
 };
 

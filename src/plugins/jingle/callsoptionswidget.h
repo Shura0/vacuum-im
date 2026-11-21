@@ -37,6 +37,7 @@ private:
 private:
 	QCheckBox *FEnabled;
 	QCheckBox *FVideo;
+	QComboBox *FQuality;
 	QCheckBox *FAec;
 	QCheckBox *FAllowUnknown;
 	QComboBox *FInputDevice;

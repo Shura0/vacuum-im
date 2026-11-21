@@ -133,6 +133,10 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 			if (!FSilent && FWindow != nullptr)
 				FWindow->setRemoteVideoFrame(AFrame);
 		});
+		connect(FMediaEngine, &MediaEngine::localVideoFrame, this, [this](const QImage &AFrame) {
+			if (!FSilent && FWindow != nullptr)
+				FWindow->setLocalVideoFrame(AFrame);
+		});
 
 		//The callee binds its ports immediately so that candidates can be offered
 		FMediaEngine->iceAgent()->setNatConfig(FJingle->natConfig(FStreamJid));
@@ -152,6 +156,25 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	connect(FWindow, &CallWindow::answerRequested, this, &JingleSession::answer);
 	connect(FWindow, &CallWindow::declineRequested, this, &JingleSession::decline);
 	connect(FWindow, &CallWindow::hangupRequested, this, [this]() { hangup(); });
+	connect(FWindow, &CallWindow::muteToggled, this, [this](bool AMuted) {
+		if (FMediaEngine)
+			FMediaEngine->setAudioMuted(AMuted);
+	});
+	connect(FWindow, &CallWindow::cameraToggled, this, [this](bool AEnabled) {
+		if (AEnabled && FWindow)
+			FWindow->setScreenSharing(false);
+		if (FMediaEngine)
+		{
+			FMediaEngine->setScreenSharing(false);
+			FMediaEngine->setVideoEnabled(AEnabled);
+		}
+	});
+	connect(FWindow, &CallWindow::screenToggled, this, [this](bool AEnabled) {
+		if (AEnabled && FWindow)
+			FWindow->setCameraEnabled(false);
+		if (FMediaEngine)
+			FMediaEngine->setScreenSharing(AEnabled);
+	});
 	connect(FWindow, &CallWindow::userClosed, this, &JingleSession::setUserClosed);
 
 	setState(FState);
@@ -871,6 +894,20 @@ void JingleSession::setState(IJingle::CallState AState)
 {
 	FState = AState;
 
+	const bool active = FState == IJingle::CallActive;
+	if (FWindow)
+	{
+		FWindow->setMuteVisible(active);
+		const bool videoEnabled = Options::node(OPV_JINGLE_VIDEO).value().toBool();
+		FWindow->setCameraVisible(active && videoEnabled);
+		FWindow->setScreenVisible(active && videoEnabled && FMediaEngine != nullptr && FMediaEngine->hasScreenShare());
+		if (!active)
+			FWindow->setScreenSharing(false);
+		const bool camera = FMediaEngine != nullptr && FMediaEngine->hasVideoCamera();
+		FWindow->setNoCameraVisible(active && videoEnabled && !camera);
+		FWindow->setCameraEnabled(camera);
+	}
+
 	//The ringtone belongs to the ringing state only; playRingtone() starts it
 	//when the window of an incoming call is shown. The dial tone accompanies an
 	//outgoing call from the first stanza until the peer answers.
@@ -1023,9 +1060,7 @@ void JingleSession::appendContentElem(QDomElement &AJingleElem, const QString &A
 	//Siskin/Martin (and XEP-0166) require the creator attribute: without it the
 	//whole <content> is rejected and the phone silently ignores session-initiate.
 	contentElem.setAttribute("creator", FInitiated ? QStringLiteral("initiator") : QStringLiteral("responder"));
-	//We do not send video yet; ask the peer to send it to us only.
-	if (AVideo)
-		contentElem.setAttribute("senders", FInitiated ? QStringLiteral("responder") : QStringLiteral("initiator"));
+	//Video is bidirectional now; the default senders="both" applies.
 
 	addDescription(contentElem, AVideo);
 	addTransport(contentElem);

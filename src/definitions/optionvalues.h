@@ -110,6 +110,7 @@
 #define OPV_JINGLE_ROOT                                       "jingle"
 #define OPV_JINGLE_ENABLED                                    "jingle.enabled"
 #define OPV_JINGLE_VIDEO                                      "jingle.video"
+#define OPV_JINGLE_VIDEO_QUALITY                              "jingle.video-quality"
 #define OPV_JINGLE_AEC                                        "jingle.aec"
 #define OPV_JINGLE_ALLOWUNKNOWN                               "jingle.allow-unknown"
 #define OPV_JINGLE_STUN_SERVER                                "jingle.stun-server"

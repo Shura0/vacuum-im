@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -48,6 +49,18 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 	FVideoLabel->hide();
 	mainLayout->addWidget(FVideoLabel);
 
+	FLocalVideoLabel = new QLabel(this);
+	FLocalVideoLabel->setAlignment(Qt::AlignCenter);
+	FLocalVideoLabel->setFixedSize(160, 120);
+	FLocalVideoLabel->setScaledContents(true);
+	FLocalVideoLabel->hide();
+	mainLayout->addWidget(FLocalVideoLabel, 0, Qt::AlignRight);
+
+	FNoCameraLabel = new QLabel(tr("No camera available"), this);
+	FNoCameraLabel->setAlignment(Qt::AlignCenter);
+	FNoCameraLabel->hide();
+	mainLayout->addWidget(FNoCameraLabel);
+
 	mainLayout->addStretch();
 
 	QHBoxLayout *buttonsLayout = new QHBoxLayout();
@@ -65,11 +78,39 @@ CallWindow::CallWindow(const QString &ASid, QWidget *AParent)
 	FHangupButton->hide();
 	buttonsLayout->addWidget(FHangupButton);
 
+	FMuteButton = new QPushButton(tr("&Mute"), this);
+	FMuteButton->setCheckable(true);
+	FMuteButton->hide();
+	buttonsLayout->addWidget(FMuteButton);
+
+	FCameraButton = new QPushButton(tr("Camera &on"), this);
+	FCameraButton->setCheckable(true);
+	FCameraButton->setChecked(true);
+	FCameraButton->hide();
+	buttonsLayout->addWidget(FCameraButton);
+
+	FScreenButton = new QPushButton(tr("Share &screen"), this);
+	FScreenButton->setCheckable(true);
+	FScreenButton->hide();
+	buttonsLayout->addWidget(FScreenButton);
+
 	mainLayout->addLayout(buttonsLayout);
 
 	connect(FAnswerButton, &QPushButton::clicked, this, &CallWindow::answerRequested);
 	connect(FDeclineButton, &QPushButton::clicked, this, &CallWindow::declineRequested);
 	connect(FHangupButton, &QPushButton::clicked, this, &CallWindow::hangupRequested);
+	connect(FMuteButton, &QPushButton::toggled, this, [this](bool AChecked) {
+		FMuteButton->setText(AChecked ? tr("&Unmute") : tr("&Mute"));
+		emit muteToggled(AChecked);
+	});
+	connect(FCameraButton, &QPushButton::toggled, this, [this](bool AChecked) {
+		FCameraButton->setText(AChecked ? tr("Camera &on") : tr("Camera &off"));
+		emit cameraToggled(AChecked);
+	});
+	connect(FScreenButton, &QPushButton::toggled, this, [this](bool AChecked) {
+		FScreenButton->setText(AChecked ? tr("Stop sharing") : tr("Share &screen"));
+		emit screenToggled(AChecked);
+	});
 
 	FTimer = new QTimer(this);
 	FTimer->setInterval(1000);
@@ -89,6 +130,52 @@ void CallWindow::setRemoteVideoFrame(const QImage &AFrame)
 		return;
 	FVideoLabel->setPixmap(QPixmap::fromImage(AFrame));
 	FVideoLabel->show();
+}
+
+void CallWindow::setLocalVideoFrame(const QImage &AFrame)
+{
+	if (AFrame.isNull())
+		return;
+	FLocalVideoLabel->setPixmap(QPixmap::fromImage(AFrame));
+	FLocalVideoLabel->show();
+}
+
+void CallWindow::setMuteVisible(bool AVisible)
+{
+	FMuteButton->setVisible(AVisible);
+}
+
+void CallWindow::setCameraVisible(bool AVisible)
+{
+	FCameraButton->setVisible(AVisible);
+}
+
+void CallWindow::setScreenVisible(bool AVisible)
+{
+	FScreenButton->setVisible(AVisible);
+}
+
+void CallWindow::setScreenSharing(bool AEnabled)
+{
+	QSignalBlocker blocker(FScreenButton);
+	FScreenButton->setChecked(AEnabled);
+	FScreenButton->setText(AEnabled ? tr("Stop sharing") : tr("Share &screen"));
+}
+
+void CallWindow::setMuted(bool AMuted)
+{
+	FMuteButton->setChecked(AMuted);
+}
+
+void CallWindow::setCameraEnabled(bool AEnabled)
+{
+	FCameraButton->setChecked(AEnabled);
+	FCameraButton->setEnabled(AEnabled || FCameraButton->isChecked());
+}
+
+void CallWindow::setNoCameraVisible(bool AVisible)
+{
+	FNoCameraLabel->setVisible(AVisible);
 }
 
 void CallWindow::setPeer(const QString &AName, const QString &AJid)

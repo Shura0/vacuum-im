@@ -17,7 +17,13 @@
 CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 {
 	FEnabled = new QCheckBox(tr("Enable voice and video calls"), this);
-	FVideo = new QCheckBox(tr("Receive video from the contact (VP8)"), this);
+	FVideo = new QCheckBox(tr("Enable video calls (VP8)"), this);
+	FQuality = new QComboBox(this);
+	FQuality->addItem(tr("Automatic (network based)"), 0);
+	FQuality->addItem(tr("Low (320x240)"), 1);
+	FQuality->addItem(tr("Medium (640x480)"), 2);
+	FQuality->addItem(tr("High (1280x720)"), 3);
+	connect(FQuality, SIGNAL(currentIndexChanged(int)), SIGNAL(modified()));
 	FAec = new QCheckBox(tr("Suppress the echo of the speakers (acoustic echo cancellation)"), this);
 	FAllowUnknown = new QCheckBox(tr("Allow calls from not authorized contacts"), this);
 	connect(FEnabled, SIGNAL(toggled(bool)), SIGNAL(modified()));
@@ -68,6 +74,7 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	layout->addWidget(FEnabled);
 	layout->addWidget(FVideo);
+	layout->addWidget(FQuality);
 	layout->addWidget(FAec);
 	layout->addWidget(FAllowUnknown);
 	layout->addWidget(deviceBox);
@@ -82,6 +89,7 @@ void CallsOptionsWidget::apply()
 {
 	Options::node(OPV_JINGLE_ENABLED).setValue(FEnabled->isChecked());
 	Options::node(OPV_JINGLE_VIDEO).setValue(FVideo->isChecked());
+	Options::node(OPV_JINGLE_VIDEO_QUALITY).setValue(FQuality->currentData().toInt());
 	Options::node(OPV_JINGLE_AEC).setValue(FAec->isChecked());
 	Options::node(OPV_JINGLE_ALLOWUNKNOWN).setValue(FAllowUnknown->isChecked());
 	Options::node(OPV_JINGLE_INPUT_DEVICE).setValue(FInputDevice->currentData().toString());
@@ -99,6 +107,8 @@ void CallsOptionsWidget::reset()
 {
 	FEnabled->setChecked(Options::node(OPV_JINGLE_ENABLED).value().toBool());
 	FVideo->setChecked(Options::node(OPV_JINGLE_VIDEO).value().toBool());
+	const int qualityIndex = FQuality->findData(Options::node(OPV_JINGLE_VIDEO_QUALITY).value().toInt());
+	FQuality->setCurrentIndex(qualityIndex >= 0 ? qualityIndex : 0);
 	FAec->setChecked(Options::node(OPV_JINGLE_AEC).value().toBool());
 	FAllowUnknown->setChecked(Options::node(OPV_JINGLE_ALLOWUNKNOWN).value().toBool());
 

@@ -5,6 +5,9 @@
 int main(int argc, char *argv[])
 {
 	QApplication::setAttribute(Qt::AA_DontShowIconsInMenus,false);
+	//xdg-desktop-portal refuses/aborts requests from applications without a
+	//desktop id (needed for the screen sharing permission dialog).
+	QApplication::setDesktopFileName(QStringLiteral("vacuum.desktop"));
 
 	QApplication app(argc, argv);
 	app.setQuitOnLastWindowClosed(false);
