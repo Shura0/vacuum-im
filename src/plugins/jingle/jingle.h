@@ -50,7 +50,7 @@ public:
 	virtual bool isSupported(const Jid &AStreamJid, const Jid &AContactJid) const;
 	bool isVideoSupported(const Jid &AStreamJid, const Jid &AContactJid) const;
 	virtual QString call(const Jid &AStreamJid, const Jid &AContactJid);
-	QString callWithVideo(const Jid &AStreamJid, const Jid &AContactJid);
+	virtual QString callWithVideo(const Jid &AStreamJid, const Jid &AContactJid);
 	virtual bool answerCall(const QString &ASid);
 	virtual bool declineCall(const QString &ASid);
 	virtual bool hangupCall(const QString &ASid);

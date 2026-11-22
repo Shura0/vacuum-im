@@ -545,6 +545,12 @@ bool VimPlugin::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 	if (plugin)
 		FRecentContacts = qobject_cast<IRecentContacts *>(plugin->instance());
 
+	// optional: the :call and :vcall commands start calls through the Jingle
+	// plugin; without it the commands simply beep
+	plugin = APluginManager->pluginInterface("IJingle").value(0,NULL);
+	if (plugin)
+		FJingle = qobject_cast<IJingle *>(plugin->instance());
+
 	connect(Options::instance(), SIGNAL(optionsOpened()), SLOT(onOptionsOpened()));
 	connect(Options::instance(), SIGNAL(optionsClosed()), SLOT(onOptionsClosed()));
 
@@ -2764,6 +2770,28 @@ void VimPlugin::executeCommand()
 			}
 		}
 	}
+	else if (name=="call" || name=="vcall")
+	{
+		// Same syntax as :chat: ":call [jid]" starts a voice call and
+		// ":vcall [jid]" a video call.  Without a JID the current chat contact
+		// is used; the account is taken from the current chat window (or the
+		// first online stream), like :join and :leave.
+		const Jid streamJid = commandStreamJid();
+		const Jid contactJid = callContactJid(streamJid,args.section(' ', 0, 0));
+		const QString sid = FJingle!=NULL && streamJid.isValid() && !contactJid.isEmpty()
+			? (name=="vcall" ? FJingle->callWithVideo(streamJid,contactJid)
+			                 : FJingle->call(streamJid,contactJid))
+			: QString();
+		if (sid.isEmpty())
+		{
+			QApplication::beep();
+			LOG_INFO(QString("[VimPlugin] :%1 failed for '%2': Jingle is unavailable, the contact has no online resource or does not support calls")
+				.arg(name).arg(contactJid.full()));
+		}
+		else
+			LOG_INFO(QString("[VimPlugin] :%1 started a call with '%2', sid=%3")
+				.arg(name).arg(contactJid.full(),sid));
+	}
 	else if (name=="join")
 	{
 		QString room = args.section(' ', 0, 0);
@@ -2878,16 +2906,18 @@ static const VimHelpCommand kHelpCommands[] =
 	{ "clear",               "",           QT_TR_NOOP("Clear the chat log") },
 	{ "close;tabclose",      "",           QT_TR_NOOP("Close the current chat tab (the last tab of a tab window is kept)") },
 	{ "chat",                "<jid> [text]", QT_TR_NOOP("Open a chat with the contact (Tab completes a roster JID) and optionally send a message") },
+	{ "call",                "[jid]", QT_TR_NOOP("Start a voice call (Tab completes a roster JID; without a JID, call the current chat contact)") },
+	{ "vcall",               "[jid]", QT_TR_NOOP("Start a video call (Tab completes a roster JID; without a JID, call the current chat contact)") },
 	{ "join",                "<room> [nick] [password]", QT_TR_NOOP("Join a conference room (Tab completes a bookmarked or recently joined room and its nick)") },
 	{ "leave;part",          "[room]",     QT_TR_NOOP("Leave the current conference room (Tab completes an open room); with a room, leave that room") },
-	{ "help;h",              "[topic]",    QT_TR_NOOP("Show this help (topics: modes, normal, visual, command, search, global)") }
+	{ "help;h",              "[topic]",    QT_TR_NOOP("Show this help (topics: modes, normal, visual, command, global)") }
 };
 
 // ============ command completion ============
 // The stream the COMMAND mode commands talk to: the one of the window the
 // command line was typed in, so with several accounts the right one is used
-// (the same choice ":chat" and ":join" make).  A window without an address
-// yet falls back to the first presence.
+// (the same choice ":join", ":leave", ":call" and ":vcall" make).  A window
+// without an address yet falls back to the first presence.
 Jid VimPlugin::commandStreamJid() const
 {
 	IMessageWindow *window = activeChatWindow();
@@ -2898,8 +2928,45 @@ Jid VimPlugin::commandStreamJid() const
 	return Jid();
 }
 
+// A call needs the full JID of the contact: Jingle checks the Jingle disco
+// features on a particular resource, and a bare JID has none.  Without an
+// argument the contact of the current private chat is used; otherwise the
+// best online resource of the given bare JID is picked, like the call buttons
+// do with the chat window address.
+Jid VimPlugin::callContactJid(const Jid &AStreamJid, const QString &ATarget) const
+{
+	Jid contact(ATarget);
+	if (contact.isEmpty())
+	{
+		IMessageWindow *window = activeChatWindow();
+		if (window!=NULL && qobject_cast<IMessageChatWindow *>(window->instance())!=NULL)
+			contact = window->contactJid();
+	}
+	if (!contact.isEmpty() && !contact.hasResource() && FPresenceManager!=NULL)
+	{
+		IPresenceItem best;
+		foreach (IPresence *presence, FPresenceManager->presences())
+		{
+			if (presence->streamJid().bare()!=AStreamJid.bare())
+				continue;
+			foreach (const IPresenceItem &item, presence->findItems(contact.bare()))
+			{
+				if (!item.itemJid.hasResource() || item.show==IPresence::Offline)
+					continue;
+				if (best.isNull() || item.priority>best.priority
+					|| (item.priority==best.priority && item.show<best.show))
+					best = item;
+			}
+		}
+		if (!best.isNull())
+			contact = best.itemJid;
+	}
+	return contact;
+}
+
 // Resolves the token Tab completes: the command name before the first space,
-// the JID after ":chat" and the room or nick after ":join".  AHead receives
+// the JID after ":chat", ":call" and ":vcall" and the room or nick after
+// ":join".  AHead receives
 // the text in front of the token, ATyped the token itself and ACandidates the
 // matches.  Returns false when the cursor is on a part that is not completed
 // (the message of ":chat", the password of ":join", any other argument).
@@ -2925,6 +2992,14 @@ bool VimPlugin::commandCompletionCandidates(const QString &ALine, QString &AHead
 		// after it starts after another space
 		if (args.contains(' '))
 			return false;
+		AHead = ":" + ALine.left(space+1);
+		ATyped = args;
+		ACandidates = rosterJidCandidates(args);
+		return true;
+	}
+	if (name.compare("call", Qt::CaseInsensitive)==0 || name.compare("vcall", Qt::CaseInsensitive)==0)
+	{
+		// a call takes a single JID argument, completed from the roster
 		AHead = ":" + ALine.left(space+1);
 		ATyped = args;
 		ACandidates = rosterJidCandidates(args);
@@ -2964,9 +3039,10 @@ bool VimPlugin::commandCompletionCandidates(const QString &ALine, QString &AHead
 }
 
 // Tab in COMMAND mode completes the name after ':' against the kHelpCommands
-// table, the first argument of ":chat" against the contact JIDs of the roster
-// and the room and nick arguments of ":join" against the known conference
-// rooms.  Repeated Tab (Shift+Tab backwards) cycles through the candidates
+// table, the first argument of ":chat", ":call" and ":vcall" against the
+// contact JIDs of the roster and the room and nick arguments of ":join"
+// against the known conference rooms.  Repeated Tab (Shift+Tab backwards)
+// cycles through the candidates
 // like the vim command line; any other key drops the cycle.
 bool VimPlugin::completeCommandLine(bool ABackwards)
 {
@@ -3037,10 +3113,10 @@ bool VimPlugin::completeCommandLine(bool ABackwards)
 	return true;
 }
 
-// The contact JIDs of the roster the ":chat" command talks to: the stream of
-// the first presence (that is what executeCommand() uses).  When the stream
-// is not known or its roster is not available yet, every open roster is
-// searched, so completion still works before the first presence arrives.
+// The contact JIDs used for ":chat", ":call" and ":vcall" completion: the
+// roster of the stream commandStreamJid() selects.  When the stream is not
+// known or its roster is not available yet, every open roster is searched,
+// so completion still works before the first presence arrives.
 QStringList VimPlugin::rosterJidCandidates(const QString &APrefix) const
 {
 	QStringList jids;
@@ -3231,8 +3307,6 @@ static QString vimHelpAnchorForTopic(const QString &ATopic)
 		return QString("visual");
 	if (topic=="command" || topic=="commands" || topic=="cmd")
 		return QString("command");
-	if (topic=="search")
-		return QString("search");
 	if (topic=="global" || topic=="hotkeys")
 		return QString("global");
 	return QString();
@@ -3292,8 +3366,7 @@ QString VimPlugin::buildHelpHtml() const
 		{ "CARET",   QT_TR_NOOP("v before anything is selected"),          QT_TR_NOOP("NORMAL with a visible cursor: a motion moves it, v starts a selection") },
 		{ "VISUAL",  QT_TR_NOOP("v (charwise) / V (linewise)"),            QT_TR_NOOP("Selects characters or whole messages; y copies the selection") },
 		{ "INSERT",  QT_TR_NOOP("i, or c to edit the last message"),       QT_TR_NOOP("The input box is a normal chat editor; Esc returns to NORMAL") },
-		{ "COMMAND", QT_TR_NOOP(":"),                                      QT_TR_NOOP("The input box is the command line; Enter runs the command, Esc cancels") },
-		{ "SEARCH",  QT_TR_NOOP("/"),                                      QT_TR_NOOP("Pattern prompt; Enter searches, Esc cancels, n/N repeat from NORMAL") }
+		{ "COMMAND", QT_TR_NOOP(":"),                                      QT_TR_NOOP("The input box is the command line; Enter runs the command, Esc cancels") }
 	};
 	for (unsigned i=0; i<sizeof(kModes)/sizeof(kModes[0]); ++i)
 	{
@@ -3307,6 +3380,9 @@ QString VimPlugin::buildHelpHtml() const
 		html += "<table width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"4\">";
 		foreach (VimActionId action, AActions)
 		{
+			// search is not working yet: do not advertise its keys in help
+			if (action==ActionSearchForward || action==ActionNextSearchMatch || action==ActionPrevSearchMatch)
+				continue;
 			html += QString("<tr><td width=\"22%\" valign=\"top\"><b>%1</b></td><td>%2</td></tr>")
 				.arg(vimHelpKeys(actionKeysString(AMode,action)))
 				.arg(actionTitle(action).toHtmlEscaped());
@@ -3318,7 +3394,7 @@ QString VimPlugin::buildHelpHtml() const
 	html += QString("<h2><a name=\"normal\"></a>%1</h2>").arg(tr("NORMAL keys"));
 	appendActions(NormalMode, vimModeActions(NormalMode));
 	html += QString("<p>%1</p>").arg(tr("<b>CARET</b> keeps the motions, the copy commands, v/V and the counts; "
-		"the prompt, paste, notification and roster keys are NORMAL only."));
+		"the paste, notification and roster keys are NORMAL only."));
 
 	// VISUAL
 	html += QString("<h2><a name=\"visual\"></a>%1</h2>").arg(tr("VISUAL keys"));
@@ -3327,19 +3403,14 @@ QString VimPlugin::buildHelpHtml() const
 		"extend a linewise selection by whole lines and h/l are ignored. <b>v</b>/<b>V</b> switch between the two kinds "
 		"and leave VISUAL to NORMAL, <b>gv</b> restores the last selection."));
 
-	// SEARCH
-	html += QString("<h2><a name=\"search\"></a>%1</h2>").arg(tr("Search"));
-	html += QString("<p>%1</p>").arg(tr("<b>/</b> opens the pattern prompt, Enter searches forward from the current "
-		"position, <b>n</b> and <b>N</b> repeat the search. An invalid pattern beeps."));
-
 	// COMMAND
 	html += QString("<h2><a name=\"command\"></a>%1</h2>").arg(tr("COMMAND mode"));
 	html += QString("<p>%1</p>").arg(tr("Press <b>:</b> in NORMAL, type a command and press Enter. "
 		"Missing arguments are taken from the rest of the line."));
 	html += QString("<p>%1</p>").arg(tr("<b>Tab</b> completes the command name after <b>:</b>, the contact JID "
-		"after <b>:chat</b>, the room and the nick after <b>:join</b> (the bookmarked rooms, the rooms joined "
-		"before and the open rooms) and the open room after <b>:leave</b>; repeated <b>Tab</b> cycles through "
-		"the matches and <b>Shift+Tab</b> cycles backwards."));
+		"after <b>:chat</b>, <b>:call</b> and <b>:vcall</b>, the room and the nick after <b>:join</b> "
+		"(the bookmarked rooms, the rooms joined before and the open rooms) and the open room after "
+		"<b>:leave</b>; repeated <b>Tab</b> cycles through the matches and <b>Shift+Tab</b> cycles backwards."));
 	html += "<table width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"4\">";
 	for (unsigned i=0; i<sizeof(kHelpCommands)/sizeof(kHelpCommands[0]); ++i)
 	{

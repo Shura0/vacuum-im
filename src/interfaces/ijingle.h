@@ -23,6 +23,8 @@ public:
 	//Calls
 	virtual bool isSupported(const Jid &AStreamJid, const Jid &AContactJid) const =0;
 	virtual QString call(const Jid &AStreamJid, const Jid &AContactJid) =0;
+	// Returns an empty sid when video calls are disabled or unsupported
+	virtual QString callWithVideo(const Jid &AStreamJid, const Jid &AContactJid) =0;
 	virtual bool answerCall(const QString &ASid) =0;
 	virtual bool declineCall(const QString &ASid) =0;
 	virtual bool hangupCall(const QString &ASid) =0;
@@ -36,6 +38,6 @@ protected:
 };
 
 Q_DECLARE_METATYPE(IJingle::CallState);
-Q_DECLARE_INTERFACE(IJingle,"Vacuum.Plugin.IJingle/1.0");
+Q_DECLARE_INTERFACE(IJingle,"Vacuum.Plugin.IJingle/2.0");
 
 #endif // IJINGLE_H

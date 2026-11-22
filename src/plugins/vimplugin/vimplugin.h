@@ -20,6 +20,7 @@
 #include <interfaces/imultiuserchat.h>
 #include <interfaces/ibookmarks.h>
 #include <interfaces/irecentcontacts.h>
+#include <interfaces/ijingle.h>
 
 #define VIMPLUGIN_UUID  "{A0593123-5391-4ae7-96fd-6442b2916263}"
 // duplicated here on purpose: the shortcutmanager header is not shared across
@@ -190,6 +191,7 @@ private:
 	bool commandCompletionCandidates(const QString &ALine, QString &AHead, QString &ATyped, QStringList &ACandidates) const;
 	// the stream of the first presence, the one the commands talk to
 	Jid commandStreamJid() const;
+	Jid callContactJid(const Jid &AStreamJid, const QString &ATarget) const;
 	// the rooms ":join" knows about with the nick they were last joined with
 	QList<VimKnownRoom> knownRooms() const;
 	QStringList joinRoomCandidates(const QString &APrefix) const;
@@ -228,6 +230,8 @@ private:
 	// joined conference rooms
 	IBookmarks         *FBookmarks = nullptr;
 	IRecentContacts    *FRecentContacts = nullptr;
+	// optional: the :call and :vcall commands start calls through Jingle
+	IJingle            *FJingle = nullptr;
 
 	VimMode FMode = NormalMode;
 	// VISUAL comes in two flavours like in vim: charwise ('v') and
