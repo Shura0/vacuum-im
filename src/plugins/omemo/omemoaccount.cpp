@@ -5,6 +5,7 @@
 #include "omemostore.h"
 
 #include <definitions/namespaces.h>
+#include <definitions/optionvalues.h>
 #include <utils/logger.h>
 #include <utils/options.h>
 #include <utils/xmpperror.h>
@@ -254,6 +255,27 @@ void OmemoAccount::setChatEnabled(const QString &AJid, bool AEnabled)
 		FStore->data().disabledChats.remove(jid);
 	else
 		FStore->data().disabledChats.insert(jid);
+	FStore->markDirty();
+	FStore->save();
+	emit stateChanged(jid);
+}
+
+bool OmemoAccount::isChatStrict(const QString &AJid) const
+{
+	if (Options::node(OPV_OMEMO_GLOBAL_POLICY).value().toInt() == OMEMO_POLICY_STRICT)
+		return true;
+	return FStore != nullptr && FStore->data().strictChats.contains(Jid(AJid).bare());
+}
+
+void OmemoAccount::setChatStrict(const QString &AJid, bool AStrict)
+{
+	const QString jid = Jid(AJid).bare();
+	if (FStore == nullptr || jid.isEmpty())
+		return;
+	if (AStrict)
+		FStore->data().strictChats.insert(jid);
+	else
+		FStore->data().strictChats.remove(jid);
 	FStore->markDirty();
 	FStore->save();
 	emit stateChanged(jid);

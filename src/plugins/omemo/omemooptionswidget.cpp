@@ -52,6 +52,11 @@ OmemoOptionsWidget::OmemoOptionsWidget(Omemo *APlugin, OmemoAccount *AAccount,
 	hint->setWordWrap(true);
 	layout->addWidget(hint);
 	layout->addStretch(1);
+
+	// The options dialog does not reset freshly created widgets; initialize
+	// the editors here, otherwise an empty line edit would overwrite the
+	// stored label when the dialog is simply accepted.
+	reset();
 }
 
 void OmemoOptionsWidget::apply()

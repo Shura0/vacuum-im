@@ -6,6 +6,7 @@
 #include <utils/jid.h>
 
 class OmemoAccount;
+class QCheckBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -24,12 +25,14 @@ private slots:
 	void refresh();
 	void onTrustClicked();
 	void onDistrustClicked();
+	void onStrictToggled(bool AChecked);
 
 private:
 	OmemoAccount *FAccount;
 	Jid FStreamJid;
 	Jid FContactJid;
 	QLabel *FOwnLabel;
+	QCheckBox *FStrictBox;
 	QLabel *FStatusLabel;
 	QListWidget *FDevicesList;
 	QPushButton *FTrustButton;

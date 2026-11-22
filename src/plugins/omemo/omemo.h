@@ -114,7 +114,8 @@ private:
 		StatusNotEncrypted,
 		StatusUnencryptedExpected,
 		StatusPending,
-		StatusFailed
+		StatusFailed,
+		StatusUntrusted
 	};
 
 	struct StanzaHandles
@@ -155,6 +156,8 @@ private:
 	static QString statusName(int AStatus);
 	static int statusFromName(const QString &AName);
 	bool processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APlainOut = nullptr);
+	bool isUntrustedEnvelope(OmemoAccount *AAccount, const QString &ASenderJid,
+		const QDomElement &AEncrypted, quint32 *ASidOut = nullptr) const;
 	bool processOutbound(const Jid &AStreamJid, Stanza &AStanza);
 	bool encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, Stanza &AStanza,
 		const QByteArray &APlain = QByteArray());

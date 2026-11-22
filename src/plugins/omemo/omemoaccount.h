@@ -60,6 +60,10 @@ public:
 	bool sessionsReady(const QString &AJid, bool AIgnoreFailed = false) const;
 	bool isChatEnabled(const QString &AJid) const;
 	void setChatEnabled(const QString &AJid, bool AEnabled);
+	// Strict trust: only devices explicitly marked trusted may send to us.
+	// Effective policy also includes the global OPV_OMEMO_GLOBAL_POLICY.
+	bool isChatStrict(const QString &AJid) const;
+	void setChatStrict(const QString &AJid, bool AStrict);
 	int deviceTrust(const QString &AJid, quint32 ADeviceId) const;
 	void setDeviceTrust(const QString &AJid, quint32 ADeviceId, int ATrustLevel);
 	QString deviceFingerprint(const QString &AJid, quint32 ADeviceId) const;

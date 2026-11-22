@@ -567,7 +567,7 @@ bool Omemo::messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessag
 		if (processInbound(AStreamJid,AMessage.stanza()))
 			cacheOmemoTimeKeys(accountForStream(AStreamJid),AMessage.fromJid().bare(),
 				AMessage.dateTime(),AMessage.body().toUtf8());
-		else
+		else if (messageStatus(AMessage.id()) != StatusUntrusted)
 		{
 			setMessageStatus(AMessage.id(),StatusFailed);
 			markStanzaStatus(AMessage.stanza(),StatusFailed);
@@ -635,6 +635,17 @@ bool Omemo::decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirect
 		QString::fromLatin1(OMEMO_NS));
 	if (!encrypted.isNull())
 	{
+		// Check strict trust before the plaintext cache too: a cached copy must
+		// not reveal a message from a device the user has not approved.
+		quint32 sid = 0;
+		if (ADirection != IMessageProcessor::DirectionOut
+			&& isUntrustedEnvelope(account,contact,encrypted,&sid))
+		{
+			rebuildOmemoMessage(AMessage,tr("[OMEMO message from an untrusted device]"));
+			setMessageStatus(AMessage.id(),StatusUntrusted);
+			return false;
+		}
+
 		// The plaintext cache is only meaningful for an encrypted archive
 		// message.  Applying it to an ordinary message whose stanza id happens
 		// to collide with a cached OMEMO id can replace its body with an empty
@@ -823,6 +834,23 @@ QString Omemo::sanitizeOmemoBody(OmemoAccount *AAccount, const QString &APlain, 
 		? FAttachments->sanitizeBody(AAccount,APlain,AAutoDownload) : APlain;
 }
 
+bool Omemo::isUntrustedEnvelope(OmemoAccount *AAccount, const QString &ASenderJid,
+	const QDomElement &AEncrypted, quint32 *ASidOut) const
+{
+	const QString sender = Jid(ASenderJid).bare();
+	if (AAccount == nullptr || sender.isEmpty() || sender==AAccount->bareJid()
+		|| !AAccount->isChatStrict(sender))
+		return false;
+	bool ok = false;
+	const quint32 sid = AEncrypted.firstChildElement(QStringLiteral("header"))
+		.attribute(QStringLiteral("sid")).toUInt(&ok);
+	if (ASidOut != nullptr)
+		*ASidOut = ok ? sid : 0;
+	if (!ok || sid == 0)
+		return true;
+	return AAccount->deviceTrust(sender,sid) != OmemoStore::TrustTrusted;
+}
+
 bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APlainOut)
 {
 	QDomElement encrypted = AStanza.firstElement(QStringLiteral("encrypted"),QString::fromLatin1(OMEMO_NS));
@@ -856,6 +884,24 @@ bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APla
 	LOG_STRM_DEBUG(AStreamJid,QString("OMEMO inbound id=%1, sid=%2, keys=%3")
 		.arg(messageId).arg(encrypted.firstChildElement(QStringLiteral("header")).attribute(QStringLiteral("sid")))
 		.arg(keyInfo.join(QLatin1Char(','))));
+
+	// Strict trust: reject the envelope before the Signal ratchet is touched,
+	// so an untrusted device cannot advance a session or create one from a
+	// pre-key message.  Keep <encrypted> in the stanza so history can re-check.
+	quint32 sid = 0;
+	if (isUntrustedEnvelope(account,sender,encrypted,&sid))
+	{
+		const QString placeholder = tr("[OMEMO message from an untrusted device]");
+		if (APlainOut != nullptr)
+			*APlainOut = placeholder;
+		replaceBody(AStanza,placeholder);
+		setMessageStatus(messageId,StatusUntrusted);
+		markStanzaStatus(AStanza,StatusUntrusted);
+		LOG_STRM_INFO(AStreamJid,QString("OMEMO message from %1/%2 rejected by strict trust")
+			.arg(sender).arg(sid));
+		return false;
+	}
+
 	QByteArray plain;
 	QString error;
 	const bool decrypted = account->decryptMessage(sender,encrypted,plain,&error);
@@ -1556,6 +1602,7 @@ QString Omemo::statusName(int AStatus)
 	case StatusUnencryptedExpected: return QStringLiteral("unencrypted");
 	case StatusPending: return QStringLiteral("pending");
 	case StatusFailed: return QStringLiteral("failed");
+	case StatusUntrusted: return QStringLiteral("untrusted");
 	default: return QStringLiteral("unknown");
 	}
 }
@@ -1572,6 +1619,8 @@ int Omemo::statusFromName(const QString &AName)
 		return StatusPending;
 	if (AName == QStringLiteral("failed"))
 		return StatusFailed;
+	if (AName == QStringLiteral("untrusted"))
+		return StatusUntrusted;
 	return StatusUnknown;
 }
 
@@ -2074,6 +2123,12 @@ QString Omemo::omemoMarkHtml(int AStatus) const
 		color = QStringLiteral("#c62828");
 		title = tr("OMEMO encryption/decryption failed");
 		glyph = QStringLiteral("&#9888;&#65038;"); // warning sign
+		break;
+	case StatusUntrusted:
+		cssClass = MSMC_MARK_OMEMO_UNTRUSTED;
+		color = QStringLiteral("#c58a00");
+		title = tr("OMEMO message from an untrusted device");
+		glyph = QStringLiteral("&#128275;&#65038;"); // open lock
 		break;
 	case StatusNotEncrypted:
 		cssClass = MSMC_MARK_OMEMO_OPEN;

@@ -15,5 +15,6 @@
 #define MSMC_MARK_OMEMO_OPEN                "vacuum-marks-omemo-open"
 #define MSMC_MARK_OMEMO_UNENCRYPTED         "vacuum-marks-omemo-unencrypted"
 #define MSMC_MARK_OMEMO_FAILED              "vacuum-marks-omemo-failed"
+#define MSMC_MARK_OMEMO_UNTRUSTED           "vacuum-marks-omemo-untrusted"
 
 #endif // MESSAGEMARKS_H

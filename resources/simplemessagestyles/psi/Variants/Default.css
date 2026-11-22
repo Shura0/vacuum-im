@@ -94,3 +94,10 @@
 	color : #c62828;
 	font-size : 90%;
 }
+/* OMEMO: message received from an untrusted device */
+.vacuum-marks-omemo-untrusted
+{
+	color : #c58a00;
+	font-size : 90%;
+}
+

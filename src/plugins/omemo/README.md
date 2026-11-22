@@ -21,6 +21,15 @@ implemented yet.
   chat window context menu and choose “OMEMO devices...” to see fingerprints
   and trust/block devices.  Devices of the same account are trusted
   automatically.
+- **Strict trust** can be enabled globally (the per-account OMEMO settings
+  page) or per contact (the “Strict trust” checkbox in the device dialog).
+  In a strict chat an incoming message is accepted only from a device marked
+  trusted; messages from unverified or blocked devices are not decrypted, the
+  session is left untouched, and the body is replaced with
+  `[OMEMO message from an untrusted device]` with an amber open-lock mark.
+  BTBV/TOFU behaviour is unchanged for non-strict chats.  Note that a skipped
+  pre-key message may stay undecryptable later, because its one-time pre-key
+  is not consumed.
 - OMEMO is always enabled; there is no global or per-account on/off switch.
   Each account has an **OMEMO** page in Settings → Accounts that shows the
   device name stored with the encrypted identity, the global trust policy and
@@ -34,7 +43,8 @@ implemented yet.
 - Every chat message has a small mark in the right-aligned marks slot,
   alongside delivery/read receipts and the edited pencil: green closed lock
   = OMEMO encrypted, amber hourglass = waiting for keys, red warning =
-  error, red open lock = contact supports OMEMO but this message is
+  error, amber open lock = strict trust rejected the sender's device,
+  red open lock = contact supports OMEMO but this message is
   plaintext, gray open lock = OMEMO is not available for this contact.  U+FE0E is added to the emoji so
   the font uses the monochrome text presentation and the CSS color is
   visible.  If no other plugin has created a right tab stop for the line,
@@ -101,9 +111,10 @@ Per-account state is stored in
 "VOMEMO1" | salt[16] | nonce[12] | tag[16] | AES-256-GCM(JSON)
 ```
 
-Store format version 2 (the XEP-0454 attachment keys and thumbnails were
-added there); version 1 files are loaded transparently and are rewritten in
-the new format on the next save.
+Store format version 3 (version 2 added the XEP-0454 attachment keys and
+thumbnails, version 3 the per-chat strict trust flag); older files are loaded
+transparently with the new fields empty and are rewritten in the new format
+on the next save.
 
 The key is derived with HKDF-SHA256 from the profile key
 (`Options::cryptKey()`), using the random per-file salt.  The file is written

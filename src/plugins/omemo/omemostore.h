@@ -63,6 +63,8 @@ public:
 		QHash<QString, QHash<quint32, Device> > devices;
 		// Chats where the user explicitly disabled OMEMO.
 		QSet<QString> disabledChats;
+		// Chats where incoming messages are accepted only from trusted devices.
+		QSet<QString> strictChats;
 		// Decrypted plaintext of processed OMEMO messages, keyed by stanza id.
 		// This keeps local/MAM history readable even when the ratchet has
 		// advanced or the copy was encrypted to an older device.

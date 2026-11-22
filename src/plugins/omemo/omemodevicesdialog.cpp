@@ -2,11 +2,17 @@
 
 #include "omemoaccount.h"
 #include "omemostore.h"
+#include "omemodefinitions.h"
 
+#include <definitions/optionvalues.h>
+#include <utils/options.h>
+
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 OmemoDevicesDialog::OmemoDevicesDialog(OmemoAccount *AAccount, const Jid &AStreamJid,
@@ -24,6 +30,10 @@ OmemoDevicesDialog::OmemoDevicesDialog(OmemoAccount *AAccount, const Jid &AStrea
 	FOwnLabel = new QLabel(this);
 	FOwnLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	layout->addWidget(FOwnLabel);
+
+	FStrictBox = new QCheckBox(tr("Strict trust: accept messages only from trusted devices of this contact"),this);
+	connect(FStrictBox,SIGNAL(toggled(bool)),SLOT(onStrictToggled(bool)));
+	layout->addWidget(FStrictBox);
 
 	FStatusLabel = new QLabel(this);
 	FStatusLabel->setWordWrap(true);
@@ -74,6 +84,16 @@ void OmemoDevicesDialog::refresh()
 	FOwnLabel->setText(ownText);
 
 	const QString contact = FContactJid.bare();
+	const bool globalStrict = Options::node(OPV_OMEMO_GLOBAL_POLICY).value().toInt()==OMEMO_POLICY_STRICT;
+	{
+		QSignalBlocker blocker(FStrictBox);
+		FStrictBox->setChecked(FAccount->isChatStrict(contact));
+	}
+	FStrictBox->setEnabled(!globalStrict);
+	FStrictBox->setToolTip(globalStrict
+		? tr("Strict trust is already enabled by the global trust policy")
+		: tr("When enabled, messages from devices you have not approved are not decrypted"));
+
 	const QList<quint32> devices = FAccount->devices(contact);
 	if (FAccount->isDeviceListKnown(contact))
 		FAccount->fetchDeviceBundles(contact);
@@ -138,5 +158,13 @@ void OmemoDevicesDialog::onDistrustClicked()
 		return;
 	FAccount->setDeviceTrust(FContactJid.bare(),item->data(Qt::UserRole).toUInt(),
 		OmemoStore::TrustDistrusted);
+	refresh();
+}
+
+void OmemoDevicesDialog::onStrictToggled(bool AChecked)
+{
+	if (FAccount == nullptr)
+		return;
+	FAccount->setChatStrict(FContactJid.bare(),AChecked);
 	refresh();
 }

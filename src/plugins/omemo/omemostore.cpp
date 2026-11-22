@@ -341,7 +341,7 @@ bool OmemoStore::save()
 QByteArray OmemoStore::serialize() const
 {
 	QJsonObject root;
-	root.insert(QStringLiteral("version"),2);
+	root.insert(QStringLiteral("version"),3);
 
 	QJsonObject device;
 	device.insert(QStringLiteral("id"),(double)FData.deviceId);
@@ -402,6 +402,12 @@ QByteArray OmemoStore::serialize() const
 		disabledChats.append(jid);
 	root.insert(QStringLiteral("disabledChats"),disabledChats);
 
+	// Introduced in version 3.
+	QJsonArray strictChats;
+	for (const QString &jid : FData.strictChats)
+		strictChats.append(jid);
+	root.insert(QStringLiteral("strictChats"),strictChats);
+
 	QJsonObject messageCache;
 	for (QHash<QString, QByteArray>::const_iterator it=FData.messageCache.constBegin();
 		it!=FData.messageCache.constEnd(); ++it)
@@ -443,9 +449,10 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 
 	QJsonObject root = document.object();
 	// Version 1: the original format.  Version 2 adds the XEP-0454 attachment
-	// key material; older files simply load without it.
+	// key material, version 3 the per-chat strict trust flag.  Older files
+	// simply load with the new fields empty.
 	const int version = root.value(QStringLiteral("version")).toInt();
-	if (version != 1 && version != 2)
+	if (version < 1 || version > 3)
 	{
 		FLastError = QStringLiteral("unsupported OMEMO store version");
 		return false;
@@ -512,6 +519,14 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 		const QString jid = value.toString();
 		if (!jid.isEmpty())
 			data.disabledChats.insert(jid);
+	}
+
+	const QJsonArray strictArray = root.value(QStringLiteral("strictChats")).toArray();
+	for (const QJsonValue &value : strictArray)
+	{
+		const QString jid = value.toString();
+		if (!jid.isEmpty())
+			data.strictChats.insert(jid);
 	}
 
 	const QJsonObject messageCache = root.value(QStringLiteral("messageCache")).toObject();
