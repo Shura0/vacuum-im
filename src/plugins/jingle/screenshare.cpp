@@ -84,7 +84,7 @@ protected:
 		}
 
 		const GstStateChangeReturn stateResult = gst_element_set_state(pipeline, GST_STATE_PLAYING);
-		LOG_INFO(QString("ScreenShare: GStreamer pipeline state result=%1, node=%2").
+		LOG_DEBUG(QString("ScreenShare: GStreamer pipeline state result=%1, node=%2").
 			arg(int(stateResult)).arg(FNodeId));
 		if (stateResult == GST_STATE_CHANGE_FAILURE)
 		{
@@ -145,7 +145,7 @@ private:
 			{
 				static int s_frames = 0;
 				if (++s_frames == 1)
-					LOG_INFO(QString("ScreenShare: first GStreamer frame, %1x%2, bytes=%3").
+					LOG_DEBUG(QString("ScreenShare: first GStreamer frame, %1x%2, bytes=%3").
 						arg(width).arg(height).arg(map.size));
 				self->FFrameCallback(frame.copy());
 			}
@@ -218,7 +218,7 @@ void ScreenShare::onPortalResponse(uint AResponse, const QVariantMap &AResults)
 	QStringList resultInfo;
 	for (const QString &key : AResults.keys())
 		resultInfo.append(key + QStringLiteral("=") + AResults.value(key).toString());
-	LOG_INFO(QString("ScreenShare: portal response step=%1 code=%2 results=%3").
+	LOG_DEBUG(QString("ScreenShare: portal response step=%1 code=%2 results=%3").
 		arg(FStep).arg(AResponse).arg(resultInfo.join(QStringLiteral(", "))));
 
 	if (AResponse != 0)

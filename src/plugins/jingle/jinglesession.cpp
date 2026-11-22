@@ -499,9 +499,15 @@ void JingleSession::storeJmiPropose(const QDomElement &ADescriptionElem)
 	FJmiPending = true;
 }
 
-bool JingleSession::processJmiMessage(const QString &AAction, const QDomElement &AJmiElem)
+bool JingleSession::processJmiMessage(const QString &AAction, const QDomElement &AJmiElem, const Jid &APeerJid)
 {
 	Q_UNUSED(AJmiElem);
+
+	//A call started from the chat toolbar may only know the bare JID; JMI
+	//answers reveal the peer's resource, which is needed for the terminate IQ
+	//and for the <finish> message.
+	if (FInitiated && APeerJid.isValid() && !APeerJid.resource().isEmpty())
+		FTargetJid = APeerJid;
 
 	if (AAction == QStringLiteral("ringing"))
 	{
@@ -545,8 +551,9 @@ bool JingleSession::processJmiMessage(const QString &AAction, const QDomElement 
 void JingleSession::sendJmiMessage(const QString &AAction, const QString &AReasonCode, const QString &AText)
 {
 	const Jid peer = FInitiated ? FTargetJid : Jid(FInitiator);
-	const Jid to = (AAction==QStringLiteral("propose") || AAction==QStringLiteral("finish") ||
-	                AAction==QStringLiteral("retract")) ? Jid(peer.bare()) : peer;
+	//XEP-0353: <propose>/<retract> go to the bare JID, everything else
+	//(<proceed>, <ringing>, <reject>, <finish>) to the other party's full JID.
+	const Jid to = (AAction==QStringLiteral("propose") || AAction==QStringLiteral("retract")) ? Jid(peer.bare()) : peer;
 	FJingle->sendJmiMessage(FStreamJid, to, AAction, FSid, AReasonCode, AText);
 }
 

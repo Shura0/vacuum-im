@@ -1,6 +1,7 @@
 #include "callsoptionswidget.h"
 
 #include <QAudioDevice>
+#include <QCameraDevice>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -27,29 +28,31 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 	FAec = new QCheckBox(tr("Suppress the echo of the speakers (acoustic echo cancellation)"), this);
 	FAllowUnknown = new QCheckBox(tr("Allow calls from not authorized contacts"), this);
 	connect(FEnabled, SIGNAL(toggled(bool)), SIGNAL(modified()));
+	connect(FEnabled, &QCheckBox::toggled, this, &CallsOptionsWidget::updateEnabledState);
+	connect(FVideo, &QCheckBox::toggled, this, [this]() { updateEnabledState(FEnabled->isChecked()); });
 	connect(FVideo, SIGNAL(toggled(bool)), SIGNAL(modified()));
 	connect(FAec, SIGNAL(toggled(bool)), SIGNAL(modified()));
 	connect(FAllowUnknown, SIGNAL(toggled(bool)), SIGNAL(modified()));
 
-	QGroupBox *deviceBox = new QGroupBox(tr("Audio devices"), this);
-	FInputDevice = new QComboBox(deviceBox);
-	FOutputDevice = new QComboBox(deviceBox);
+	FDeviceBox = new QGroupBox(tr("Audio devices"), this);
+	FInputDevice = new QComboBox(FDeviceBox);
+	FOutputDevice = new QComboBox(FDeviceBox);
 	connect(FInputDevice, SIGNAL(currentIndexChanged(int)), SIGNAL(modified()));
 	connect(FOutputDevice, SIGNAL(currentIndexChanged(int)), SIGNAL(modified()));
 
-	QFormLayout *deviceLayout = new QFormLayout(deviceBox);
+	QFormLayout *deviceLayout = new QFormLayout(FDeviceBox);
 	deviceLayout->addRow(tr("Microphone:"), FInputDevice);
 	deviceLayout->addRow(tr("Speaker:"), FOutputDevice);
 
-	QGroupBox *natBox = new QGroupBox(tr("NAT traversal"), this);
-	FUseDiscovery = new QCheckBox(tr("Use STUN and TURN servers published by the account's server"), natBox);
-	FForceRelay = new QCheckBox(tr("Relay all media through TURN (for testing)"), natBox);
-	FStunServer = new QLineEdit(natBox);
+	FNatBox = new QGroupBox(tr("NAT traversal"), this);
+	FUseDiscovery = new QCheckBox(tr("Use STUN and TURN servers published by the account's server"), FNatBox);
+	FForceRelay = new QCheckBox(tr("Relay all media through TURN (for testing)"), FNatBox);
+	FStunServer = new QLineEdit(FNatBox);
 	FStunServer->setPlaceholderText(tr("empty: only the discovered servers"));
-	FTurnServer = new QLineEdit(natBox);
+	FTurnServer = new QLineEdit(FNatBox);
 	FTurnServer->setPlaceholderText(tr("host or host:port, e.g. turn.example.org:3478"));
-	FTurnUsername = new QLineEdit(natBox);
-	FTurnPassword = new QLineEdit(natBox);
+	FTurnUsername = new QLineEdit(FNatBox);
+	FTurnPassword = new QLineEdit(FNatBox);
 	FTurnPassword->setEchoMode(QLineEdit::Password);
 
 	connect(FUseDiscovery, SIGNAL(toggled(bool)), SIGNAL(modified()));
@@ -59,7 +62,7 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 	connect(FTurnUsername, SIGNAL(textEdited(QString)), SIGNAL(modified()));
 	connect(FTurnPassword, SIGNAL(textEdited(QString)), SIGNAL(modified()));
 
-	QFormLayout *natLayout = new QFormLayout(natBox);
+	QFormLayout *natLayout = new QFormLayout(FNatBox);
 	natLayout->addRow(FUseDiscovery);
 	natLayout->addRow(FForceRelay);
 	natLayout->addRow(tr("STUN server:"), FStunServer);
@@ -71,18 +74,48 @@ CallsOptionsWidget::CallsOptionsWidget(QWidget *AParent) : QWidget(AParent)
 		"same network work. A manual server overrides the discovered one; credentials are used for TURN."), this);
 	hint->setWordWrap(true);
 
+	QGroupBox *capsBox = new QGroupBox(tr("Capabilities"), this);
+	QFormLayout *capsLayout = new QFormLayout(capsBox);
+#ifdef HAVE_WEBRTC_AEC
+	FAecAvailable = true;
+	const QString aecInfo = tr("WebRTC AudioProcessing");
+#else
+	FAecAvailable = false;
+	const QString aecInfo = tr("Not compiled in (install webrtc-audio-processing to enable)");
+#endif
+	capsLayout->addRow(tr("Echo cancellation:"), new QLabel(aecInfo, capsBox));
+#ifdef HAVE_SCREENSHARE
+	capsLayout->addRow(tr("Screen sharing:"), new QLabel(tr("Available (xdg-desktop-portal + GStreamer)"), capsBox));
+#else
+	capsLayout->addRow(tr("Screen sharing:"), new QLabel(tr("Not available (needs Qt DBus + GStreamer)"), capsBox));
+#endif
+	const QCameraDevice camera = QMediaDevices::defaultVideoInput();
+	capsLayout->addRow(tr("Camera:"), new QLabel(camera.isNull() ? tr("None") : camera.description(), capsBox));
+	capsLayout->addRow(tr("Codecs:"), new QLabel(tr("Opus / VP8 (loaded at runtime)"), capsBox));
+
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	layout->addWidget(FEnabled);
 	layout->addWidget(FVideo);
 	layout->addWidget(FQuality);
 	layout->addWidget(FAec);
 	layout->addWidget(FAllowUnknown);
-	layout->addWidget(deviceBox);
-	layout->addWidget(natBox);
+	layout->addWidget(FDeviceBox);
+	layout->addWidget(FNatBox);
+	layout->addWidget(capsBox);
 	layout->addWidget(hint);
 	layout->addStretch();
 
 	reset();
+}
+
+void CallsOptionsWidget::updateEnabledState(bool AEnabled)
+{
+	FVideo->setEnabled(AEnabled);
+	FQuality->setEnabled(AEnabled && FVideo->isChecked());
+	FAec->setEnabled(AEnabled && FAecAvailable);
+	FAllowUnknown->setEnabled(AEnabled);
+	FDeviceBox->setEnabled(AEnabled);
+	FNatBox->setEnabled(AEnabled);
 }
 
 void CallsOptionsWidget::apply()
@@ -127,6 +160,7 @@ void CallsOptionsWidget::reset()
 	FTurnServer->setText(Options::node(OPV_JINGLE_TURN_SERVER).value().toString());
 	FTurnUsername->setText(Options::node(OPV_JINGLE_TURN_USERNAME).value().toString());
 	FTurnPassword->setText(Options::node(OPV_JINGLE_TURN_PASSWORD).value().toString());
+	updateEnabledState(FEnabled->isChecked());
 }
 
 void CallsOptionsWidget::fillDevices(QComboBox *ACombo, const QList<QAudioDevice> &ADevices)

@@ -296,7 +296,7 @@ void VideoTransmitter::submitFrame(const QImage &AImage)
 		return;
 	static int s_submitted = 0;
 	if (++s_submitted == 1 || s_submitted % 50 == 0)
-		LOG_INFO(QString("VideoTransmitter: submitted frames=%1").arg(s_submitted));
+		LOG_DEBUG(QString("VideoTransmitter: submitted frames=%1").arg(s_submitted));
 
 	const qint64 now = QDateTime::currentMSecsSinceEpoch();
 	if (now - FLastFrameMs < 1000 / VideoFps)
@@ -383,7 +383,7 @@ bool VideoTransmitter::encodeImage(const QImage &AImage)
 		{
 			++FEncodedFrames;
 			if (FEncodedFrames == 1 || FEncodedFrames % 50 == 0)
-				LOG_INFO(QString("VideoTransmitter: encoded frames=%1 size=%2 bytes").arg(FEncodedFrames).arg(int(packet->sz)));
+				LOG_DEBUG(QString("VideoTransmitter: encoded frames=%1 size=%2 bytes").arg(FEncodedFrames).arg(int(packet->sz)));
 			emit encodedFrame(QByteArray(reinterpret_cast<const char *>(packet->buf), int(packet->sz)),
 			                  90000 / VideoFps);
 			return true;

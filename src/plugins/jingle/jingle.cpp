@@ -1053,7 +1053,7 @@ bool Jingle::processJmiMessage(const Jid &AStreamJid, const Stanza &AStanza,
 		LOG_STRM_DEBUG(AStreamJid, QString("JMI action '%1' for unknown session '%2' ignored").arg(AAction, sid));
 		return true;
 	}
-	session->processJmiMessage(AAction, AJmiElem);
+	session->processJmiMessage(AAction, AJmiElem, AStanza.fromJid());
 	return true;
 }
 

@@ -47,7 +47,7 @@ public:
 	void storeInitiate(const QDomElement &AJingleElem);
 	//XEP-0353 Jingle Message Initiation
 	void storeJmiPropose(const QDomElement &ADescriptionElem);
-	bool processJmiMessage(const QString &AAction, const QDomElement &AJmiElem);
+	bool processJmiMessage(const QString &AAction, const QDomElement &AJmiElem, const Jid &APeerJid);
 	//Called when the server/peer acknowledges our session-initiate (sendStanzaRequest result)
 	void onInitiateResult(bool AOk, const QString &AErrorText);
 	void setSilent(bool ASilent);

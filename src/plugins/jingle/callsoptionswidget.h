@@ -8,6 +8,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QGroupBox;
 class QLineEdit;
 
 /*
@@ -34,8 +35,11 @@ signals:
 	void childReset();
 private:
 	static void fillDevices(QComboBox *ACombo, const QList<QAudioDevice> &ADevices);
+	void updateEnabledState(bool AEnabled);
 private:
 	QCheckBox *FEnabled;
+	QGroupBox *FDeviceBox;
+	QGroupBox *FNatBox;
 	QCheckBox *FVideo;
 	QComboBox *FQuality;
 	QCheckBox *FAec;
@@ -48,6 +52,7 @@ private:
 	QLineEdit *FTurnServer;
 	QLineEdit *FTurnUsername;
 	QLineEdit *FTurnPassword;
+	bool FAecAvailable;
 };
 
 #endif // CALLSOPTIONSWIDGET_H

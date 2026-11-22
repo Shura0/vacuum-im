@@ -494,7 +494,7 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 					{
 						++FVideoDecodedCount;
 						if (FVideoDecodedCount == 1)
-							LOG_INFO(QString("MediaEngine: first VP8 frame decoded, %1x%2").arg(frame.width()).arg(frame.height()));
+							LOG_DEBUG(QString("MediaEngine: first VP8 frame decoded, %1x%2").arg(frame.width()).arg(frame.height()));
 						emit videoFrameReceived(frame);
 					}
 					else if (FVideoDecodedCount == 0 && FVideoRtpCount <= 5)
@@ -512,7 +512,7 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 			}
 		}
 		if (FVideoRtpCount == 1 || FVideoRtpCount % 100 == 0)
-			LOG_INFO(QString("MediaEngine: video RTP packets=%1 decoded=%2 ssrc=0x%3 receiver=%4").
+			LOG_DEBUG(QString("MediaEngine: video RTP packets=%1 decoded=%2 ssrc=0x%3 receiver=%4").
 				arg(FVideoRtpCount).arg(FVideoDecodedCount).arg(header.ssrc, 8, 16, QChar('0')).
 				arg(FVideoReceiver && FVideoReceiver->isReady()));
 		return;
@@ -527,7 +527,7 @@ void MediaEngine::onMediaDatagram(const QByteArray &AData, int AComponent)
 	if (FRtcpSession->remoteSsrc() != header.ssrc)
 	{
 		FRtcpSession->setRemoteSsrc(header.ssrc);
-		LOG_INFO(QString("MediaEngine: remote RTP stream ssrc=0x%1").arg(header.ssrc, 8, 16, QChar('0')));
+		LOG_DEBUG(QString("MediaEngine: remote RTP stream ssrc=0x%1").arg(header.ssrc, 8, 16, QChar('0')));
 	}
 
 	if (FRemotePayloadType >= 0 && header.payloadType != FRemotePayloadType)
