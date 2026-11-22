@@ -11,7 +11,9 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QLabel>
+#include <QLocale>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QMimeData>
@@ -229,6 +231,22 @@ IHttpUpload *HttpUploadsManager::createUpload(const Jid &AStreamJid, const QStri
 
 bool HttpUploadsManager::uploadFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType, const QString &AFileName)
 {
+	if (AFileName.isEmpty() || !isSupported(AStreamJid))
+		return false;
+
+	IMessageWindow *window = NULL;
+	if (FMessageWidgets != NULL)
+	{
+		window = FMessageWidgets->findChatWindow(AStreamJid,AContactJid);
+		if (window == NULL)
+			window = FMessageWidgets->findNormalWindow(AStreamJid,AContactJid);
+	}
+
+	if (!confirmUpload(window!=NULL ? window->instance() : NULL,tr("Send file"),AFileName))
+		// The user declined: report the request as handled so that callers
+		// (filetransfer) do not send the same file over a fallback transport.
+		return true;
+
 	return startUpload(AStreamJid,AContactJid,AMessageType,AFileName);
 }
 
@@ -464,6 +482,54 @@ void HttpUploadsManager::showStatus(IMessageViewWidget *AView, const QString &AH
 		options.time = QDateTime::currentDateTime();
 		AView->appendHtml(AHtml,options);
 	}
+}
+
+bool HttpUploadsManager::confirmUpload(QWidget *AParent, const QString &ATitle,
+	const QString &AFileName, const QImage &AImage) const
+{
+	const QSize previewSize(480,360);
+	QImage preview = AImage;
+	if (preview.isNull() && !AFileName.isEmpty())
+	{
+		QImageReader reader(AFileName);
+		QSize imageSize = reader.size();
+		if (imageSize.isValid() && !imageSize.isEmpty())
+		{
+			imageSize.scale(previewSize,Qt::KeepAspectRatio);
+			reader.setScaledSize(imageSize);
+			preview = reader.read();
+		}
+	}
+
+	QDialog dialog(AParent);
+	dialog.setWindowTitle(ATitle);
+	QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+	if (!preview.isNull())
+	{
+		QLabel *previewLabel = new QLabel(&dialog);
+		previewLabel->setPixmap(QPixmap::fromImage(preview).scaled(previewSize,Qt::KeepAspectRatio,Qt::SmoothTransformation));
+		previewLabel->setAlignment(Qt::AlignCenter);
+		layout->addWidget(previewLabel);
+	}
+
+	if (!AFileName.isEmpty())
+	{
+		QFileInfo fileInfo(AFileName);
+		QLabel *info = new QLabel(&dialog);
+		info->setText(QStringLiteral("<b>%1</b><br>%2")
+			.arg(fileInfo.fileName().toHtmlEscaped(),QLocale().formattedDataSize(fileInfo.size())));
+		info->setAlignment(Qt::AlignCenter);
+		layout->addWidget(info);
+	}
+
+	QDialogButtonBox *buttons = new QDialogButtonBox(&dialog);
+	buttons->addButton(tr("Send"),QDialogButtonBox::AcceptRole);
+	buttons->addButton(tr("Cancel"),QDialogButtonBox::RejectRole);
+	layout->addWidget(buttons);
+	connect(buttons,SIGNAL(accepted()),&dialog,SLOT(accept()));
+	connect(buttons,SIGNAL(rejected()),&dialog,SLOT(reject()));
+	return dialog.exec()==QDialog::Accepted;
 }
 
 void HttpUploadsManager::sendUploadedFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
@@ -724,6 +790,9 @@ void HttpUploadsManager::onUploadFileByAction(bool)
 	if (fileName.isEmpty())
 		return;
 
+	if (!confirmUpload(window->instance(),tr("Send file"),fileName))
+		return;
+
 	startUpload(window->streamJid(),window->contactJid(),messageTypeForWindow(window),fileName,window->viewWidget());
 }
 
@@ -925,20 +994,7 @@ bool HttpUploadsManager::messageEditContentsInsert(int AOrder, IMessageEditWidge
 		return false;
 
 	// Ask before uploading: pasting a screenshot must not silently send it.
-	QDialog dialog(AWidget->instance());
-	dialog.setWindowTitle(tr("Send pasted image"));
-	QVBoxLayout *layout = new QVBoxLayout(&dialog);
-	QLabel *preview = new QLabel(&dialog);
-	preview->setPixmap(QPixmap::fromImage(image).scaled(QSize(480,360),Qt::KeepAspectRatio,Qt::SmoothTransformation));
-	preview->setAlignment(Qt::AlignCenter);
-	layout->addWidget(preview);
-	QDialogButtonBox *buttons = new QDialogButtonBox(&dialog);
-	buttons->addButton(tr("Send"),QDialogButtonBox::AcceptRole);
-	buttons->addButton(tr("Cancel"),QDialogButtonBox::RejectRole);
-	layout->addWidget(buttons);
-	connect(buttons,SIGNAL(accepted()),&dialog,SLOT(accept()));
-	connect(buttons,SIGNAL(rejected()),&dialog,SLOT(reject()));
-	if (dialog.exec()!=QDialog::Accepted)
+	if (!confirmUpload(AWidget->instance(),tr("Send pasted image"),QString(),image))
 		return true;
 
 	QSharedPointer<QTemporaryDir> tempDir(new QTemporaryDir);

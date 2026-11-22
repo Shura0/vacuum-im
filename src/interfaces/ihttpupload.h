@@ -53,8 +53,11 @@ public:
 	virtual IHttpUpload *findUpload(const QString &AUploadId) const =0;
 	virtual IHttpUpload *createUpload(const Jid &AStreamJid, const QString &AFileName, QObject *AParent = NULL) =0;
 	// Uploads a file and sends the resulting link to the contact or room.
+	// Shows a confirmation dialog with a preview before starting the upload.
 	// Returns false when no HTTP upload service is available or the task
 	// cannot be created, so the caller can fall back to another transport.
+	// Returns true when the user rejects the confirmation - the request was
+	// handled and the caller must not fall back to another transport.
 	virtual bool uploadFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType, const QString &AFileName) =0;
 protected:
 	virtual void uploadCreated(IHttpUpload *AUpload) =0;
