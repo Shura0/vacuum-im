@@ -319,9 +319,16 @@ namespace
 		OmemoStore::Device *device = findDevice(self->store(),jidFromAddress(AAddress),AAddress->device_id,false);
 		if (device == nullptr || device->keyId.isEmpty())
 			return 1;
-		if (device->keyId.size() != (int)AKeyLen)
-			return 0;
-		return CRYPTO_memcmp(device->keyId.constData(),AKeyData,AKeyLen) == 0 ? 1 : 0;
+		const bool trusted = device->keyId.size()==(int)AKeyLen
+			&& CRYPTO_memcmp(device->keyId.constData(),AKeyData,AKeyLen)==0;
+		if (!trusted && !device->identityChanged)
+		{
+			// The peer presented a different identity key.  Reject the session
+			// operation and remember it so the UI can warn and offer a reset.
+			device->identityChanged = true;
+			self->store()->markDirty();
+		}
+		return trusted ? 1 : 0;
 	}
 
 	int loadPreKeyCallback(signal_buffer **ARecord, uint32_t APreKeyId, void *AUserData)

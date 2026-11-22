@@ -31,6 +31,7 @@ private slots:
 	void onRemoveDeviceClicked();
 	void onRefreshClicked();
 	void onSelectionChanged();
+	void onResetIdentityClicked();
 
 private:
 	OmemoAccount *FAccount;
@@ -43,6 +44,7 @@ private:
 	QListWidget *FOwnDevicesList;
 	QPushButton *FTrustButton;
 	QPushButton *FDistrustButton;
+	QPushButton *FResetIdentityButton;
 	QPushButton *FResetButton;
 	QPushButton *FRemoveButton;
 	// Which list the fingerprint label currently follows

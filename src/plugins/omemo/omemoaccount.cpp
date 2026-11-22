@@ -302,6 +302,37 @@ void OmemoAccount::setDeviceTrust(const QString &AJid, quint32 ADeviceId, int AT
 	emit stateChanged(jid);
 }
 
+bool OmemoAccount::deviceIdentityChanged(const QString &AJid, quint32 ADeviceId) const
+{
+	if (FStore == nullptr)
+		return false;
+	return FStore->data().devices.value(Jid(AJid).bare()).value(ADeviceId).identityChanged;
+}
+
+bool OmemoAccount::resetChangedIdentity(const QString &AJid, quint32 ADeviceId)
+{
+	if (!FStarted || FStore == nullptr || ADeviceId == 0)
+		return false;
+	const QString jid = Jid(AJid).bare();
+	auto jit = FStore->data().devices.find(jid);
+	if (jit == FStore->data().devices.end() || !jit.value().contains(ADeviceId))
+		return false;
+	jit.value().remove(ADeviceId);
+	if (jit.value().isEmpty())
+		FStore->data().devices.remove(jid);
+	FBundles[jid].remove(ADeviceId);
+	const QString cacheKey = bundleCacheKey(jid,ADeviceId);
+	FPendingBundles.remove(cacheKey);
+	FFailedBundles.remove(cacheKey);
+	FStore->markDirty();
+	if (FCrypto != nullptr)
+		FCrypto->flush();
+	else
+		FStore->save();
+	emit stateChanged(jid);
+	return true;
+}
+
 QString OmemoAccount::deviceFingerprint(const QString &AJid, quint32 ADeviceId) const
 {
 	if (FStore == nullptr)
@@ -1155,6 +1186,17 @@ void OmemoAccount::parseBundle(const QDomElement &AItems, const QString &AJid, q
 			device.keyId = preKeyBundle.identityKey;
 			FStore->markDirty();
 			FStore->save();
+		}
+		else if (device.keyId != preKeyBundle.identityKey && !device.identityChanged)
+		{
+			// The device republished a different identity key: it may have been
+			// reinstalled or replaced.  Keep the old key and session and warn.
+			device.identityChanged = true;
+			FStore->markDirty();
+			FStore->save();
+			LOG_STRM_WARNING(FStreamJid,QString("OMEMO identity of %1/%2 changed")
+				.arg(jid).arg(ADeviceId));
+			emit stateChanged(jid);
 		}
 	}
 }

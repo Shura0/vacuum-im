@@ -119,10 +119,10 @@ Per-account state is stored in
 "VOMEMO1" | salt[16] | nonce[12] | tag[16] | AES-256-GCM(JSON)
 ```
 
-Store format version 3 (version 2 added the XEP-0454 attachment keys and
-thumbnails, version 3 the per-chat strict trust flag); older files are loaded
-transparently with the new fields empty and are rewritten in the new format
-on the next save.
+Store format version 4 (version 2 added the XEP-0454 attachment keys and
+thumbnails, version 3 the per-chat strict trust flag, version 4 the per-device
+identity-changed flag); older files are loaded transparently with the new
+fields empty and are rewritten in the new format on the next save.
 
 The key is derived with HKDF-SHA256 from the profile key
 (`Options::cryptKey()`), using the random per-file salt.  The file is written
@@ -161,8 +161,13 @@ available”.  Set a profile password to enable encrypted storage.
   message itself would be sent in plaintext) the file is uploaded unencrypted
   and sent as an ordinary `https://` link with an `x:oob` fallback, because the
   aesgcm key would otherwise never reach the recipient.
-- Identity changes on an existing device are rejected by the Signal trust
-  callback and need manual session cleanup (not exposed in the UI yet).
+- Identity changes on an existing device are detected both from the published
+  bundle and from the Signal trust callback.  Messages from such a device are
+  not decrypted and get a red key mark with the text
+  `[OMEMO device identity changed]`.  The device dialog marks the device with
+  **IDENTITY CHANGED** and offers **Reset changed identity**, which deletes the
+  stored identity/session so the next message is treated as a new unverified
+  device and can be trusted again.  The old bundle node is not retracted.
 - The UI is limited to the device dialog, the chat lock indicator, the
   per-chat switch and the per-account OMEMO settings page; reacting to identity
   changes of a contact's existing device is not exposed yet (resetting that

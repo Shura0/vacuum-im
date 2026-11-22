@@ -66,6 +66,8 @@ public:
 	void setChatStrict(const QString &AJid, bool AStrict);
 	int deviceTrust(const QString &AJid, quint32 ADeviceId) const;
 	void setDeviceTrust(const QString &AJid, quint32 ADeviceId, int ATrustLevel);
+	bool deviceIdentityChanged(const QString &AJid, quint32 ADeviceId) const;
+	bool resetChangedIdentity(const QString &AJid, quint32 ADeviceId);
 	QString deviceFingerprint(const QString &AJid, quint32 ADeviceId) const;
 	QString ownFingerprint() const;
 	// Label of this device, stored next to the encrypted identity

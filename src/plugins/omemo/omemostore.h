@@ -38,6 +38,8 @@ public:
 		int unrespondedSent = 0;
 		int unrespondedReceived = 0;
 		qint64 removedAt = 0;
+		// The published bundle no longer matches the stored identity key
+		bool identityChanged = false;
 	};
 
 	// XEP-0454 encrypted attachments: sanitized https url -> key material.

@@ -567,7 +567,8 @@ bool Omemo::messageReadWrite(int AOrder, const Jid &AStreamJid, Message &AMessag
 		if (processInbound(AStreamJid,AMessage.stanza()))
 			cacheOmemoTimeKeys(accountForStream(AStreamJid),AMessage.fromJid().bare(),
 				AMessage.dateTime(),AMessage.body().toUtf8());
-		else if (messageStatus(AMessage.id()) != StatusUntrusted)
+		else if (messageStatus(AMessage.id()) != StatusUntrusted
+			&& messageStatus(AMessage.id()) != StatusIdentityChanged)
 		{
 			setMessageStatus(AMessage.id(),StatusFailed);
 			markStanzaStatus(AMessage.stanza(),StatusFailed);
@@ -643,6 +644,13 @@ bool Omemo::decryptMessage(const Jid &AStreamJid, Message &AMessage, int ADirect
 		{
 			rebuildOmemoMessage(AMessage,tr("[OMEMO message from an untrusted device]"));
 			setMessageStatus(AMessage.id(),StatusUntrusted);
+			return false;
+		}
+		if (ADirection != IMessageProcessor::DirectionOut
+			&& isIdentityChangedEnvelope(account,contact,encrypted))
+		{
+			rebuildOmemoMessage(AMessage,tr("[OMEMO device identity changed]"));
+			setMessageStatus(AMessage.id(),StatusIdentityChanged);
 			return false;
 		}
 
@@ -851,6 +859,18 @@ bool Omemo::isUntrustedEnvelope(OmemoAccount *AAccount, const QString &ASenderJi
 	return AAccount->deviceTrust(sender,sid) != OmemoStore::TrustTrusted;
 }
 
+bool Omemo::isIdentityChangedEnvelope(OmemoAccount *AAccount, const QString &ASenderJid,
+	const QDomElement &AEncrypted) const
+{
+	const QString sender = Jid(ASenderJid).bare();
+	if (AAccount == nullptr || sender.isEmpty() || sender==AAccount->bareJid())
+		return false;
+	bool ok = false;
+	const quint32 sid = AEncrypted.firstChildElement(QStringLiteral("header"))
+		.attribute(QStringLiteral("sid")).toUInt(&ok);
+	return ok && sid != 0 && AAccount->deviceIdentityChanged(sender,sid);
+}
+
 bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APlainOut)
 {
 	QDomElement encrypted = AStanza.firstElement(QStringLiteral("encrypted"),QString::fromLatin1(OMEMO_NS));
@@ -899,6 +919,17 @@ bool Omemo::processInbound(const Jid &AStreamJid, Stanza &AStanza, QString *APla
 		markStanzaStatus(AStanza,StatusUntrusted);
 		LOG_STRM_INFO(AStreamJid,QString("OMEMO message from %1/%2 rejected by strict trust")
 			.arg(sender).arg(sid));
+		return false;
+	}
+	if (isIdentityChangedEnvelope(account,sender,encrypted))
+	{
+		const QString placeholder = tr("[OMEMO device identity changed]");
+		if (APlainOut != nullptr)
+			*APlainOut = placeholder;
+		replaceBody(AStanza,placeholder);
+		setMessageStatus(messageId,StatusIdentityChanged);
+		markStanzaStatus(AStanza,StatusIdentityChanged);
+		LOG_STRM_WARNING(AStreamJid,QString("OMEMO message from %1 rejected: device identity changed").arg(sender));
 		return false;
 	}
 
@@ -1603,6 +1634,7 @@ QString Omemo::statusName(int AStatus)
 	case StatusPending: return QStringLiteral("pending");
 	case StatusFailed: return QStringLiteral("failed");
 	case StatusUntrusted: return QStringLiteral("untrusted");
+	case StatusIdentityChanged: return QStringLiteral("identity-changed");
 	default: return QStringLiteral("unknown");
 	}
 }
@@ -1621,6 +1653,8 @@ int Omemo::statusFromName(const QString &AName)
 		return StatusFailed;
 	if (AName == QStringLiteral("untrusted"))
 		return StatusUntrusted;
+	if (AName == QStringLiteral("identity-changed"))
+		return StatusIdentityChanged;
 	return StatusUnknown;
 }
 
@@ -2129,6 +2163,12 @@ QString Omemo::omemoMarkHtml(int AStatus) const
 		color = QStringLiteral("#c58a00");
 		title = tr("OMEMO message from an untrusted device");
 		glyph = QStringLiteral("&#128275;&#65038;"); // open lock
+		break;
+	case StatusIdentityChanged:
+		cssClass = MSMC_MARK_OMEMO_FAILED;
+		color = QStringLiteral("#c62828");
+		title = tr("OMEMO device identity changed, the message was not decrypted");
+		glyph = QStringLiteral("&#128273;&#65038;"); // key
 		break;
 	case StatusNotEncrypted:
 		cssClass = MSMC_MARK_OMEMO_OPEN;

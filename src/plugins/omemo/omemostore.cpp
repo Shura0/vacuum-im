@@ -341,7 +341,7 @@ bool OmemoStore::save()
 QByteArray OmemoStore::serialize() const
 {
 	QJsonObject root;
-	root.insert(QStringLiteral("version"),3);
+	root.insert(QStringLiteral("version"),4);
 
 	QJsonObject device;
 	device.insert(QStringLiteral("id"),(double)FData.deviceId);
@@ -391,6 +391,7 @@ QByteArray OmemoStore::serialize() const
 			object.insert(QStringLiteral("unrespondedSent"),dit->unrespondedSent);
 			object.insert(QStringLiteral("unrespondedReceived"),dit->unrespondedReceived);
 			object.insert(QStringLiteral("removedAt"),(double)dit->removedAt);
+			object.insert(QStringLiteral("identityChanged"),dit->identityChanged);
 			list.append(object);
 		}
 		devices.insert(jit.key(),list);
@@ -449,10 +450,10 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 
 	QJsonObject root = document.object();
 	// Version 1: the original format.  Version 2 adds the XEP-0454 attachment
-	// key material, version 3 the per-chat strict trust flag.  Older files
-	// simply load with the new fields empty.
+	// key material, version 3 the per-chat strict trust flag, version 4 the
+	// per-device identity-changed flag.  Older files load with new fields empty.
 	const int version = root.value(QStringLiteral("version")).toInt();
-	if (version < 1 || version > 3)
+	if (version < 1 || version > 4)
 	{
 		FLastError = QStringLiteral("unsupported OMEMO store version");
 		return false;
@@ -508,6 +509,7 @@ bool OmemoStore::deserialize(const QByteArray &APayload)
 			deviceData.unrespondedSent = object.value(QStringLiteral("unrespondedSent")).toInt();
 			deviceData.unrespondedReceived = object.value(QStringLiteral("unrespondedReceived")).toInt();
 			deviceData.removedAt = (qint64)object.value(QStringLiteral("removedAt")).toDouble();
+			deviceData.identityChanged = object.value(QStringLiteral("identityChanged")).toBool();
 			list.insert(id,deviceData);
 		}
 		data.devices.insert(jit.key(),list);

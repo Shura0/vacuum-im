@@ -41,8 +41,10 @@ OmemoDevicesDialog::OmemoDevicesDialog(OmemoAccount *AAccount, const Jid &AStrea
 	QHBoxLayout *contactButtons = new QHBoxLayout;
 	FTrustButton = new QPushButton(tr("Trust selected"),contactBox);
 	FDistrustButton = new QPushButton(tr("Block selected"),contactBox);
+	FResetIdentityButton = new QPushButton(tr("Reset changed identity"),contactBox);
 	contactButtons->addWidget(FTrustButton);
 	contactButtons->addWidget(FDistrustButton);
+	contactButtons->addWidget(FResetIdentityButton);
 	contactButtons->addStretch(1);
 	contactLayout->addLayout(contactButtons);
 	layout->addWidget(contactBox,1);
@@ -80,6 +82,7 @@ OmemoDevicesDialog::OmemoDevicesDialog(OmemoAccount *AAccount, const Jid &AStrea
 
 	connect(FTrustButton,SIGNAL(clicked()),SLOT(onTrustClicked()));
 	connect(FDistrustButton,SIGNAL(clicked()),SLOT(onDistrustClicked()));
+	connect(FResetIdentityButton,SIGNAL(clicked()),SLOT(onResetIdentityClicked()));
 	connect(FResetButton,SIGNAL(clicked()),SLOT(onResetSessionClicked()));
 	connect(FRemoveButton,SIGNAL(clicked()),SLOT(onRemoveDeviceClicked()));
 	connect(refreshButton,SIGNAL(clicked()),SLOT(onRefreshClicked()));
@@ -145,8 +148,11 @@ void OmemoDevicesDialog::refresh()
 		else
 			state = tr("not verified");
 
-		QListWidgetItem *item = new QListWidgetItem(
-			tr("Device %1 — %2").arg(deviceId).arg(state),FDevicesList);
+		const bool identityChanged = FAccount->deviceIdentityChanged(contact,deviceId);
+		QString itemText = tr("Device %1 — %2").arg(deviceId).arg(state);
+		if (identityChanged)
+			itemText += tr(" — IDENTITY CHANGED");
+		QListWidgetItem *item = new QListWidgetItem(itemText,FDevicesList);
 		item->setData(Qt::UserRole,deviceId);
 		const QString fingerprint = FAccount->deviceFingerprint(contact,deviceId);
 		item->setToolTip(fingerprint.isEmpty()
@@ -157,6 +163,8 @@ void OmemoDevicesDialog::refresh()
 	}
 	FTrustButton->setEnabled(!devices.isEmpty());
 	FDistrustButton->setEnabled(!devices.isEmpty());
+	FResetIdentityButton->setEnabled(selectedId != 0
+		&& FAccount->deviceIdentityChanged(contact,selectedId));
 
 	// Own devices
 	const quint32 selectedOwnId = FOwnDevicesList->currentItem() != nullptr
@@ -202,6 +210,21 @@ void OmemoDevicesDialog::onDistrustClicked()
 		return;
 	FAccount->setDeviceTrust(FContactJid.bare(),item->data(Qt::UserRole).toUInt(),
 		OmemoStore::TrustDistrusted);
+	refresh();
+}
+
+void OmemoDevicesDialog::onResetIdentityClicked()
+{
+	QListWidgetItem *item = FDevicesList->currentItem();
+	if (item == nullptr || FAccount == nullptr)
+		return;
+	const quint32 deviceId = item->data(Qt::UserRole).toUInt();
+	QMessageBox::StandardButton result = QMessageBox::warning(this,tr("Reset changed OMEMO identity"),
+		tr("Delete this device's stored identity and session? The next message will be treated as a new, unverified device and must be trusted again."),
+		QMessageBox::Yes | QMessageBox::Cancel,QMessageBox::Cancel);
+	if (result != QMessageBox::Yes)
+		return;
+	FAccount->resetChangedIdentity(FContactJid.bare(),deviceId);
 	refresh();
 }
 
