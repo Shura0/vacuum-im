@@ -63,6 +63,7 @@ public:
 	bool isAudioActive() const;
 	void setAudioMuted(bool AMuted);
 	void setVideoEnabled(bool AEnabled);
+	void setVideoAllowed(bool AAllowed);
 	void setScreenSharing(bool AEnabled);
 	bool hasVideoCamera() const;
 	static bool hasScreenShare();
@@ -173,6 +174,7 @@ private:
 	bool FAudioActive;
 	bool FMuted;
 	bool FVideoEnabled;
+	bool FVideoAllowed;
 	bool FFailPending;
 };
 

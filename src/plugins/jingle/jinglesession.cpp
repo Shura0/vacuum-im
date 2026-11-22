@@ -52,7 +52,7 @@ static QList<QDomElement> directContents(const QDomElement &AJingleElem)
 	return result;
 }
 
-JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const Jid &AContactJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, Jingle *AJingle, const QString &APeerName)
+JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const Jid &AContactJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, bool AWithVideo, Jingle *AJingle, const QString &APeerName)
 	: QObject(nullptr)
 {
 	FStreamJid = AStreamJid;
@@ -62,6 +62,7 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	FTargetJid = AInitiated ? AContactJid : Jid(AInitiatorJid);
 	FSid = ASid;
 	FInitiated = AInitiated;
+	FVideoRequested = AWithVideo;
 	FResendId = 0;
 	FContentName = QStringLiteral(RTP_CONTENT_NAME);
 	FJingle = AJingle;
@@ -102,6 +103,7 @@ JingleSession::JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const 
 	connect(FPeerWaitTimer, &QTimer::timeout, this, &JingleSession::onPeerWaitTimeout);
 
 	FMediaEngine = new MediaEngine(this);
+	FMediaEngine->setVideoAllowed(!FInitiated || FVideoRequested);
 	if (!FMediaEngine->initialize())
 	{
 		LOG_STRM_WARNING(FStreamJid, QString("Jingle session '%1': media engine failed to initialise, "
@@ -250,7 +252,7 @@ void JingleSession::initiate()
 	{
 		FJmiAwaitingProceed = true;
 		FJmiUsed = true;
-		sendJmiMessage(QStringLiteral("propose"));
+		sendJmiMessage(QStringLiteral("propose"), QString(), QString(), FVideoRequested);
 		FJmiTimer->setInterval(3000);
 		FJmiTimer->start();
 	}
@@ -548,13 +550,13 @@ bool JingleSession::processJmiMessage(const QString &AAction, const QDomElement 
 	return true;
 }
 
-void JingleSession::sendJmiMessage(const QString &AAction, const QString &AReasonCode, const QString &AText)
+void JingleSession::sendJmiMessage(const QString &AAction, const QString &AReasonCode, const QString &AText, bool AWithVideo)
 {
 	const Jid peer = FInitiated ? FTargetJid : Jid(FInitiator);
 	//XEP-0353: <propose>/<retract> go to the bare JID, everything else
 	//(<proceed>, <ringing>, <reject>, <finish>) to the other party's full JID.
 	const Jid to = (AAction==QStringLiteral("propose") || AAction==QStringLiteral("retract")) ? Jid(peer.bare()) : peer;
-	FJingle->sendJmiMessage(FStreamJid, to, AAction, FSid, AReasonCode, AText);
+	FJingle->sendJmiMessage(FStreamJid, to, AAction, FSid, AReasonCode, AText, AWithVideo);
 }
 
 void JingleSession::finishJmiSession(const QString &AReason, const QString &AText)
@@ -905,7 +907,8 @@ void JingleSession::setState(IJingle::CallState AState)
 	if (FWindow)
 	{
 		FWindow->setMuteVisible(active);
-		const bool videoEnabled = Options::node(OPV_JINGLE_VIDEO).value().toBool();
+		const bool videoEnabled = Options::node(OPV_JINGLE_VIDEO).value().toBool() &&
+		                          (FInitiated ? FVideoRequested : FRemoteVideoPayloadType >= 0);
 		FWindow->setCameraVisible(active && videoEnabled);
 		FWindow->setScreenVisible(active && videoEnabled && FMediaEngine != nullptr && FMediaEngine->hasScreenShare());
 		if (!active)
@@ -1027,7 +1030,7 @@ Stanza JingleSession::makeSessionAction(const QString &AAction, QDomElement *AJi
 void JingleSession::addContentElement(QDomElement &AJingleElem) const
 {
 	const bool withVideo = Options::node(OPV_JINGLE_VIDEO).value().toBool() &&
-	                       (FInitiated || FRemoteVideoPayloadType >= 0);
+	                       (FInitiated ? FVideoRequested : FRemoteVideoPayloadType >= 0);
 	QStringList order;
 	if (!FInitiated && !FRemoteContentOrder.isEmpty())
 		order = FRemoteContentOrder;

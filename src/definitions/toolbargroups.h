@@ -16,6 +16,7 @@
 #define TBG_MWTBW_ARCHIVE_VIEW                                  700
 #define TBG_MWTBW_VCARD_VIEW                                    900
 #define TBG_MWTBW_JINGLE_CALL                                   950
+#define TBG_MWTBW_JINGLE_VIDEO_CALL                             960
 #define TBG_MWTBW_MULTIUSERCHAT_INVITE                          1000
 #define TBG_MWTBW_CLEAR_WINDOW                                  1800
 #define TBG_MWTBW_CHATSTATES                                    10050

@@ -200,6 +200,7 @@ bool Jingle::initObjects()
 		//Trickle (transport-info) delivers the srflx/relay candidates as they appear.
 
 		FDiscovery->insertFeatureHandler(NS_JINGLE_APPS_RTP, this, DFO_DEFAULT);
+		FDiscovery->insertFeatureHandler(NS_JINGLE_APPS_RTP_VIDEO, this, DFO_DEFAULT);
 	}
 	if (FOptionsManager)
 	{
@@ -248,7 +249,26 @@ bool Jingle::isSupported(const Jid &AStreamJid, const Jid &AContactJid) const
 	return false;
 }
 
+bool Jingle::isVideoSupported(const Jid &AStreamJid, const Jid &AContactJid) const
+{
+	if (FDiscovery && AStreamJid.isValid() && AContactJid.isValid() && Options::node(OPV_JINGLE_ENABLED).value().toBool())
+		return FDiscovery->checkDiscoFeature(AStreamJid, AContactJid, NS_JINGLE_APPS_RTP_VIDEO);
+	return false;
+}
+
 QString Jingle::call(const Jid &AStreamJid, const Jid &AContactJid)
+{
+	return startCall(AStreamJid, AContactJid, false);
+}
+
+QString Jingle::callWithVideo(const Jid &AStreamJid, const Jid &AContactJid)
+{
+	if (!Options::node(OPV_JINGLE_VIDEO).value().toBool())
+		return QString();
+	return startCall(AStreamJid, AContactJid, true);
+}
+
+QString Jingle::startCall(const Jid &AStreamJid, const Jid &AContactJid, bool AWithVideo)
 {
 	IXmppStream *xmppStream = FXmppStreamManager->findXmppStream(AStreamJid);
 	if (!xmppStream || !AContactJid.isValid())
@@ -265,7 +285,7 @@ QString Jingle::call(const Jid &AStreamJid, const Jid &AContactJid)
 	}
 
 	Jid localJid = xmppStream->streamJid();
-	JingleSession *session = createSession(AStreamJid, AContactJid, localJid, localJid.full(), JingleSession::generateSid(), true);
+	JingleSession *session = createSession(AStreamJid, AContactJid, localJid, localJid.full(), JingleSession::generateSid(), true, AWithVideo);
 	session->initiate();
 
 	emit callStarted(AStreamJid, AContactJid, session->sid());
@@ -426,6 +446,8 @@ bool Jingle::execDiscoFeature(const Jid &AStreamJid, const QString &AFeature, co
 {
 	if (AFeature == NS_JINGLE_APPS_RTP)
 		return !call(AStreamJid, ADiscoInfo.contactJid).isEmpty();
+	if (AFeature == NS_JINGLE_APPS_RTP_VIDEO)
+		return !callWithVideo(AStreamJid, ADiscoInfo.contactJid).isEmpty();
 	return false;
 }
 
@@ -440,6 +462,18 @@ Action *Jingle::createDiscoFeatureAction(const Jid &AStreamJid, const QString &A
 		action->setData(ADR_CONTACT_JID, ADiscoInfo.contactJid.full());
 		action->setEnabled(isSupported(AStreamJid, ADiscoInfo.contactJid));
 		connect(action, SIGNAL(triggered(bool)), SLOT(onCallByAction(bool)));
+		return action;
+	}
+	if (AFeature == NS_JINGLE_APPS_RTP_VIDEO)
+	{
+		Action *action = new Action(AParent);
+		action->setText(tr("Video Call"));
+		action->setIcon(RSR_STORAGE_MENUICONS, MNI_JINGLE_VIDEO);
+		action->setData(ADR_STREAM_JID, AStreamJid.full());
+		action->setData(ADR_CONTACT_JID, ADiscoInfo.contactJid.full());
+		action->setEnabled(isVideoSupported(AStreamJid, ADiscoInfo.contactJid) &&
+		                 Options::node(OPV_JINGLE_VIDEO).value().toBool());
+		connect(action, SIGNAL(triggered(bool)), SLOT(onVideoCallByAction(bool)));
 		return action;
 	}
 	return nullptr;
@@ -870,6 +904,15 @@ void Jingle::onCallByAction(bool AChecked)
 		call(Jid(action->data(ADR_STREAM_JID).toString()), Jid(action->data(ADR_CONTACT_JID).toString()));
 }
 
+void Jingle::onVideoCallByAction(bool AChecked)
+{
+	Q_UNUSED(AChecked);
+
+	Action *action = qobject_cast<Action *>(sender());
+	if (action)
+		callWithVideo(Jid(action->data(ADR_STREAM_JID).toString()), Jid(action->data(ADR_CONTACT_JID).toString()));
+}
+
 void Jingle::onChatCallByAction(bool AChecked)
 {
 	Q_UNUSED(AChecked);
@@ -881,6 +924,20 @@ void Jingle::onChatCallByAction(bool AChecked)
 		IMessageChatWindow *chatWindow = qobject_cast<IMessageChatWindow *>(widget->messageWindow()->instance());
 		if (chatWindow != nullptr)
 			call(chatWindow->streamJid(), chatWindow->contactJid());
+	}
+}
+
+void Jingle::onChatVideoCallByAction(bool AChecked)
+{
+	Q_UNUSED(AChecked);
+
+	Action *action = qobject_cast<Action *>(sender());
+	IMessageToolBarWidget *widget = action!=nullptr ? FToolBarVideoActions.key(action, nullptr) : nullptr;
+	if (widget != nullptr)
+	{
+		IMessageChatWindow *chatWindow = qobject_cast<IMessageChatWindow *>(widget->messageWindow()->instance());
+		if (chatWindow != nullptr)
+			callWithVideo(chatWindow->streamJid(), chatWindow->contactJid());
 	}
 }
 
@@ -903,6 +960,7 @@ void Jingle::onToolBarWidgetDestroyed(QObject *AObject)
 		{
 			FToolBarWidgets.removeAll(widget);
 			FToolBarActions.remove(widget);
+			FToolBarVideoActions.remove(widget);
 			break;
 		}
 	}
@@ -920,39 +978,59 @@ void Jingle::updateToolBarAction(IMessageToolBarWidget *AWidget)
 	const Jid streamJid = chatWindow!=nullptr ? chatWindow->streamJid() : Jid::null;
 	const Jid contactJid = chatWindow!=nullptr ? chatWindow->contactJid() : Jid::null;
 
-	Action *action = FToolBarActions.value(AWidget, nullptr);
+	Action *voiceAction = FToolBarActions.value(AWidget, nullptr);
+	Action *videoAction = FToolBarVideoActions.value(AWidget, nullptr);
 	if (chatWindow!=nullptr && contactJid.isValid())
 	{
-		if (action == nullptr)
+		if (voiceAction == nullptr)
 		{
-			action = new Action(AWidget->toolBarChanger()->toolBar());
-			action->setText(tr("Call"));
-			action->setIcon(RSR_STORAGE_MENUICONS, MNI_JINGLE_CALL);
-			connect(action, SIGNAL(triggered(bool)), SLOT(onChatCallByAction(bool)));
-			AWidget->toolBarChanger()->insertAction(action, TBG_MWTBW_JINGLE_CALL);
-			FToolBarActions.insert(AWidget, action);
+			voiceAction = new Action(AWidget->toolBarChanger()->toolBar());
+			voiceAction->setText(tr("Voice call"));
+			voiceAction->setIcon(RSR_STORAGE_MENUICONS, MNI_JINGLE_CALL);
+			connect(voiceAction, SIGNAL(triggered(bool)), SLOT(onChatCallByAction(bool)));
+			AWidget->toolBarChanger()->insertAction(voiceAction, TBG_MWTBW_JINGLE_CALL);
+			FToolBarActions.insert(AWidget, voiceAction);
+		}
+		if (videoAction == nullptr)
+		{
+			videoAction = new Action(AWidget->toolBarChanger()->toolBar());
+			videoAction->setText(tr("Video call"));
+			videoAction->setIcon(RSR_STORAGE_MENUICONS, MNI_JINGLE_VIDEO);
+			connect(videoAction, SIGNAL(triggered(bool)), SLOT(onChatVideoCallByAction(bool)));
+			AWidget->toolBarChanger()->insertAction(videoAction, TBG_MWTBW_JINGLE_VIDEO_CALL);
+			FToolBarVideoActions.insert(AWidget, videoAction);
 		}
 
 		const bool supported = isSupported(streamJid, contactJid);
-		if (!supported && FDiscovery && !FDiscovery->hasDiscoInfo(streamJid, contactJid))
-		{
-			//Nothing is known about the peer yet: ask for its features and let
-			//the discoInfoReceived handler update the button when it arrives
+		const bool videoSupported = isVideoSupported(streamJid, contactJid) &&
+		                            Options::node(OPV_JINGLE_VIDEO).value().toBool();
+		const bool noDisco = !supported && FDiscovery && !FDiscovery->hasDiscoInfo(streamJid, contactJid);
+		if (noDisco)
 			FDiscovery->requestDiscoInfo(streamJid, contactJid);
-			action->setToolTip(tr("Checking whether the contact supports calls..."));
-		}
-		else
-		{
-			action->setToolTip(supported ? tr("Call") :
-				tr("Voice calls are not supported by the contact"));
-		}
-		action->setEnabled(supported);
+
+		voiceAction->setToolTip(noDisco ? tr("Checking whether the contact supports calls...") :
+			(supported ? tr("Voice call") : tr("Voice calls are not supported by the contact")));
+		voiceAction->setEnabled(supported);
+
+		videoAction->setToolTip(noDisco ? tr("Checking whether the contact supports calls...") :
+			(videoSupported ? tr("Video call") :
+			 tr("Video calls are not supported by the contact or disabled in the options")));
+		videoAction->setEnabled(supported && videoSupported);
 	}
-	else if (action != nullptr)
+	else
 	{
-		AWidget->toolBarChanger()->removeItem(AWidget->toolBarChanger()->actionHandle(action));
-		FToolBarActions.remove(AWidget);
-		delete action;
+		if (voiceAction != nullptr)
+		{
+			AWidget->toolBarChanger()->removeItem(AWidget->toolBarChanger()->actionHandle(voiceAction));
+			FToolBarActions.remove(AWidget);
+			delete voiceAction;
+		}
+		if (videoAction != nullptr)
+		{
+			AWidget->toolBarChanger()->removeItem(AWidget->toolBarChanger()->actionHandle(videoAction));
+			FToolBarVideoActions.remove(AWidget);
+			delete videoAction;
+		}
 	}
 }
 
@@ -969,7 +1047,7 @@ void Jingle::onSessionFinished(JingleSession *ASession, const QString &AReason, 
 }
 
 bool Jingle::sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString &AAction,
-	const QString &ASid, const QString &AReasonCode, const QString &AText)
+	const QString &ASid, const QString &AReasonCode, const QString &AText, bool AWithVideo)
 {
 	if (!FStanzaProcessor || !ATo.isValid())
 		return false;
@@ -985,7 +1063,7 @@ bool Jingle::sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString
 		QDomElement descriptionElem = message.createElement("description", NS_JINGLE_APPS_RTP);
 		descriptionElem.setAttribute("media", "audio");
 		actionElem.appendChild(descriptionElem);
-		if (Options::node(OPV_JINGLE_VIDEO).value().toBool())
+		if (AWithVideo)
 		{
 			//XEP-0353 requires the media list in <propose> to match the
 			//contents of the following session-initiate exactly.
@@ -1157,9 +1235,9 @@ JingleSession *Jingle::findActiveSession(const Jid &AStreamJid, const Jid &ACont
 	return nullptr;
 }
 
-JingleSession *Jingle::createSession(const Jid &AStreamJid, const Jid &AContactJid, const Jid &ALocalJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated)
+JingleSession *Jingle::createSession(const Jid &AStreamJid, const Jid &AContactJid, const Jid &ALocalJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, bool AWithVideo)
 {
-	JingleSession *session = new JingleSession(AStreamJid, ALocalJid, AContactJid, AInitiatorJid, ASid, AInitiated, this, peerName(AStreamJid, AContactJid));
+	JingleSession *session = new JingleSession(AStreamJid, ALocalJid, AContactJid, AInitiatorJid, ASid, AInitiated, AWithVideo, this, peerName(AStreamJid, AContactJid));
 
 	connect(session, &JingleSession::stateChanged, this, [this, session](IJingle::CallState AState) {
 		onSessionStateChanged(session, AState);

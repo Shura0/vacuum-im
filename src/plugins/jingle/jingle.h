@@ -48,7 +48,9 @@ public:
 	virtual bool startPlugin() { return true; }
 	// IJingle
 	virtual bool isSupported(const Jid &AStreamJid, const Jid &AContactJid) const;
+	bool isVideoSupported(const Jid &AStreamJid, const Jid &AContactJid) const;
 	virtual QString call(const Jid &AStreamJid, const Jid &AContactJid);
+	QString callWithVideo(const Jid &AStreamJid, const Jid &AContactJid);
 	virtual bool answerCall(const QString &ASid);
 	virtual bool declineCall(const QString &ASid);
 	virtual bool hangupCall(const QString &ASid);
@@ -80,7 +82,7 @@ public:
 	NatConfig natConfig(const Jid &AStreamJid) const;
 	//XEP-0353 Jingle Message Initiation: <propose>/<proceed>/<finish> messages
 	bool sendJmiMessage(const Jid &AStreamJid, const Jid &ATo, const QString &AAction, const QString &ASid,
-		const QString &AReasonCode = QString(), const QString &AText = QString());
+		const QString &AReasonCode = QString(), const QString &AText = QString(), bool AWithVideo = false);
 signals:
 	// IJingle notifications
 	void callStarted(const Jid &AStreamJid, const Jid &AContactJid, const QString &ASid);
@@ -91,7 +93,9 @@ private slots:
 	void onStreamOpened(IXmppStream *AXmppStream);
 	void onStreamClosed(IXmppStream *AXmppStream);
 	void onCallByAction(bool AChecked);
+	void onVideoCallByAction(bool AChecked);
 	void onChatCallByAction(bool AChecked);
+	void onChatVideoCallByAction(bool AChecked);
 	void onToolBarWidgetCreated(IMessageToolBarWidget *AWidget);
 	void onToolBarWidgetDestroyed(QObject *AObject);
 	void updateToolBarActions();
@@ -110,7 +114,8 @@ private:
 	void onNatServicesResult(const Jid &AStreamJid, const Stanza &AStanza);
 	void onNatCredentialsResult(const Jid &AStreamJid, const Stanza &AStanza, const NatService &AService);
 	void removeSession(JingleSession *ASession);
-	JingleSession *createSession(const Jid &AStreamJid, const Jid &AContactJid, const Jid &ALocalJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated);
+	JingleSession *createSession(const Jid &AStreamJid, const Jid &AContactJid, const Jid &ALocalJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, bool AWithVideo = false);
+	QString startCall(const Jid &AStreamJid, const Jid &AContactJid, bool AWithVideo);
 private:
 	IPluginManager *FPluginManager;
 	IStanzaProcessor *FStanzaProcessor;
@@ -122,6 +127,7 @@ private:
 	IMessageArchiver *FMessageArchiver;
 	INotifications *FNotifications;
 	QHash<IMessageToolBarWidget *, Action *> FToolBarActions;
+	QHash<IMessageToolBarWidget *, Action *> FToolBarVideoActions;
 	QList<IMessageToolBarWidget *> FToolBarWidgets;
 	QHash<Jid, QList<int> > FStanzaHandles;    //streamJid -> registered stanza handle ids
 	QList<JingleSession *> FSessions;

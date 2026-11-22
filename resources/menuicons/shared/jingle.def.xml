@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The voice call icon is the "call-start" icon of the GNOME icon theme
      (gnome-icon-theme, Copyright 2002-2008 Andreas Nilsson, GPL-2+),
-     used here to have a coloured handset matching the other toolbar icons. -->
+     used here to have a coloured handset matching the other toolbar icons.
+     The video call icon is derived from the "camera-video" icon of the Breeze
+     icon theme (KF6, LGPL-2.1+), recoloured to blue so the two call buttons
+     are easy to tell apart. -->
 <icondef>
   <icon>
     <key>jingleCall</key>

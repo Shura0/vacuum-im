@@ -89,6 +89,7 @@ MediaEngine::MediaEngine(QObject *AParent) : QObject(AParent)
 	FAudioActive = false;
 	FMuted = false;
 	FVideoEnabled = false;
+	FVideoAllowed = true;
 	FAsDtlsClient = true;
 	FRemoteParamsReady = false;
 	FIceConnected = false;
@@ -359,6 +360,11 @@ void MediaEngine::setVideoEnabled(bool AEnabled)
 bool MediaEngine::hasVideoCamera() const
 {
 	return FVideoTransmitter != nullptr && FVideoTransmitter->hasCamera();
+}
+
+void MediaEngine::setVideoAllowed(bool AAllowed)
+{
+	FVideoAllowed = AAllowed;
 }
 
 void MediaEngine::setScreenSharing(bool AEnabled)
@@ -936,7 +942,7 @@ bool MediaEngine::startAudio()
 	scheduleRtcpReport(RtcpMinIntervalMs / 2 + int(QRandomGenerator::global()->bounded(RtcpMinIntervalMs / 2)));
 
 	FMediaTimer->start();
-	FVideoEnabled = FRemoteVideoPayloadType >= 0 && Options::node(OPV_JINGLE_VIDEO).value().toBool();
+	FVideoEnabled = FRemoteVideoPayloadType >= 0 && FVideoAllowed;
 	if (FVideoEnabled)
 	{
 		FVideoTransmitter->setQualityMode(Options::node(OPV_JINGLE_VIDEO_QUALITY).value().toInt());

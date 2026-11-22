@@ -21,7 +21,7 @@ class JingleSession :
 {
 	Q_OBJECT;
 public:
-	JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const Jid &AContactJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, Jingle *AJingle, const QString &APeerName);
+	JingleSession(const Jid &AStreamJid, const Jid &ALocalJid, const Jid &AContactJid, const QString &AInitiatorJid, const QString &ASid, bool AInitiated, bool AWithVideo, Jingle *AJingle, const QString &APeerName);
 	virtual ~JingleSession();
 
 	static QString generateSid();
@@ -86,7 +86,7 @@ private:
 	void onPeerWaitTimeout();
 	QString ourDtlsSetup() const;
 	void applyDtlsClientRole();
-	void sendJmiMessage(const QString &AAction, const QString &AReasonCode = QString(), const QString &AText = QString());
+	void sendJmiMessage(const QString &AAction, const QString &AReasonCode = QString(), const QString &AText = QString(), bool AWithVideo = false);
 	void resendInitiate();
 	void finishJmiSession(const QString &AReasonCode, const QString &AText);
 	QString reasonText(const QString &AReason) const;
@@ -102,6 +102,7 @@ private:
 	QString FPeerName;
 	QString FSid;
 	bool FInitiated;
+	bool FVideoRequested;
 	bool FSilent;
 	int FResendId;
 	QString FContentName; //Echo the initiator's content name (e.g. "0") in our answer
