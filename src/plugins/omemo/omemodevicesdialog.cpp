@@ -66,8 +66,12 @@ void OmemoDevicesDialog::refresh()
 	QStringList ownIds;
 	for (quint32 id : ownDevices)
 		ownIds.append(QString::number(id));
-	FOwnLabel->setText(tr("This device: %1\nMy devices: %2\nFingerprint: %3")
-		.arg(ownDevice).arg(ownIds.join(QStringLiteral(", "))).arg(FAccount->ownFingerprint()));
+	QString ownText = tr("This device: %1\nMy devices: %2\nFingerprint: %3")
+		.arg(ownDevice).arg(ownIds.join(QStringLiteral(", "))).arg(FAccount->ownFingerprint());
+	const QString label = FAccount->deviceLabel();
+	if (!label.isEmpty())
+		ownText += tr("\nName: %1").arg(label.toHtmlEscaped());
+	FOwnLabel->setText(ownText);
 
 	const QString contact = FContactJid.bare();
 	const QList<quint32> devices = FAccount->devices(contact);

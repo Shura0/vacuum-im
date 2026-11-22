@@ -311,6 +311,51 @@ QString OmemoAccount::ownFingerprint() const
 	return groups.join(QLatin1Char(' '));
 }
 
+QString OmemoAccount::deviceLabel() const
+{
+	return FStore != nullptr ? FStore->data().deviceLabel : QString();
+}
+
+void OmemoAccount::setDeviceLabel(const QString &ALabel)
+{
+	if (FStore == nullptr)
+		return;
+	const QString label = ALabel.trimmed();
+	if (FStore->data().deviceLabel == label)
+		return;
+	FStore->data().deviceLabel = label;
+	FStore->markDirty();
+	FStore->save();
+	emit stateChanged(bareJid());
+}
+
+void OmemoAccount::clearSessions()
+{
+	if (!FStarted || FStore == nullptr || FCrypto == nullptr)
+		return;
+
+	// Only the serialized ratchets are dropped.  Identity keys, device ids,
+	// fingerprints, trust decisions and the plaintext cache are preserved, so
+	// the local history stays readable after the sessions are rebuilt.
+	for (auto jidIt=FStore->data().devices.begin(); jidIt!=FStore->data().devices.end(); ++jidIt)
+		for (auto deviceIt=jidIt.value().begin(); deviceIt!=jidIt.value().end(); ++deviceIt)
+			deviceIt->session.clear();
+
+	FStore->markDirty();
+	FCrypto->flush();
+
+	// Bundles must be fetched again: the old cached ones may have been used
+	// for the sessions we just dropped.
+	FBundles.clear();
+	FPendingBundles.clear();
+	FFailedBundles.clear();
+
+	QString error;
+	if (!ensureSelfSession(&error))
+		LOG_STRM_WARNING(FStreamJid,QString("Cannot recreate OMEMO self-session after clearing sessions: %1").arg(error));
+	emit stateChanged(bareJid());
+}
+
 bool OmemoAccount::ensureDeviceList(const QString &AJid)
 {
 	const QString jid = Jid(AJid).bare();

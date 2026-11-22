@@ -14,4 +14,8 @@
 #define OMEMO_PEP_REQUEST_TIMEOUT       30000
 #define OMEMO_DEVICELIST_TTL            3600
 
+// Global trust policy (OPV_OMEMO_GLOBAL_POLICY)
+#define OMEMO_POLICY_BTBV               0
+#define OMEMO_POLICY_STRICT             1
+
 #endif // OMEMODEFINITIONS_H

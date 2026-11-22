@@ -121,6 +121,9 @@
 #define OPV_JINGLE_FORCE_RELAY                                "jingle.force-relay"
 #define OPV_JINGLE_INPUT_DEVICE                                "jingle.input-device"
 #define OPV_JINGLE_OUTPUT_DEVICE                               "jingle.output-device"
+// Omemo
+#define OPV_OMEMO_ROOT                                      "omemo"
+#define OPV_OMEMO_GLOBAL_POLICY                             "omemo.trust-policy"
 // Emoticons
 #define OPV_MESSAGES_EMOTICONS_ICONSET                  "messages.emoticons.iconset"
 #define OPV_MESSAGES_EMOTICONS_MAXINMESSAGE             "messages.emoticons.max-in-message"

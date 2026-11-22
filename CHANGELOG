@@ -9,6 +9,8 @@ LEGEND
   [-] Bug fix
 
 ------
+  [+] OMEMO: a per-account options page with a device name, the global trust policy setting and a "Clear all OMEMO sessions" action; OMEMO stays always enabled, with no on/off switches
+  [*] OMEMO: documented that changing the profile password keeps the profile key and the encrypted store readable, so no store migration is needed
   [-] Build: the Jingle plugin now locates libsrtp2 through pkg-config or a plain header/library lookup with a clear configure error; CI installs libsrtp2-dev, so the Linux build succeeds again
   [+] Vim plugin: the :call and :vcall commands start voice and video calls with a contact JID (Tab completes roster JIDs as for :chat; with no JID the current chat contact is used, resolving its full resource); :help no longer advertises the not-yet-working / search
   [-] OMEMO: the published device list no longer replaces other devices of the same account, so a second client (e.g. Snikket on a phone) stays in the list and receives a key in outgoing messages; the first message after reconnect is held until sessions with our own devices are ready

@@ -64,6 +64,11 @@ public:
 	void setDeviceTrust(const QString &AJid, quint32 ADeviceId, int ATrustLevel);
 	QString deviceFingerprint(const QString &AJid, quint32 ADeviceId) const;
 	QString ownFingerprint() const;
+	// Label of this device, stored next to the encrypted identity
+	QString deviceLabel() const;
+	void setDeviceLabel(const QString &ALabel);
+	// Drops all Signal ratchet states; sessions are rebuilt from the bundles
+	void clearSessions();
 
 	// Returns true when the device list and every needed bundle are cached and
 	// sessions have been established.  Missing data is requested in the

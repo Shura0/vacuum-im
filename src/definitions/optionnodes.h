@@ -6,6 +6,7 @@
 #define OPN_ACCOUNTS_PARAMS              OPN_ACCOUNTS".[id].Parameters"
 #define OPN_ACCOUNTS_HISTORY             OPN_ACCOUNTS".[id].History"
 #define OPN_ACCOUNTS_ADDITIONAL          OPN_ACCOUNTS".[id].Additional"
+#define OPN_ACCOUNTS_OMEMO               OPN_ACCOUNTS".[id].Omemo"
 #define OPN_ROSTERVIEW                   "RosterView"
 #define OPN_MESSAGES                     "Messages"
 #define OPN_CONFERENCES                  "Conferences"

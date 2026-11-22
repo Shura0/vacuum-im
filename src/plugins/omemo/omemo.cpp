@@ -3,6 +3,10 @@
 #include <definitions/actiongroups.h>
 #include <definitions/menuicons.h>
 #include <definitions/messagemarks.h>
+#include <definitions/optionnodes.h>
+#include <definitions/optionnodeorders.h>
+#include <definitions/optionvalues.h>
+#include <definitions/optionwidgetorders.h>
 #include <definitions/messageeditororders.h>
 #include <definitions/messagestylehandlerorders.h>
 #include <definitions/messageviewurlhandlerorders.h>
@@ -37,6 +41,7 @@
 
 #include "omemodefinitions.h"
 #include "omemodevicesdialog.h"
+#include "omemooptionswidget.h"
 #include "omemostore.h"
 
 #include <QDateTime>
@@ -171,6 +176,7 @@ Omemo::Omemo() :
 	FXmppStreamManager(nullptr),
 	FMessageProcessor(nullptr),
 	FMessageWidgets(nullptr),
+	FOptionsManager(nullptr),
 	FAttachments(nullptr),
 	FMessageContextManager(nullptr),
 	FMediaConsumerActive(false),
@@ -225,6 +231,7 @@ void Omemo::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->dependences.append(QUuid(STANZAPROCESSOR_UUID));
 	APluginInfo->dependences.append(QUuid(PEPMANAGER_UUID));
 	APluginInfo->dependences.append(QUuid(XMPPSTREAMS_UUID));
+	APluginInfo->dependences.append(QUuid(OPTIONSMANAGER_UUID));
 }
 
 bool Omemo::initConnections(IPluginManager *APluginManager, int &AInitOrder)
@@ -258,6 +265,10 @@ bool Omemo::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 		FMessageWidgets = qobject_cast<IMessageWidgets *>(plugin->instance());
 		FMessageContextManager = qobject_cast<IMessageDocumentContextManager *>(plugin->instance());
 	}
+
+	plugin = APluginManager->pluginInterface(QStringLiteral("IOptionsManager")).value(0,nullptr);
+	if (plugin != nullptr)
+		FOptionsManager = qobject_cast<IOptionsManager *>(plugin->instance());
 
 	// The plugins we unregister from at destruction may already be dead by then
 	// (shutdown order is not guaranteed), so drop the pointers as soon as the
@@ -298,6 +309,9 @@ bool Omemo::initObjects()
 			SLOT(onStreamClosed(IXmppStream *)));
 	}
 
+	if (FOptionsManager != nullptr)
+		FOptionsManager->insertOptionsDialogHolder(this);
+
 	foreach (IAccount *account, FAccountManager->accounts())
 		onAccountInserted(account);
 
@@ -316,6 +330,12 @@ bool Omemo::initObjects()
 			onChatWindowCreated(window);
 	}
 
+	return true;
+}
+
+bool Omemo::initSettings()
+{
+	Options::setDefaultValue(OPV_OMEMO_GLOBAL_POLICY,OMEMO_POLICY_BTBV);
 	return true;
 }
 
@@ -343,6 +363,7 @@ void Omemo::onAccountInserted(IAccount *AAccount)
 		onAccountStateChanged(account,AJid);
 	});
 	FAccounts.insert(AAccount->accountId(),account);
+	openOmemoOptionsNode(AAccount->accountId());
 
 	if (FXmppStreamManager != nullptr && AAccount->xmppStream() != nullptr
 		&& FXmppStreamManager->isXmppStreamActive(AAccount->xmppStream())
@@ -362,6 +383,7 @@ void Omemo::onAccountRemoved(IAccount *AAccount)
 	if (AAccount == nullptr)
 		return;
 
+	closeOmemoOptionsNode(AAccount->accountId());
 	OmemoAccount *account = FAccounts.take(AAccount->accountId());
 	if (account != nullptr)
 	{
@@ -729,6 +751,48 @@ void Omemo::registerUploadedFile(const Jid &AStreamJid, const QString &ACleanUrl
 	OmemoAccount *account = accountForStream(AStreamJid);
 	if (account != nullptr && FAttachments != nullptr)
 		FAttachments->storeUploadedFile(account,ACleanUrl,ASourceFileName,AFragment);
+}
+
+OmemoAccount *Omemo::accountById(const QUuid &AAccountId) const
+{
+	return FAccounts.value(AAccountId);
+}
+
+void Omemo::openOmemoOptionsNode(const QUuid &AAccountId)
+{
+	if (FOptionsManager != nullptr)
+	{
+		const QString nodeId = QString(OPN_ACCOUNTS_OMEMO).replace(QStringLiteral("[id]"),AAccountId.toString());
+		const IOptionsDialogNode node = { ONO_ACCOUNTS_OMEMO, nodeId, MNI_OPTIONS_DIALOG, tr("OMEMO") };
+		FOptionsManager->insertOptionsDialogNode(node);
+	}
+}
+
+void Omemo::closeOmemoOptionsNode(const QUuid &AAccountId)
+{
+	if (FOptionsManager != nullptr)
+	{
+		const QString nodeId = QString(OPN_ACCOUNTS_OMEMO).replace(QStringLiteral("[id]"),AAccountId.toString());
+		FOptionsManager->removeOptionsDialogNode(nodeId);
+	}
+}
+
+QMultiMap<int, IOptionsDialogWidget *> Omemo::optionsDialogWidgets(const QString &ANodeId, QWidget *AParent)
+{
+	QMultiMap<int, IOptionsDialogWidget *> widgets;
+	const QStringList nodeTree = ANodeId.split('.',Qt::SkipEmptyParts);
+	if (nodeTree.count()==3 && nodeTree.at(0)==OPN_ACCOUNTS && nodeTree.at(2)==QStringLiteral("Omemo"))
+	{
+		OmemoAccount *account = accountById(QUuid(nodeTree.at(1)));
+		if (account != nullptr)
+		{
+			widgets.insert(OHO_ACCOUNTS_OMEMO_SETTINGS,
+				FOptionsManager->newOptionsDialogHeader(tr("OMEMO"),AParent));
+			widgets.insert(OWO_ACCOUNTS_OMEMO_LABEL,
+				new OmemoOptionsWidget(this,account,FOptionsManager,AParent));
+		}
+	}
+	return widgets;
 }
 
 OmemoAccount *Omemo::accountForStream(const Jid &AStreamJid)

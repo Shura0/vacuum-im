@@ -14,6 +14,7 @@
 #include <interfaces/imessagestylemanager.h>
 #include <interfaces/imessageprocessor.h>
 #include <interfaces/imessagewidgets.h>
+#include <interfaces/ioptionsmanager.h>
 #include <interfaces/ipluginmanager.h>
 #include <interfaces/ipepmanager.h>
 #include <interfaces/istanzaprocessor.h>
@@ -40,10 +41,11 @@ class Omemo :
 	public IFileUploadEncryption,
 	public IMessageStyleHandler,
 	public IMessageViewUrlHandler,
-	public IImageMediaProvider
+	public IImageMediaProvider,
+	public IOptionsDialogHolder
 {
 	Q_OBJECT
-	Q_INTERFACES(IPlugin IStanzaHandler IMessageEditor IEndToEndEncryption IFileUploadEncryption IMessageStyleHandler IMessageViewUrlHandler IImageMediaProvider)
+	Q_INTERFACES(IPlugin IStanzaHandler IMessageEditor IEndToEndEncryption IFileUploadEncryption IMessageStyleHandler IMessageViewUrlHandler IImageMediaProvider IOptionsDialogHolder)
 	Q_PLUGIN_METADATA(IID "org.vacuum-im.plugins.Omemo")
 public:
 	Omemo();
@@ -54,8 +56,10 @@ public:
 	virtual void pluginInfo(IPluginInfo *APluginInfo);
 	virtual bool initConnections(IPluginManager *APluginManager, int &AInitOrder);
 	virtual bool initObjects();
-	virtual bool initSettings() { return true; }
+	virtual bool initSettings();
 	virtual bool startPlugin();
+	// IOptionsDialogHolder
+	virtual QMultiMap<int, IOptionsDialogWidget *> optionsDialogWidgets(const QString &ANodeId, QWidget *AParent);
 	// IStanzaHandler
 	virtual bool stanzaReadWrite(int AHandleId, const Jid &AStreamJid, Stanza &AStanza, bool &AAccept);
 	// IMessageEditor
@@ -136,6 +140,9 @@ private:
 
 	void startAccount(OmemoAccount *AAccount);
 	OmemoAccount *accountForStream(const Jid &AStreamJid);
+	OmemoAccount *accountById(const QUuid &AAccountId) const;
+	void openOmemoOptionsNode(const QUuid &AAccountId);
+	void closeOmemoOptionsNode(const QUuid &AAccountId);
 	void updateLock(IMessageChatWindow *AWindow);
 	void updateLocks(OmemoAccount *AAccount);
 	void showDevicesDialog(IMessageChatWindow *AWindow);
@@ -173,6 +180,7 @@ private:
 	IXmppStreamManager *FXmppStreamManager;
 	IMessageProcessor *FMessageProcessor;
 	IMessageWidgets *FMessageWidgets;
+	IOptionsManager *FOptionsManager;
 	OmemoAttachments *FAttachments;
 	IMessageDocumentContextManager *FMessageContextManager;
 	// True when the image viewer renders provider urls in its galleries;

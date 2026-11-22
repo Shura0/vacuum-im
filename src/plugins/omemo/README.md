@@ -1,8 +1,8 @@
 # OMEMO plugin
 
 Legacy OMEMO 0.3 (XEP-0384 v0.3, `eu.siacs.conversations.axolotl`) for
-one-to-one chats, including the receiving side of encrypted files (XEP-0454).
-sending files, OMEMO 2, group chats and calls are intentionally not
+one-to-one chats, including encrypted files (XEP-0454) both received and sent
+through XEP-0363 HTTP Upload.  OMEMO 2, group chats and calls are not
 implemented yet.
 
 ## Behaviour
@@ -21,6 +21,12 @@ implemented yet.
   chat window context menu and choose “OMEMO devices...” to see fingerprints
   and trust/block devices.  Devices of the same account are trusted
   automatically.
+- OMEMO is always enabled; there is no global or per-account on/off switch.
+  Each account has an **OMEMO** page in Settings → Accounts that shows the
+  device name stored with the encrypted identity, the global trust policy and
+  a **Clear all OMEMO sessions** action.  Clearing sessions drops the Signal
+  ratchets and rebuilds them from the devices' published bundles; identity
+  keys, trust decisions and readable history are preserved.
 - Clicking the lock indicator opens a menu with the per-chat switch
   “Use OMEMO in this chat”.  The switch is stored in the encrypted OMEMO
   store and survives a restart; when it is off, outgoing messages are sent
@@ -104,6 +110,19 @@ The key is derived with HKDF-SHA256 from the profile key
 atomically with `0600` permissions.  Keys are never written to
 `options.xml`.
 
+## Profile password
+
+Changing the profile password does not affect OMEMO.  The profile key itself
+is not regenerated: `OptionsManager::changeProfilePassword()` decrypts the
+existing key with the old password and re-encrypts the **same** key bytes with
+the new one, so `Options::cryptKey()` stays stable and the HKDF-derived OMEMO
+store key is unchanged.  No migration of `<account-uuid>.dat` is needed; a
+store written before the change remains readable afterwards.
+
+If the profile has no encryption key at all (an old-format profile without a
+password), OMEMO cannot start and reports “The profile encryption key is not
+available”.  Set a profile password to enable encrypted storage.
+
 ## PEP nodes
 
 - `eu.siacs.conversations.axolotl.devicelist` (item `current`, root `list`)
@@ -125,11 +144,9 @@ atomically with `0600` permissions.  Keys are never written to
   aesgcm key would otherwise never reach the recipient.
 - Identity changes on an existing device are rejected by the Signal trust
   callback and need manual session cleanup (not exposed in the UI yet).
-- Profile password changes are not migrated yet; the OMEMO file is encrypted
-  with the current profile key.
 - The UI is limited to the per-contact device/trust dialog, the chat lock
-  indicator and the per-chat OMEMO switch; there is no account-level switch
-  yet.
+  indicator, the per-chat switch and the per-account OMEMO settings page;
+  managing own devices and reacting to identity changes are not exposed yet.
 
 ## Build
 

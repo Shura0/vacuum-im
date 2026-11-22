@@ -6,6 +6,7 @@ set(SOURCES
 	omemodevicesdialog.cpp
 	omemoenvelope.cpp
 	omemonetwork.cpp
+	omemooptionswidget.cpp
 	omemostore.cpp
 )
 set(HEADERS
@@ -17,5 +18,6 @@ set(HEADERS
 	omemodevicesdialog.h
 	omemoenvelope.h
 	omemonetwork.h
+	omemooptionswidget.h
 	omemostore.h
 )
