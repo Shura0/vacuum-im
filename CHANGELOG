@@ -9,6 +9,7 @@ LEGEND
   [-] Bug fix
 
 ------
+  [-] Build: the Jingle plugin now locates libsrtp2 through pkg-config or a plain header/library lookup with a clear configure error; CI installs libsrtp2-dev, so the Linux build succeeds again
   [+] Vim plugin: the :call and :vcall commands start voice and video calls with a contact JID (Tab completes roster JIDs as for :chat; with no JID the current chat contact is used, resolving its full resource); :help no longer advertises the not-yet-working / search
   [-] OMEMO: the published device list no longer replaces other devices of the same account, so a second client (e.g. Snikket on a phone) stays in the list and receives a key in outgoing messages; the first message after reconnect is held until sessions with our own devices are ready
   [-] OMEMO: outgoing messages are visible in the chat again when the contact is offline; encryption now works on a deep copy of the stanza, so removing the body for the wire payload no longer strips it from the message displayed locally

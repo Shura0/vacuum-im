@@ -10,14 +10,36 @@ include("${CMAKE_SOURCE_DIR}/src/plugins/plugins.cmake")
 
 if (IS_ENABLED)
 	find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
-	target_link_libraries(${PLUGIN_NAME} OpenSSL::SSL OpenSSL::Crypto srtp2)
+	target_link_libraries(${PLUGIN_NAME} OpenSSL::SSL OpenSSL::Crypto)
+
+	# SRTP is required for encrypted media.  Some distributions ship no
+	# srtp2.pc, so fall back to a plain header/library lookup and report a
+	# clear configure error instead of failing deep in the compilation.
+	find_package(PkgConfig QUIET)
+	if (PkgConfig_FOUND)
+		pkg_check_modules(SRTP2 QUIET srtp2)
+	endif()
+	if (SRTP2_FOUND)
+		target_include_directories(${PLUGIN_NAME} PRIVATE ${SRTP2_INCLUDE_DIRS})
+		target_compile_options(${PLUGIN_NAME} PRIVATE ${SRTP2_CFLAGS_OTHER})
+		target_link_directories(${PLUGIN_NAME} PRIVATE ${SRTP2_LIBRARY_DIRS})
+		target_link_libraries(${PLUGIN_NAME} ${SRTP2_LIBRARIES})
+		target_link_options(${PLUGIN_NAME} PRIVATE ${SRTP2_LDFLAGS_OTHER})
+	else()
+		find_path(SRTP2_INCLUDE_DIR NAMES srtp2/srtp.h)
+		find_library(SRTP2_LIBRARY NAMES srtp2)
+		if (NOT SRTP2_INCLUDE_DIR OR NOT SRTP2_LIBRARY)
+			message(FATAL_ERROR "jingle: libsrtp2 development files not found; install libsrtp2-dev or disable the plugin with -DPLUGIN_jingle=OFF")
+		endif()
+		target_include_directories(${PLUGIN_NAME} PRIVATE ${SRTP2_INCLUDE_DIR})
+		target_link_libraries(${PLUGIN_NAME} ${SRTP2_LIBRARY})
+	endif()
 
 	find_package(Qt6Multimedia REQUIRED)
 	target_link_libraries(${PLUGIN_NAME} Qt6::Multimedia)
 
 	#Echo cancellation is optional: without the library the plugin builds and
 	#calls work, just without echo control (the user is warned in the log).
-	find_package(PkgConfig QUIET)
 	if (PkgConfig_FOUND)
 		pkg_check_modules(WEBRTC_APM QUIET webrtc-audio-processing-1)
 	endif()

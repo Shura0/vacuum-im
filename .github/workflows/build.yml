@@ -33,7 +33,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ninja-build \
             libx11-dev libxss-dev \
-            zlib1g-dev libssl-dev
+            zlib1g-dev libssl-dev libsrtp2-dev
 
       - name: Configure
         run: |
