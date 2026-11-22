@@ -21,6 +21,14 @@ implemented yet.
   chat window context menu and choose “OMEMO devices...” to see fingerprints
   and trust/block devices.  Devices of the same account are trusted
   automatically.
+- The device dialog has two sections: the contact's devices and **own devices**.
+  For any selected device you can reset its single session.  An own device can
+  be removed: its id is dropped from the PEP devicelist and its store entry is
+  deleted.  Removing the **current** device asks for confirmation and generates
+  a new identity (new device id, identity key and prekeys), republishes the
+  bundle to `bundles:<new-id>` and the devicelist, and rebuilds sessions.  The
+  old bundle node is not retracted.  Identity/trust decisions, the device name
+  and readable history are preserved.
 - **Strict trust** can be enabled globally (the per-account OMEMO settings
   page) or per contact (the “Strict trust” checkbox in the device dialog).
   In a strict chat an incoming message is accepted only from a device marked
@@ -155,9 +163,10 @@ available”.  Set a profile password to enable encrypted storage.
   aesgcm key would otherwise never reach the recipient.
 - Identity changes on an existing device are rejected by the Signal trust
   callback and need manual session cleanup (not exposed in the UI yet).
-- The UI is limited to the per-contact device/trust dialog, the chat lock
-  indicator, the per-chat switch and the per-account OMEMO settings page;
-  managing own devices and reacting to identity changes are not exposed yet.
+- The UI is limited to the device dialog, the chat lock indicator, the
+  per-chat switch and the per-account OMEMO settings page; reacting to identity
+  changes of a contact's existing device is not exposed yet (resetting that
+  device's session manually is possible).
 
 ## Build
 

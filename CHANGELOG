@@ -9,6 +9,7 @@ LEGEND
   [-] Bug fix
 
 ------
+  [+] OMEMO: the device dialog now manages own devices too — per-device session reset, removing a device from the PEP list and regenerating the identity when the current device is removed
   [+] OMEMO: strict trust policy — globally or per contact — rejects incoming messages from unverified devices before touching the Signal session, showing an amber untrusted-device placeholder instead; the device dialog has a Strict checkbox and the store keeps the flag in version 3
   [-] OMEMO: the device name in the account settings stays after reopening the options dialog; the widget now initializes its editors when created instead of overwriting the stored name with an empty field
   [+] OMEMO: a per-account options page with a device name, the global trust policy setting and a "Clear all OMEMO sessions" action; OMEMO stays always enabled, with no on/off switches

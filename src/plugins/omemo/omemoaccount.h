@@ -73,6 +73,13 @@ public:
 	void setDeviceLabel(const QString &ALabel);
 	// Drops all Signal ratchet states; sessions are rebuilt from the bundles
 	void clearSessions();
+	bool isOwnDevice(quint32 ADeviceId) const;
+	// Clears the ratchet of one device only; trust and the identity are kept
+	bool resetDeviceSession(const QString &AJid, quint32 ADeviceId);
+	// Removes another own device from PEP and from the store.  Removing the
+	// current device regenerates the identity (new id, keys and bundle).
+	bool removeOwnDevice(quint32 ADeviceId, QString *AError = nullptr);
+	bool regenerateIdentity(QString *AError = nullptr);
 
 	// Returns true when the device list and every needed bundle are cached and
 	// sessions have been established.  Missing data is requested in the

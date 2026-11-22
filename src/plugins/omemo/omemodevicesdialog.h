@@ -2,6 +2,7 @@
 #define OMEMODEVICESDIALOG_H
 
 #include <QDialog>
+#include <QPointer>
 
 #include <utils/jid.h>
 
@@ -11,9 +12,9 @@ class QLabel;
 class QListWidget;
 class QPushButton;
 
-// Minimal trust UI: shows the contact's devices and their fingerprints and
-// lets the user trust or distrust a device.  The dialog is deliberately
-// simple; the full device management screen can replace it later.
+// Device and trust management for one contact and for the account itself.
+// The contact list can be trusted/blocked; both lists allow a single session
+// reset, and own devices can be removed from the published PEP device list.
 class OmemoDevicesDialog : public QDialog
 {
 	Q_OBJECT
@@ -26,17 +27,26 @@ private slots:
 	void onTrustClicked();
 	void onDistrustClicked();
 	void onStrictToggled(bool AChecked);
+	void onResetSessionClicked();
+	void onRemoveDeviceClicked();
+	void onRefreshClicked();
+	void onSelectionChanged();
 
 private:
 	OmemoAccount *FAccount;
 	Jid FStreamJid;
 	Jid FContactJid;
-	QLabel *FOwnLabel;
 	QCheckBox *FStrictBox;
 	QLabel *FStatusLabel;
+	QLabel *FFingerprintLabel;
 	QListWidget *FDevicesList;
+	QListWidget *FOwnDevicesList;
 	QPushButton *FTrustButton;
 	QPushButton *FDistrustButton;
+	QPushButton *FResetButton;
+	QPushButton *FRemoveButton;
+	// Which list the fingerprint label currently follows
+	QPointer<QListWidget> FLastSelectionList;
 };
 
 #endif // OMEMODEVICESDIALOG_H

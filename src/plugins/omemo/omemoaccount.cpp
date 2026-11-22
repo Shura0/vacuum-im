@@ -378,6 +378,130 @@ void OmemoAccount::clearSessions()
 	emit stateChanged(bareJid());
 }
 
+bool OmemoAccount::isOwnDevice(quint32 ADeviceId) const
+{
+	return ADeviceId != 0 && FCrypto != nullptr && FCrypto->deviceId()==ADeviceId;
+}
+
+bool OmemoAccount::resetDeviceSession(const QString &AJid, quint32 ADeviceId)
+{
+	if (!FStarted || FStore == nullptr || FCrypto == nullptr || ADeviceId == 0)
+		return false;
+	const QString jid = Jid(AJid).bare();
+	auto jit = FStore->data().devices.find(jid);
+	if (jit == FStore->data().devices.end())
+		return false;
+	auto dit = jit->find(ADeviceId);
+	if (dit == jit->end())
+		return false;
+	dit->session.clear();
+
+	const QString cacheKey = bundleCacheKey(jid,ADeviceId);
+	FBundles[jid].remove(ADeviceId);
+	FPendingBundles.remove(cacheKey);
+	FFailedBundles.remove(cacheKey);
+
+	FStore->markDirty();
+	FCrypto->flush();
+	emit stateChanged(jid);
+	return true;
+}
+
+bool OmemoAccount::removeOwnDevice(quint32 ADeviceId, QString *AError)
+{
+	if (!FStarted || FStore == nullptr || FCrypto == nullptr || ADeviceId == 0)
+	{
+		if (AError != nullptr)
+			*AError = tr("OMEMO is not initialized");
+		return false;
+	}
+	// The current device cannot simply disappear from the list: every PEP
+	// refresh would add it back.  A new identity means a new device id.
+	if (isOwnDevice(ADeviceId))
+		return regenerateIdentity(AError);
+
+	const QString ownJid = bareJid();
+	QList<quint32> list = FDeviceLists.value(ownJid);
+	if (!list.contains(ADeviceId))
+	{
+		if (AError != nullptr)
+			*AError = tr("The device is not in the published device list");
+		return false;
+	}
+	list.removeAll(ADeviceId);
+	FDeviceLists[ownJid] = list;
+	FStore->data().devices[ownJid].remove(ADeviceId);
+	FBundles[ownJid].remove(ADeviceId);
+	const QString cacheKey = bundleCacheKey(ownJid,ADeviceId);
+	FPendingBundles.remove(cacheKey);
+	FFailedBundles.remove(cacheKey);
+
+	FStore->markDirty();
+	FCrypto->flush();
+	publishDeviceList(list);
+	emit stateChanged(ownJid);
+	return true;
+}
+
+bool OmemoAccount::regenerateIdentity(QString *AError)
+{
+	if (!FStarted || FStore == nullptr || FCrypto == nullptr)
+	{
+		if (AError != nullptr)
+			*AError = tr("OMEMO is not initialized");
+		return false;
+	}
+
+	const QString ownJid = bareJid();
+	const quint32 oldDeviceId = FCrypto->deviceId();
+	OmemoStore::Data &data = FStore->data();
+
+	// Ratchets are bound to the old identity and must go.  Trust decisions,
+	// strict flags, device label and the plaintext history cache are kept.
+	for (auto jidIt=data.devices.begin(); jidIt!=data.devices.end(); ++jidIt)
+		for (auto deviceIt=jidIt.value().begin(); deviceIt!=jidIt.value().end(); ++deviceIt)
+			deviceIt->session.clear();
+	data.devices.remove(ownJid);
+	data.identityKeyPair.clear();
+	data.identityPublic.clear();
+	data.registrationId = 0;
+	data.deviceId = 0;
+	data.signedPreKeys.clear();
+	data.preKeys.clear();
+	data.latestSignedPreKeyId = 0;
+	data.latestPreKeyId = 0;
+
+	FBundles.clear();
+	FPendingBundles.clear();
+	FFailedBundles.clear();
+
+	QString error;
+	if (!FCrypto->ensureIdentity(&error) || !FCrypto->ensurePreKeys(OMEMO_PREKEYS_MAX,&error))
+	{
+		if (AError != nullptr)
+			*AError = error;
+		LOG_STRM_WARNING(FStreamJid,QString("Cannot regenerate OMEMO identity: %1").arg(error));
+		return false;
+	}
+	FCrypto->flush();
+
+	QList<quint32> list = FDeviceLists.value(ownJid);
+	list.removeAll(oldDeviceId);
+	if (!list.contains(FCrypto->deviceId()))
+		list.append(FCrypto->deviceId());
+	FDeviceLists[ownJid] = list;
+	registerDevices(ownJid,list);
+
+	publishBundle();
+	publishDeviceList(list);
+	QString selfError;
+	if (!ensureSelfSession(&selfError))
+		LOG_STRM_WARNING(FStreamJid,QString("Cannot create OMEMO self-session after identity reset: %1").arg(selfError));
+	LOG_STRM_INFO(FStreamJid,QString("OMEMO identity regenerated, device=%1").arg(FCrypto->deviceId()));
+	emit stateChanged(ownJid);
+	return true;
+}
+
 bool OmemoAccount::ensureDeviceList(const QString &AJid)
 {
 	const QString jid = Jid(AJid).bare();
