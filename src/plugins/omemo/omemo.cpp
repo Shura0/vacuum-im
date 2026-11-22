@@ -894,7 +894,10 @@ bool Omemo::processOutbound(const Jid &AStreamJid, Stanza &AStanza)
 
 	account->ensureSessions(contactJid);
 	account->ensureSessions(ownJid);
-	if (!account->sessionsReady(contactJid))
+	// Wait for sessions with our other devices too: otherwise the first
+	// outgoing message after reconnect would have no key for a second client
+	// on this account (e.g. a phone) and it could not decrypt the message.
+	if (!account->sessionsReady(contactJid) || !account->sessionsReady(ownJid,true))
 	{
 		setMessageStatus(messageId,StatusPending);
 		markStanzaStatus(AStanza,StatusPending);
@@ -950,16 +953,23 @@ bool Omemo::encryptStanza(OmemoAccount *AAccount, const QString &AContactJid, St
 		return false;
 	}
 
-	QDomNodeList bodies = AStanza.element().elementsByTagName(QStringLiteral("body"));
+	// MessageProcessor passes a copy of the message stanza to stanza handlers,
+	// but QDom nodes are implicitly shared. Removing <body> from that copy
+	// would strip the body from the original Message as well, so messageHasText()
+	// would fail and the outgoing message would never be shown in the chat.
+	// Work on a deep copy and assign it back only when encryption succeeded.
+	Stanza stanza(AStanza.element().cloneNode(true).toElement());
+	QDomNodeList bodies = stanza.element().elementsByTagName(QStringLiteral("body"));
 	for (int i=bodies.count()-1; i>=0; --i)
-		AStanza.element().removeChild(bodies.at(i));
-	AStanza.element().appendChild(encrypted.cloneNode(true));
+		stanza.element().removeChild(bodies.at(i));
+	stanza.element().appendChild(encrypted.cloneNode(true));
 	// Ask the server to archive the encrypted stanza even though its only
 	// readable body is a fallback.
-	AStanza.addElement(QStringLiteral("store"),QString::fromLatin1(OMEMO_NS_HINTS));
+	stanza.addElement(QStringLiteral("store"),QString::fromLatin1(OMEMO_NS_HINTS));
 	// Legacy clients and servers expect a readable fallback for clients that
 	// do not understand OMEMO.
-	replaceBody(AStanza,QStringLiteral("[This message is OMEMO encrypted]"));
+	replaceBody(stanza,QStringLiteral("[This message is OMEMO encrypted]"));
+	AStanza = stanza;
 	return true;
 }
 
@@ -1026,7 +1036,7 @@ void Omemo::flushPending(OmemoAccount *AAccount, const QString &AJid)
 		AAccount->ensureDeviceList(ownJid);
 		AAccount->ensureSessions(contactJid);
 		AAccount->ensureSessions(ownJid);
-		if (!AAccount->sessionsReady(contactJid))
+		if (!AAccount->sessionsReady(contactJid) || !AAccount->sessionsReady(ownJid,true))
 		{
 			setMessageStatus(message.stanza.id(),StatusPending);
 			remaining.append(message);

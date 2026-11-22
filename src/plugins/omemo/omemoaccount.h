@@ -57,7 +57,7 @@ public:
 	bool isDeviceListKnown(const QString &AJid) const;
 	bool hasDevices(const QString &AJid) const;
 	bool hasEncryptableDevices(const QString &AJid) const;
-	bool sessionsReady(const QString &AJid) const;
+	bool sessionsReady(const QString &AJid, bool AIgnoreFailed = false) const;
 	bool isChatEnabled(const QString &AJid) const;
 	void setChatEnabled(const QString &AJid, bool AEnabled);
 	int deviceTrust(const QString &AJid, quint32 ADeviceId) const;

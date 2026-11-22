@@ -218,16 +218,21 @@ bool OmemoAccount::hasEncryptableDevices(const QString &AJid) const
 	return !encryptableDevices(AJid).isEmpty();
 }
 
-bool OmemoAccount::sessionsReady(const QString &AJid) const
+bool OmemoAccount::sessionsReady(const QString &AJid, bool AIgnoreFailed) const
 {
 	const QString jid = Jid(AJid).bare();
 	if (!FKnownDeviceLists.contains(jid) || FCrypto == nullptr)
 		return false;
 	for (quint32 deviceId : FDeviceLists.value(jid))
 	{
-		if (deviceTrust(jid,deviceId) == OmemoStore::TrustTrusted
-			&& !FCrypto->hasSession(jid,deviceId))
-			return false;
+		if (deviceTrust(jid,deviceId) != OmemoStore::TrustTrusted
+			|| FCrypto->hasSession(jid,deviceId))
+			continue;
+		// A bundle that failed to load will never produce a session; do not
+		// block messages forever waiting for such a device.
+		if (AIgnoreFailed && FFailedBundles.contains(bundleCacheKey(jid,deviceId)))
+			continue;
+		return false;
 	}
 	return true;
 }
@@ -581,13 +586,21 @@ void OmemoAccount::publishOwnDevice()
 		return;
 	}
 
-	// Only devices whose private keys and bundles are actually present in this
-	// store may be advertised.  Old device ids left in the PEP list have no
-	// bundle here; remote clients then either skip the missing bundle or fail
-	// to build a session for the current device.
-	QList<quint32> list;
-	if (FCrypto->deviceId() != 0)
-		list.append(FCrypto->deviceId());
+	// XEP-0384: a client adds its own device id to the published list, it must
+	// not replace the list with only its own device.  Overwriting it removes
+	// other clients of the same account (a phone with Snikket, etc.) from PEP,
+	// so outgoing messages carry no <key rid> for them and those clients
+	// report "message is not encrypted to this device".  The two clients would
+	// then keep overwriting each other on every reconnect.
+	// Other devices' bundles are published by those devices themselves, so
+	// their private keys are not needed locally to keep their ids in the list.
+	QList<quint32> list = FDeviceLists.value(ownJid);
+	const quint32 ownDeviceId = FCrypto->deviceId();
+	if (ownDeviceId != 0 && !list.contains(ownDeviceId))
+		list.append(ownDeviceId);
+	for (int i=list.size()-1; i>=0; --i)
+		if (list.at(i) == 0)
+			list.removeAt(i);
 	FDeviceLists[ownJid] = list;
 	registerDevices(ownJid,list);
 
