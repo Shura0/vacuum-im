@@ -4,6 +4,7 @@
 #include <QMap>
 #include <QList>
 #include <QImage>
+#include <functional>
 #include <QPointer>
 #include <QSharedPointer>
 #include <QNetworkAccessManager>
@@ -106,8 +107,8 @@ protected:
 	void updateToolBarAction(IMessageToolBarWidget *AWidget);
 	void updateToolBarActions(const Jid &AStreamJid = Jid::null);
 	void showStatus(IMessageViewWidget *AView, const QString &AHtml) const;
-	bool confirmUpload(QWidget *AParent, const QString &ATitle,
-		const QString &AFileName = QString(), const QImage &AImage = QImage()) const;
+	void confirmUpload(QWidget *AParent, const QString &ATitle,
+		const QString &AFileName, const QImage &AImage, const std::function<void()> &AAccepted) const;
 	void sendUploadedFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
 		const QUrl &AUrl, const QString &AFileName, const QString &AEncryptionFragment = QString()) const;
 	void notifyUploadFailed(const Jid &AStreamJid, const QString &AFileName, const XmppError &AError) const;

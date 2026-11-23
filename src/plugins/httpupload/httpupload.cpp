@@ -242,12 +242,15 @@ bool HttpUploadsManager::uploadFile(const Jid &AStreamJid, const Jid &AContactJi
 			window = FMessageWidgets->findNormalWindow(AStreamJid,AContactJid);
 	}
 
-	if (!confirmUpload(window!=NULL ? window->instance() : NULL,tr("Send file"),AFileName))
-		// The user declined: report the request as handled so that callers
-		// (filetransfer) do not send the same file over a fallback transport.
-		return true;
-
-	return startUpload(AStreamJid,AContactJid,AMessageType,AFileName);
+	// The confirmation must not run a nested dialog event loop: right after the
+	// native file dialog closes it would keep a stale KIO job alive and crash
+	// in KJob::kill() when its pending timer is delivered.
+	// Reporting the request as handled also when the user declines keeps callers
+	// (filetransfer) from sending the same file over a fallback transport.
+	confirmUpload(window!=NULL ? window->instance() : NULL,tr("Send file"),AFileName,QImage(),
+		[this,AStreamJid,AContactJid,AMessageType,AFileName]()
+		{ startUpload(AStreamJid,AContactJid,AMessageType,AFileName); });
+	return true;
 }
 
 qint64 HttpUploadsManager::parseMaxFileSize(const IDiscoInfo &AInfo, const QString &AServiceNS) const
@@ -484,8 +487,8 @@ void HttpUploadsManager::showStatus(IMessageViewWidget *AView, const QString &AH
 	}
 }
 
-bool HttpUploadsManager::confirmUpload(QWidget *AParent, const QString &ATitle,
-	const QString &AFileName, const QImage &AImage) const
+void HttpUploadsManager::confirmUpload(QWidget *AParent, const QString &ATitle,
+	const QString &AFileName, const QImage &AImage, const std::function<void()> &AAccepted) const
 {
 	const QSize previewSize(480,360);
 	QImage preview = AImage;
@@ -501,13 +504,18 @@ bool HttpUploadsManager::confirmUpload(QWidget *AParent, const QString &ATitle,
 		}
 	}
 
-	QDialog dialog(AParent);
-	dialog.setWindowTitle(ATitle);
-	QVBoxLayout *layout = new QVBoxLayout(&dialog);
+	// Deliberately modeless. QDialog::exec() would enter a DialogExec event loop,
+	// which defers DeferredDelete events; a KIO job left over from the file dialog
+	// then receives its pending timer with an already destroyed delegate and
+	// crashes in KJob::kill(). show() keeps the regular event loop running.
+	QDialog *dialog = new QDialog(AParent);
+	dialog->setWindowTitle(ATitle);
+	dialog->setModal(true);
+	QVBoxLayout *layout = new QVBoxLayout(dialog);
 
 	if (!preview.isNull())
 	{
-		QLabel *previewLabel = new QLabel(&dialog);
+		QLabel *previewLabel = new QLabel(dialog);
 		previewLabel->setPixmap(QPixmap::fromImage(preview).scaled(previewSize,Qt::KeepAspectRatio,Qt::SmoothTransformation));
 		previewLabel->setAlignment(Qt::AlignCenter);
 		layout->addWidget(previewLabel);
@@ -516,20 +524,26 @@ bool HttpUploadsManager::confirmUpload(QWidget *AParent, const QString &ATitle,
 	if (!AFileName.isEmpty())
 	{
 		QFileInfo fileInfo(AFileName);
-		QLabel *info = new QLabel(&dialog);
+		QLabel *info = new QLabel(dialog);
 		info->setText(QStringLiteral("<b>%1</b><br>%2")
 			.arg(fileInfo.fileName().toHtmlEscaped(),QLocale().formattedDataSize(fileInfo.size())));
 		info->setAlignment(Qt::AlignCenter);
 		layout->addWidget(info);
 	}
 
-	QDialogButtonBox *buttons = new QDialogButtonBox(&dialog);
+	QDialogButtonBox *buttons = new QDialogButtonBox(dialog);
 	buttons->addButton(tr("Send"),QDialogButtonBox::AcceptRole);
 	buttons->addButton(tr("Cancel"),QDialogButtonBox::RejectRole);
 	layout->addWidget(buttons);
-	connect(buttons,SIGNAL(accepted()),&dialog,SLOT(accept()));
-	connect(buttons,SIGNAL(rejected()),&dialog,SLOT(reject()));
-	return dialog.exec()==QDialog::Accepted;
+	connect(buttons,&QDialogButtonBox::accepted,dialog,[dialog,AAccepted]()
+	{
+		dialog->accept();
+		if (AAccepted)
+			AAccepted();
+	});
+	connect(buttons,&QDialogButtonBox::rejected,dialog,&QDialog::reject);
+	connect(dialog,&QDialog::finished,dialog,&QObject::deleteLater);
+	dialog->show();
 }
 
 void HttpUploadsManager::sendUploadedFile(const Jid &AStreamJid, const Jid &AContactJid, int AMessageType,
@@ -790,10 +804,13 @@ void HttpUploadsManager::onUploadFileByAction(bool)
 	if (fileName.isEmpty())
 		return;
 
-	if (!confirmUpload(window->instance(),tr("Send file"),fileName))
-		return;
-
-	startUpload(window->streamJid(),window->contactJid(),messageTypeForWindow(window),fileName,window->viewWidget());
+	Jid streamJid = window->streamJid();
+	Jid contactJid = window->contactJid();
+	int messageType = messageTypeForWindow(window);
+	IMessageViewWidget *view = window->viewWidget();
+	confirmUpload(window->instance(),tr("Send file"),fileName,QImage(),
+		[this,streamJid,contactJid,messageType,view,fileName]()
+		{ startUpload(streamJid,contactJid,messageType,fileName,view); });
 }
 
 void HttpUploadsManager::onDropUploadByAction(bool)
@@ -994,25 +1011,28 @@ bool HttpUploadsManager::messageEditContentsInsert(int AOrder, IMessageEditWidge
 		return false;
 
 	// Ask before uploading: pasting a screenshot must not silently send it.
-	if (!confirmUpload(AWidget->instance(),tr("Send pasted image"),QString(),image))
-		return true;
-
-	QSharedPointer<QTemporaryDir> tempDir(new QTemporaryDir);
-	if (!tempDir->isValid() || !image.save(tempDir->filePath(QStringLiteral("pasted-image.png")),"PNG"))
-	{
-		showStatus(window->viewWidget(),tr("Failed to save the pasted image"));
-		return true;
-	}
-
-	int messageType = messageTypeForWindow(window);
+	// The dialog is modeless, so the paste handler must not wait for it.
+	Jid streamJid = window->streamJid();
 	Jid contactJid = window->contactJid();
+	int messageType = messageTypeForWindow(window);
 	if (messageType == Message::GroupChat)
 		contactJid = contactJid.bare();
+	IMessageViewWidget *view = window->viewWidget();
+	confirmUpload(AWidget->instance(),tr("Send pasted image"),QString(),image,
+		[this,image,streamJid,contactJid,messageType,view]()
+		{
+			QSharedPointer<QTemporaryDir> tempDir(new QTemporaryDir);
+			if (!tempDir->isValid() || !image.save(tempDir->filePath(QStringLiteral("pasted-image.png")),"PNG"))
+			{
+				showStatus(view,tr("Failed to save the pasted image"));
+				return;
+			}
 
-	LOG_STRM_INFO(window->streamJid(),QString("Pasted image upload started, to=%1, size=%2x%3")
-		.arg(contactJid.full()).arg(image.width()).arg(image.height()));
-	startUpload(window->streamJid(),contactJid,messageType,
-		tempDir->filePath(QStringLiteral("pasted-image.png")),window->viewWidget(),tempDir);
+			LOG_STRM_INFO(streamJid,QString("Pasted image upload started, to=%1, size=%2x%3")
+				.arg(contactJid.full()).arg(image.width()).arg(image.height()));
+			startUpload(streamJid,contactJid,messageType,
+				tempDir->filePath(QStringLiteral("pasted-image.png")),view,tempDir);
+		});
 	return true;
 }
 
