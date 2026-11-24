@@ -31,7 +31,6 @@ protected:
 	void createRow(int AAction);
 private:
 	int keyRow(int AAction) const;
-	bool hasVisualColumn(int AAction) const;
 private:
 	QCheckBox *FEnable;
 	QCheckBox *FCounts;

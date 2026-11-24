@@ -9,6 +9,7 @@
 #include <QKeySequenceEdit>
 #include <QLabel>
 #include <QPushButton>
+#include <QStringList>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -20,6 +21,7 @@
 
 enum KeysColumn
 {
+	KC_Command,
 	KC_Normal,
 	KC_Visual,
 	KC__Count
@@ -34,9 +36,11 @@ VimOptionsWidget::VimOptionsWidget(QWidget *AParent) : QWidget(AParent)
 
 	QGroupBox *keys = new QGroupBox(tr("Keys"), this);
 	FKeyTable = new QTableWidget(Action__Count, KC__Count, keys);
+	FKeyTable->setHorizontalHeaderLabels(QStringList()
+		<< tr("Command") << tr("Normal") << tr("Visual"));
+	FKeyTable->horizontalHeader()->setSectionResizeMode(KC_Command, QHeaderView::Stretch);
 	FKeyTable->horizontalHeader()->setSectionResizeMode(KC_Normal, QHeaderView::ResizeToContents);
 	FKeyTable->horizontalHeader()->setSectionResizeMode(KC_Visual, QHeaderView::ResizeToContents);
-	FKeyTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
 	FKeyTable->verticalHeader()->setVisible(false);
 	FKeyTable->setEditTriggers(QAbstractItemView::AllEditTriggers);
 	for (int action = 0; action < Action__Count; ++action)
@@ -90,7 +94,7 @@ void VimOptionsWidget::createRow(int AAction)
 	QString title = VimPlugin::actionTitle(VimActionId(AAction));
 	QTableWidgetItem *nameItem = new QTableWidgetItem(title);
 	nameItem->setFlags(Qt::ItemIsEnabled);
-	FKeyTable->setItem(row, KC_Normal, nameItem);
+	FKeyTable->setItem(row, KC_Command, nameItem);
 
 	for (int column = KC_Normal; column < KC__Count; ++column)
 	{
@@ -102,12 +106,6 @@ void VimOptionsWidget::createRow(int AAction)
 int VimOptionsWidget::keyRow(int AAction) const
 {
 	return AAction;  // table rows are keyed by actions
-}
-
-bool VimOptionsWidget::hasVisualColumn(int AAction) const
-{
-	Q_UNUSED(AAction);
-	return true;
 }
 
 void VimOptionsWidget::apply()
