@@ -70,6 +70,7 @@ bool DefaultConnection::connectToHost()
 		QString host = option(IDefaultConnection::Host).toString();
 		quint16 port = option(IDefaultConnection::Port).toInt();
 		QString domain = option(IDefaultConnection::Domain).toString();
+		FPeerVerifyName = domain;
 		FUseLegacySSL = option(IDefaultConnection::UseLegacySsl).toBool();
 		FVerifyMode = (CertificateVerifyMode)option(IDefaultConnection::CertVerifyMode).toInt();
 
@@ -100,6 +101,8 @@ bool DefaultConnection::connectToHost()
 
 bool DefaultConnection::startEncryption()
 {
+	if (!FPeerVerifyName.isEmpty())
+		FSocket.setPeerVerifyName(FPeerVerifyName);
 	FSocket.startClientEncryption();
 	return true;
 }
@@ -263,14 +266,18 @@ void DefaultConnection::connectToNextHost()
 	{
 		SrvRecord record = FRecords.takeFirst();
 
+		// RFC 6125/7590: the certificate has to be checked against the JID domain,
+		// not against the SRV target which may be missing from the certificate
+		FSocket.setPeerVerifyName(FPeerVerifyName);
+
 		if (FUseLegacySSL)
 		{
-			LOG_INFO(QString("Connecting to host with encryption, host=%1, port=%2").arg(record.target).arg(record.port));
-			FSocket.connectToHostEncrypted(record.target, record.port);
+			LOG_INFO(QString("Connecting to host with encryption, host=%1, port=%2, verify=%3").arg(record.target).arg(record.port).arg(FPeerVerifyName));
+			FSocket.connectToHostEncrypted(record.target, record.port, FPeerVerifyName);
 		}
 		else
 		{
-			LOG_INFO(QString("Connecting to host=%1, port=%2").arg(record.target).arg(record.port));
+			LOG_INFO(QString("Connecting to host=%1, port=%2, verify=%3").arg(record.target).arg(record.port).arg(FPeerVerifyName));
 			FSocket.connectToHost(record.target, record.port);
 		}
 	}

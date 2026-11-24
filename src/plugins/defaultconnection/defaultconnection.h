@@ -86,6 +86,7 @@ private:
 	bool FUseLegacySSL;
 	QMap<int, QVariant> FOptions;
 	CertificateVerifyMode FVerifyMode;
+	QString FPeerVerifyName;
 };
 
 #endif // DEFAULTCONNECTION_H
