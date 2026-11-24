@@ -212,7 +212,9 @@ void RosterSearch::startSearch()
 	if (filterRegularExpression().pattern() != pattern)
 	{
 		LOG_DEBUG(QString("Changing roster search pattern to='%1'").arg(pattern));
-		QRegularExpression regExp(QRegularExpression::wildcardToRegularExpression(pattern),QRegularExpression::CaseInsensitiveOption);
+		QRegularExpression regExp(QRegularExpression::wildcardToRegularExpression(pattern,
+			QRegularExpression::UnanchoredWildcardConversion | QRegularExpression::NonPathWildcardConversion),
+			QRegularExpression::CaseInsensitiveOption);
 		setFilterRegularExpression(regExp);
 	}
 	invalidate();
