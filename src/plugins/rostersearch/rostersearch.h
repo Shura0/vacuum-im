@@ -60,6 +60,7 @@ signals:
 protected:
 	bool eventFilter(QObject *AObject, QEvent *AEvent);
 	bool filterAcceptsRow(int ARow, const QModelIndex &AParent) const;
+	bool isVimModeActive() const;
 protected slots:
 	void onFieldActionTriggered(bool);
 	void onEnableActionTriggered(bool AChecked);
@@ -68,6 +69,7 @@ protected slots:
 	void onOptionsOpened();
 	void onOptionsClosed();
 private:
+	IPluginManager *FPluginManager;
 	IMainWindow *FMainWindow;
 	IRostersViewPlugin *FRostersViewPlugin;
 private:

@@ -18,8 +18,13 @@
 #include <utils/action.h>
 #include <utils/logger.h>
 
+// Keep in sync with the Vim mode plugin (src/plugins/vimplugin/vimplugin.h)
+#define ROSTERSEARCH_VIMPLUGIN_UUID  "{A0593123-5391-4ae7-96fd-6442b2916263}"
+#define ROSTERSEARCH_VIM_ENABLE      QString("vim.enable")
+
 RosterSearch::RosterSearch()
 {
+	FPluginManager = NULL;
 	FRostersViewPlugin = NULL;
 	FMainWindow = NULL;
 
@@ -74,6 +79,7 @@ void RosterSearch::pluginInfo(IPluginInfo *APluginInfo)
 bool RosterSearch::initConnections(IPluginManager *APluginManager, int &AInitOrder)
 {
 	Q_UNUSED(AInitOrder);
+	FPluginManager = APluginManager;
 	IPlugin *plugin = APluginManager->pluginInterface("IRostersViewPlugin").value(0,NULL);
 	if (plugin)
 	{
@@ -145,6 +151,13 @@ bool RosterSearch::rosterIndexDoubleClicked(int AOrder, IRosterIndex *AIndex, co
 	return false;
 }
 
+bool RosterSearch::isVimModeActive() const
+{
+	return FPluginManager!=NULL
+		&& FPluginManager->pluginInstance(QUuid(ROSTERSEARCH_VIMPLUGIN_UUID))!=NULL
+		&& Options::node(ROSTERSEARCH_VIM_ENABLE).value().toBool();
+}
+
 bool RosterSearch::rosterKeyPressed(int AOrder, const QList<IRosterIndex *> &AIndexes, const QKeyEvent *AEvent)
 {
 	Q_UNUSED(AIndexes);
@@ -152,6 +165,12 @@ bool RosterSearch::rosterKeyPressed(int AOrder, const QList<IRosterIndex *> &AIn
 	{
 		if ((AEvent->modifiers() & ~(Qt::ShiftModifier|Qt::KeypadModifier))==0)
 		{
+			if (isVimModeActive())
+			{
+				// in Vim mode letters are reserved for navigation, '/' opens the search
+				return AEvent->key()==Qt::Key_Slash
+					|| (!AEvent->text().isEmpty() && AEvent->text().at(0)==QLatin1Char('/'));
+			}
 			QChar key = !AEvent->text().isEmpty() ? AEvent->text().at(0) : QChar();
 			if (key.isLetterOrNumber() || key.isPunct())
 				return true;
@@ -167,6 +186,23 @@ bool RosterSearch::rosterKeyReleased(int AOrder, const QList<IRosterIndex *> &AI
 	{
 		if ((AEvent->modifiers() & ~(Qt::ShiftModifier|Qt::KeypadModifier))==0)
 		{
+			if (isVimModeActive())
+			{
+				if (AEvent->key()==Qt::Key_Slash
+					|| (!AEvent->text().isEmpty() && AEvent->text().at(0)==QLatin1Char('/')))
+				{
+					if (!isSearchEnabled())
+					{
+						FSearchEdit->clear();
+						setSearchEnabled(true);
+						FAutoEnabled = true;
+					}
+					FSearchEdit->setFocus();
+					FSearchEdit->selectAll();
+					return true;
+				}
+				return false;
+			}
 			QChar key = !AEvent->text().isEmpty() ? AEvent->text().at(0) : QChar();
 			if (key.isLetterOrNumber() || key.isPunct())
 			{
