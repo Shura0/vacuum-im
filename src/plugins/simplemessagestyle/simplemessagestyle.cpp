@@ -27,6 +27,16 @@
 #define SCROLL_TIMEOUT                      100
 #define SHARED_STYLE_PATH                   RESOURCES_DIR "/" RSR_STORAGE_SIMPLEMESSAGESTYLES "/" FILE_STORAGE_SHARED_DIR
 
+// The bounds are placed around the message body only: the sender, the time
+// and the service marks of the content template stay outside of them, so a
+// plain-text copy of a selection can keep just the original message text.
+static QString wrapCopyableMessageBody(const QString &AHtml)
+{
+	return QStringLiteral("<span>") + QString(SMS_MESSAGE_BODY_START) + QStringLiteral("</span>")
+		+ AHtml
+		+ QStringLiteral("<span>") + QString(SMS_MESSAGE_BODY_END) + QStringLiteral("</span>");
+}
+
 static const char *SenderColors[] =  {
 	"blue", "blueviolet", "brown", "cadetblue", "chocolate", "coral", "cornflowerblue", "crimson",
 	"darkblue", "darkcyan", "darkgoldenrod", "darkgreen", "darkmagenta", "darkolivegreen", "darkorange",
@@ -284,6 +294,8 @@ bool SimpleMessageStyle::appendContent(QWidget *AWidget, const QString &AHtml, c
 		fillContentKeywords(content,AOptions,wstatus);
 		QString messageHtml = prepareMessage(AHtml,AOptions);
 		messageHtml = processStyleContent(AWidget, messageHtml, AOptions);
+		if (AOptions.kind == IMessageStyleContentOptions::KindMessage)
+			messageHtml = wrapCopyableMessageBody(messageHtml);
 		messageHtml += processContentSlots(AWidget, content, AOptions);
 		content.replace("%message%",messageHtml);
 

@@ -18,6 +18,7 @@
 #include <QTimer>
 
 #include <definitions/menuicons.h>
+#include <definitions/messagemarks.h>
 #include <definitions/optionvalues.h>
 #include <definitions/recentitemproperties.h>
 #include <definitions/recentitemtypes.h>
@@ -33,8 +34,8 @@
 // vim copy commands.  START is placed before the message text, END before
 // the marks slot (receipts/encryption/correction glyphs), so copying a range
 // never includes timestamps, sender/time cells or service marks.
-#define VIM_MESSAGE_START       QChar(0x2060)
-#define VIM_MESSAGE_END         QChar(0x2061)
+#define VIM_MESSAGE_START       SMS_MESSAGE_BODY_START
+#define VIM_MESSAGE_END         SMS_MESSAGE_BODY_END
 // block property that carries the sender name of the message
 #define VIM_SENDER_PROPERTY     (QTextFormat::UserProperty + 0x5649)
 // block property that carries the message direction (incoming/outgoing):
@@ -624,26 +625,11 @@ bool VimPlugin::messageStyleContentInsert(int AOrder, QWidget *AWidget, const QS
 {
 	Q_UNUSED(AOrder);
 	Q_UNUSED(AWidget);
-	if (AOptions.kind == IMessageStyleContentOptions::KindMessage)
-	{
-		// Keep the marks slot outside of the copyable body: it contains the
-		// read/delivered/corrected/encrypted service glyphs.
-		static const QString marksSlot = QStringLiteral("%contentSlot:marks%");
-		const int marksPos = AHtml.indexOf(marksSlot);
-		if (marksPos >= 0)
-		{
-			AModifiedHtml = QStringLiteral("<span>") + VIM_MESSAGE_START + QStringLiteral("</span>")
-				+ AHtml.left(marksPos)
-				+ QStringLiteral("<span>") + VIM_MESSAGE_END + QStringLiteral("</span>")
-				+ AHtml.mid(marksPos);
-		}
-		else
-		{
-			AModifiedHtml = QStringLiteral("<span>") + VIM_MESSAGE_START + QStringLiteral("</span>")
-				+ AHtml
-				+ QStringLiteral("<span>") + VIM_MESSAGE_END + QStringLiteral("</span>");
-		}
-	}
+	Q_UNUSED(AHtml);
+	Q_UNUSED(AModifiedHtml);
+	Q_UNUSED(AOptions);
+	// The copyable body bounds are placed by the style engine itself, so they
+	// exist even when the vim plugin is disabled.
 	return true;
 }
 
@@ -746,8 +732,8 @@ void VimPlugin::onWindowContentAppended(const QString &AHtml, const IMessageStyl
 			if (markerPos >= 0)
 			{
 				// Consecutive messages use the NextContent template without a
-				// sender field; inherit the previous sender so copied text
-				// still has a nickname.
+				// sender field; inherit the previous sender so :nick and :jid
+				// can still resolve the author of that message.
 				QString sender = AOptions.senderName;
 				if (sender.isEmpty())
 				{
@@ -2199,10 +2185,18 @@ QString VimPlugin::messageCopyText(QTextDocument *ADocument, int AStart, int AEn
 	// service glyphs).  They are outside of the body range, but strip
 	// replacement characters defensively.
 	body.remove(QChar::ObjectReplacementCharacter);
+	for (int i=body.size()-1; i>=0; --i)
+	{
+		const ushort code = body.at(i).unicode();
+		if (code==0x200B || code==0x200C || code==0x200D
+			|| (code>=0x2060 && code<=0x206F)
+			|| code==0xFFF9 || code==0xFFFA)
+			body.remove(i,1);
+	}
 
-	const QString sender = plainSenderName(ADocument->findBlock(AStart).blockFormat().property(VIM_SENDER_PROPERTY).toString());
-	if (!sender.isEmpty())
-		return sender + QStringLiteral(": ") + body;
+	// Copy exactly what the user selected from the message. The sender is
+	// available to :nick/:jid through the block property, it is not part of
+	// the message text and must not be prepended to a yank.
 	return body;
 }
 

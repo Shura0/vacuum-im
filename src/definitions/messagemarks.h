@@ -1,6 +1,16 @@
 #ifndef MESSAGEMARKS_H
 #define MESSAGEMARKS_H
 
+#include <QChar>
+
+// Invisible bounds of the copyable message body. The style engine places
+// them around the body only, so the sender, the time and the marks stay
+// outside and are dropped when the selection is copied as plain text.
+// The mark plugins use U+200B..U+200D and U+2060..U+206F as their invisible
+// anchors, so the bounds must be different characters.
+#define SMS_MESSAGE_BODY_START             QChar(0xFFF9)
+#define SMS_MESSAGE_BODY_END               QChar(0xFFFA)
+
 // Reserved content slot filled with the message marks (delivery receipts,
 // chat markers, the edited note and the OMEMO status).
 #define MSM_CONTENT_SLOT_MARKS              "marks"

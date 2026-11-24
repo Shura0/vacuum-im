@@ -4,6 +4,8 @@
 #include <QTextBlock>
 #include <QTextCursor>
 
+#include <definitions/messagemarks.h>
+
 #include <algorithm>
 #include <functional>
 
@@ -142,6 +144,67 @@ QTextDocumentFragment TextManager::getTrimmedTextFragment(const QTextDocumentFra
 	return cursor.selection();
 }
 
+// Zero-width characters are used as invisible anchors by the message marks
+// plugins. They are not part of the text the user wrote.
+static bool isInvisibleMarkChar(const QChar &AChar)
+{
+	const ushort code = AChar.unicode();
+	return code==0x200B || code==0x200C || code==0x200D
+		|| (code>=0x2060 && code<=0x206F)
+		|| code==0xFFF9 || code==0xFFFA;
+}
+
+static QString stripInvisibleMarks(const QString &AText)
+{
+	QString result;
+	result.reserve(AText.size());
+	for (int i=0; i<AText.size(); ++i)
+		if (!isInvisibleMarkChar(AText.at(i)))
+			result += AText.at(i);
+	return result;
+}
+
+// Keep only the text between the body bounds placed by the style engine.
+// The sender, the time and the service marks live outside of them.
+static QString messageBodyForCopy(const QString &AText)
+{
+	const bool hasStart = AText.contains(SMS_MESSAGE_BODY_START);
+	const bool hasEnd = AText.contains(SMS_MESSAGE_BODY_END);
+	if (!hasStart && !hasEnd)
+		return stripInvisibleMarks(AText);
+
+	// A selection which starts inside a message has no leading bound in it.
+	bool inside = !hasStart && hasEnd;
+	bool hasBody = false;
+	QString result;
+	for (int i=0; i<AText.size(); ++i)
+	{
+		const QChar ch = AText.at(i);
+		if (ch == SMS_MESSAGE_BODY_START)
+		{
+			inside = true;
+			continue;
+		}
+		if (ch == SMS_MESSAGE_BODY_END)
+		{
+			if (inside && hasBody)
+				result += QChar::LineFeed;
+			inside = false;
+			continue;
+		}
+		if (isInvisibleMarkChar(ch))
+			continue;
+		if (inside)
+		{
+			result += ch;
+			hasBody = true;
+		}
+	}
+	if (result.endsWith(QChar::LineFeed))
+		result.chop(1);
+	return result;
+}
+
 QString TextManager::getCopyableText(const QTextDocumentFragment &AFragment)
 {
 	if (AFragment.isEmpty())
@@ -181,7 +244,7 @@ QString TextManager::getCopyableText(const QTextDocumentFragment &AFragment)
 		replace.insertText(url);
 	}
 
-	return doc.toPlainText();
+	return messageBodyForCopy(doc.toPlainText());
 }
 
 QString TextManager::getElidedString(const QString &AString, Qt::TextElideMode AMode, int AMaxChars)
