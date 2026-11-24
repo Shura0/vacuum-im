@@ -9,6 +9,7 @@ LEGEND
   [-] Bug fix
 
 ------
+  [!] New plugin "Message Displayed Sync": publishes the identifier of the newest received message of a chat into the XEP-0490 "urn:xmpp:mds:displayed:0" PEP node whenever the chat is shown, so the other clients of the same account (e.g. Snikket) clear their unread markers; the XEP-0359 stanza ids are collected from live messages and from the server archive history, the node is private (whitelist access) and is only published when the server supports publish-options, and the state is kept between restarts so the displayed position never moves backwards; sending side only, group chats are not covered yet
   [-] HTTP upload: sending a photo no longer crashes when the confirmation dialog follows the native file dialog; the dialog is now modeless so its nested event loop no longer leaves a stale KIO job to be killed by a pending timer
   [+] HTTP upload: selecting a file to send (from the chat toolbar or the Send File action) now opens a confirmation dialog with a preview of the chosen picture or the file name and size, with Send/Cancel buttons, instead of starting the upload immediately; the dialog is shared with the pasted-image flow
   [+] OMEMO: warn when a contact device publishes a different identity key (bundle check and Signal rejection) — such messages are not decrypted and get a red key mark; the device dialog offers "Reset changed identity" to trust it again

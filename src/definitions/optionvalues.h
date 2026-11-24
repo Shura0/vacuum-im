@@ -131,6 +131,8 @@
 #define OPV_MESSAGES_CHATSTATESENABLED                  "messages.chatstates-enabled"
 // ChatMarkers
 #define OPV_MESSAGES_CHATMARKERSENABLED                 "messages.chat-markers-enabled"
+// MessageDisplayedSync
+#define OPV_MESSAGES_DISPLAYEDSYNCENABLED               "messages.displayed-sync-enabled"
 // MessageCorrect
 #define OPV_MESSAGES_MESSAGECORRECTENABLED              "messages.message-correct-enabled"
 // NormalMessageHandler

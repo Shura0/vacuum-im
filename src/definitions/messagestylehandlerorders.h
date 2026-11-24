@@ -8,6 +8,7 @@
 #define MSHO_OMEMO                             280
 #define MSHO_MESSAGERECEIPTS                   250
 #define MSHO_MESSAGECHATMARKERS                260
+#define MSHO_MESSAGEDISPLAYEDSYNC              265
 #define MSHO_MESSAGECORRECT                    270
 
 #endif // MESSAGESTYLEHANDLERORDERS_H

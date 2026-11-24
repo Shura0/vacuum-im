@@ -89,6 +89,7 @@
 #define NS_PUBSUB_ERRORS                        "http://jabber.org/protocol/pubsub#errors"
 #define NS_PUBSUB_EVENT                         "http://jabber.org/protocol/pubsub#event"
 #define NS_PUBSUB_OWNER                         "http://jabber.org/protocol/pubsub#owner"
+#define NS_PUBSUB_PUBLISH_OPTIONS               "http://jabber.org/protocol/pubsub#publish-options"
 
 #define NS_ADDRESS                              "http://jabber.org/protocol/address"
 
@@ -104,6 +105,8 @@
 #define NS_MESSAGE_RECEIPTS                      "urn:xmpp:receipts"
 #define NS_MESSAGE_MARKERS                       "urn:xmpp:chat-markers:0"
 #define NS_MESSAGE_CORRECT                       "urn:xmpp:message-correct:0"
+#define NS_MESSAGE_DISPLAYED_SYNC                "urn:xmpp:mds:displayed:0"
+#define NS_STANZA_ID                             "urn:xmpp:sid:0"
 
 #define NS_VACUUM_PRIVATESTORAGE_UPDATE         "vacuum:privatestorage:update"
 
