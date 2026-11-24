@@ -232,7 +232,9 @@ void DefaultConnection::addCaSertificates(const QList<QSslCertificate> &ACertifi
 
 void DefaultConnection::setCaCertificates(const QList<QSslCertificate> &ACertificates)
 {
-	FSocket.sslConfiguration().setCaCertificates(ACertificates);
+	QSslConfiguration config = FSocket.sslConfiguration();
+	config.setCaCertificates(ACertificates);
+	FSocket.setSslConfiguration(config);
 }
 
 QNetworkProxy DefaultConnection::proxy() const
