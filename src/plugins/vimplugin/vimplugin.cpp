@@ -2744,13 +2744,15 @@ void VimPlugin::executeCommand()
 	}
 	else if (name=="chat")
 	{
-		const QString target = args.section(' ', 0, 0);
+		QString target = args.section(' ', 0, 0);
 		const QString body = args.section(' ', 1).trimmed();
 		if (!target.isEmpty() && FMessageWidgets!=NULL)
 		{
-			Jid streamJid;
-			if (FPresenceManager!=NULL && !FPresenceManager->presences().isEmpty())
-				streamJid = FPresenceManager->presences().first()->streamJid();
+			// a nickname entered directly or picked by Tab works like a JID
+			const QString byName = jidByContactName(target);
+			if (!byName.isEmpty())
+				target = byName;
+			const Jid streamJid = commandStreamJid();
 			IMessageChatWindow *chat = FMessageWidgets->getChatWindow(streamJid, Jid(target));
 			if (chat!=NULL)
 			{
@@ -2899,9 +2901,9 @@ static const VimHelpCommand kHelpCommands[] =
 	{ "w;send",              "<text>",     QT_TR_NOOP("Send the text as a message") },
 	{ "clear",               "",           QT_TR_NOOP("Clear the chat log") },
 	{ "close;tabclose",      "",           QT_TR_NOOP("Close the current chat tab (the last tab of a tab window is kept)") },
-	{ "chat",                "<jid> [text]", QT_TR_NOOP("Open a chat with the contact (Tab completes a roster JID) and optionally send a message") },
-	{ "call",                "[jid]", QT_TR_NOOP("Start a voice call (Tab completes a roster JID; without a JID, call the current chat contact)") },
-	{ "vcall",               "[jid]", QT_TR_NOOP("Start a video call (Tab completes a roster JID; without a JID, call the current chat contact)") },
+	{ "chat",                "<jid|nick> [text]", QT_TR_NOOP("Open a chat with the contact by JID or roster nickname (Tab completes both) and optionally send a message") },
+	{ "call",                "[jid|nick]", QT_TR_NOOP("Start a voice call by JID or roster nickname (Tab completes both; without an argument, call the current chat contact)") },
+	{ "vcall",               "[jid|nick]", QT_TR_NOOP("Start a video call by JID or roster nickname (Tab completes both; without an argument, call the current chat contact)") },
 	{ "join",                "<room> [nick] [password]", QT_TR_NOOP("Join a conference room (Tab completes a bookmarked or recently joined room and its nick)") },
 	{ "leave;part",          "[room]",     QT_TR_NOOP("Leave the current conference room (Tab completes an open room); with a room, leave that room") },
 	{ "help;h",              "[topic]",    QT_TR_NOOP("Show this help (topics: modes, normal, visual, command, global)") }
@@ -2929,7 +2931,11 @@ Jid VimPlugin::commandStreamJid() const
 // do with the chat window address.
 Jid VimPlugin::callContactJid(const Jid &AStreamJid, const QString &ATarget) const
 {
-	Jid contact(ATarget);
+	QString target = ATarget;
+	const QString byName = jidByContactName(target);
+	if (!byName.isEmpty())
+		target = byName;
+	Jid contact(target);
 	if (contact.isEmpty())
 	{
 		IMessageWindow *window = activeChatWindow();
@@ -2959,8 +2965,8 @@ Jid VimPlugin::callContactJid(const Jid &AStreamJid, const QString &ATarget) con
 }
 
 // Resolves the token Tab completes: the command name before the first space,
-// the JID after ":chat", ":call" and ":vcall" and the room or nick after
-// ":join".  AHead receives
+// the JID or nickname after ":chat", ":call" and ":vcall" and the room or
+// nick after ":join".  AHead receives
 // the text in front of the token, ATyped the token itself and ACandidates the
 // matches.  Returns false when the cursor is on a part that is not completed
 // (the message of ":chat", the password of ":join", any other argument).
@@ -2988,15 +2994,15 @@ bool VimPlugin::commandCompletionCandidates(const QString &ALine, QString &AHead
 			return false;
 		AHead = ":" + ALine.left(space+1);
 		ATyped = args;
-		ACandidates = rosterJidCandidates(args);
+		ACandidates = rosterContactCandidates(args);
 		return true;
 	}
 	if (name.compare("call", Qt::CaseInsensitive)==0 || name.compare("vcall", Qt::CaseInsensitive)==0)
 	{
-		// a call takes a single JID argument, completed from the roster
+		// a call takes a single JID or nickname argument, completed from the roster
 		AHead = ":" + ALine.left(space+1);
 		ATyped = args;
-		ACandidates = rosterJidCandidates(args);
+		ACandidates = rosterContactCandidates(args);
 		return true;
 	}
 	if (name.compare("join", Qt::CaseInsensitive)==0)
@@ -3034,7 +3040,7 @@ bool VimPlugin::commandCompletionCandidates(const QString &ALine, QString &AHead
 
 // Tab in COMMAND mode completes the name after ':' against the kHelpCommands
 // table, the first argument of ":chat", ":call" and ":vcall" against the
-// contact JIDs of the roster and the room and nick arguments of ":join"
+// contact JIDs and nicknames of the roster and the room and nick arguments of ":join"
 // against the known conference rooms.  Repeated Tab (Shift+Tab backwards)
 // cycles through the candidates
 // like the vim command line; any other key drops the cycle.
@@ -3107,19 +3113,18 @@ bool VimPlugin::completeCommandLine(bool ABackwards)
 	return true;
 }
 
-// The contact JIDs used for ":chat", ":call" and ":vcall" completion: the
-// roster of the stream commandStreamJid() selects.  When the stream is not
-// known or its roster is not available yet, every open roster is searched,
-// so completion still works before the first presence arrives.
-QStringList VimPlugin::rosterJidCandidates(const QString &APrefix) const
+// The rosters used for ":chat", ":call" and ":vcall" completion: the roster
+// of the stream commandStreamJid() selects.  When the stream is not known or
+// its roster is not available yet, every open roster is searched, so
+// completion still works before the first presence arrives.
+QList<IRoster *> VimPlugin::commandRosters() const
 {
-	QStringList jids;
+	QList<IRoster *> rosters;
 	if (FRosterManager==NULL)
-		return jids;
+		return rosters;
 
+	rosters = FRosterManager->rosters();
 	const Jid streamJid = commandStreamJid();
-
-	QList<IRoster *> rosters = FRosterManager->rosters();
 	if (!streamJid.isEmpty())
 	{
 		IRoster *roster = FRosterManager->findRoster(streamJid);
@@ -3138,18 +3143,70 @@ QStringList VimPlugin::rosterJidCandidates(const QString &APrefix) const
 		if (roster!=NULL)
 			rosters = QList<IRoster *>() << roster;
 	}
+	return rosters;
+}
 
-	foreach (IRoster *roster, rosters)
+// Tab offers both the bare JID and the roster nickname of a contact.  The
+// completed nickname is resolved back to its JID when the command runs.
+QStringList VimPlugin::rosterContactCandidates(const QString &APrefix) const
+{
+	QStringList candidates;
+	foreach (IRoster *roster, commandRosters())
 	{
 		foreach (const IRosterItem &item, roster->items())
 		{
+			if (item.itemJid.isEmpty())
+				continue;
 			const QString jid = item.itemJid.bare();
-			if (!jid.isEmpty() && jid.startsWith(APrefix, Qt::CaseInsensitive) && !jids.contains(jid))
-				jids.append(jid);
+			const QString name = item.name.isEmpty() ? item.itemJid.uNode() : item.name;
+			if (!jid.isEmpty() && jid.startsWith(APrefix,Qt::CaseInsensitive) && !candidates.contains(jid,Qt::CaseInsensitive))
+				candidates.append(jid);
+			if (!name.isEmpty() && name.startsWith(APrefix,Qt::CaseInsensitive) && !candidates.contains(name,Qt::CaseInsensitive))
+				candidates.append(name);
 		}
 	}
-	jids.sort(Qt::CaseInsensitive);
-	return jids;
+	candidates.sort(Qt::CaseInsensitive);
+	return candidates;
+}
+
+// Resolves a typed nickname (or a name picked by Tab) to the contact JID, so
+// ":chat Alice" works just like ":chat alice@example.org".  When several
+// contacts share a name the online one wins; names are matched on the current
+// account only, which is also where the completion candidates come from.
+QString VimPlugin::jidByContactName(const QString &AName) const
+{
+	QString fallback;
+	QString online;
+	foreach (IRoster *roster, commandRosters())
+	{
+		foreach (const IRosterItem &item, roster->items())
+		{
+			if (item.itemJid.isEmpty())
+				continue;
+			const QString name = item.name.isEmpty() ? item.itemJid.uNode() : item.name;
+			if (name.isEmpty() || name.compare(AName,Qt::CaseInsensitive)!=0)
+				continue;
+			const QString jid = item.itemJid.bare();
+			if (fallback.isEmpty())
+				fallback = jid;
+			if (online.isEmpty() && FPresenceManager!=NULL)
+			{
+				IPresence *presence = FPresenceManager->findPresence(roster->streamJid());
+				if (presence!=NULL)
+				{
+					foreach (const IPresenceItem &pitem, presence->findItems(Jid(jid)))
+					{
+						if (pitem.show!=IPresence::Offline)
+						{
+							online = jid;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	return !online.isEmpty() ? online : fallback;
 }
 
 void VimPlugin::resetCommandCompletion()
@@ -3401,7 +3458,7 @@ QString VimPlugin::buildHelpHtml() const
 	html += QString("<h2><a name=\"command\"></a>%1</h2>").arg(tr("COMMAND mode"));
 	html += QString("<p>%1</p>").arg(tr("Press <b>:</b> in NORMAL, type a command and press Enter. "
 		"Missing arguments are taken from the rest of the line."));
-	html += QString("<p>%1</p>").arg(tr("<b>Tab</b> completes the command name after <b>:</b>, the contact JID "
+	html += QString("<p>%1</p>").arg(tr("<b>Tab</b> completes the command name after <b>:</b>, the contact JID or nickname "
 		"after <b>:chat</b>, <b>:call</b> and <b>:vcall</b>, the room and the nick after <b>:join</b> "
 		"(the bookmarked rooms, the rooms joined before and the open rooms) and the open room after "
 		"<b>:leave</b>; repeated <b>Tab</b> cycles through the matches and <b>Shift+Tab</b> cycles backwards."));

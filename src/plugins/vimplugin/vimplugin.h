@@ -185,7 +185,11 @@ private:
 	// Tab completion of the COMMAND mode name, cycling through the
 	// kHelpCommands aliases with Tab/Shift+Tab
 	bool completeCommandLine(bool ABackwards);
-	QStringList rosterJidCandidates(const QString &APrefix) const;
+	// contacts of the account the command is typed in: bare JIDs and roster
+	// nicknames, both offered by Tab completion
+	QList<IRoster *> commandRosters() const;
+	QStringList rosterContactCandidates(const QString &APrefix) const;
+	QString jidByContactName(const QString &AName) const;
 	// resolves the token under the cursor: the text before it in AHead, the
 	// token itself in ATyped and the candidates in ACandidates
 	bool commandCompletionCandidates(const QString &ALine, QString &AHead, QString &ATyped, QStringList &ACandidates) const;
