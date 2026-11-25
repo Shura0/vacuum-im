@@ -66,7 +66,11 @@ void MainTabWidget::removeTabPage(IMainTabPage *APage)
 	{
 		removeTab(indexOf(APage->instance()));
 		FTabPageOrders.remove(tabPageOrder(APage));
-		disconnect(APage->instance());
+		// Disconnect only our own connections. A blanket disconnect() would
+		// also cut other plugins' destroyed() handlers for this page, so on
+		// shutdown they would keep a pointer to a widget we have just deleted.
+		disconnect(APage->instance(),SIGNAL(tabPageChanged()),this,SLOT(onTabPageChanged()));
+		disconnect(APage->instance(),SIGNAL(tabPageDestroyed()),this,SLOT(onTabPageDestroyed()));
 		emit tabPageRemoved(APage);
 	}
 }

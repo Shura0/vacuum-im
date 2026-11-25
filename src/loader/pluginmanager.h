@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QObject>
 #include <QHash>
+#include <QEventLoop>
 #include <QPointer>
 #include <QTranslator>
 #include <QDomDocument>
@@ -96,6 +97,7 @@ protected slots:
 	void onShowAboutBoxDialog();
 	void onShutdownTimerTimeout();
 private:
+	QEventLoopLocker *FLoopLocker;
 	QPointer<AboutBox> FAboutDialog;
 	QPointer<SetupPluginsDialog> FPluginsDialog;
 private:

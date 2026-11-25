@@ -81,6 +81,7 @@ void RostersViewPlugin::pluginInfo(IPluginInfo *APluginInfo)
 	APluginInfo->author = "Potapov S.A. aka Lion";
 	APluginInfo->homePage = "http://www.vacuum-im.org";
 	APluginInfo->dependences.append(QUuid(ROSTERSMODEL_UUID));
+	APluginInfo->dependences.append(QUuid(MAINWINDOW_UUID));
 }
 
 bool RostersViewPlugin::initConnections(IPluginManager *APluginManager, int &AInitOrder)

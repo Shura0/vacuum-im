@@ -7,6 +7,7 @@
 #include <QProcess>
 #include <QLibrary>
 #include <QFileInfo>
+#include <QSet>
 #include <QSettings>
 #include <QLibraryInfo>
 #include <definitions/plugininitorders.h>
@@ -79,6 +80,14 @@ PluginManager::PluginManager(QApplication *AParent) : QObject(AParent)
 	FUtilsTranslator = new QTranslator(this);
 	FLoaderTranslator = new QTranslator(this);
 
+	// KStatusNotifierItem (used by the KDE system tray) holds a
+	// QEventLoopLocker while the tray icon exists.  When the tray plugin is
+	// unloaded during a restart that locker is released, and if it is the
+	// last one Qt posts QEvent::Quit - killing the freshly restarted app.
+	// Keep a locker of our own for the whole process lifetime so unloading
+	// plugins can never trigger that automatic quit.
+	FLoopLocker = new QEventLoopLocker;
+
 	FShutdownTimer.setSingleShot(true);
 	connect(&FShutdownTimer,SIGNAL(timeout()),SLOT(onShutdownTimerTimeout()));
 
@@ -90,6 +99,7 @@ PluginManager::PluginManager(QApplication *AParent) : QObject(AParent)
 
 PluginManager::~PluginManager()
 {
+	delete FLoopLocker;
 	Logger::closeLog();
 	PluginHelper::setPluginManager(NULL);
 }
@@ -551,8 +561,45 @@ bool PluginManager::startPlugins()
 
 void PluginManager::unloadPlugins()
 {
-	foreach(const QUuid &uid, FPluginItems.keys())
-		unloadPlugin(uid);
+	// FPluginItems is a QHash, so its key order is arbitrary. A plugin may be
+	// destroyed before the services it still uses in its destructor (for
+	// example MessageDisplayedSync -> PEPManager, or the roster view -> main
+	// window), leaving those plugins with dangling pointers during a restart.
+	// Unload dependents first, dependencies last.
+	auto dependsOn = [this](const QUuid &ADependent, const QUuid &ADependency) {
+		const IPluginInfo *info = FPluginItems.value(ADependent).info;
+		foreach (const QUuid &depend, info->dependences)
+			if (depend==ADependency || FPluginItems.value(ADependency).info->implements.contains(depend))
+				return true;
+		return false;
+	};
+
+	QSet<QUuid> remaining = qToSet(FPluginItems.keys());
+	while (!remaining.isEmpty())
+	{
+		QUuid next;
+		for (const QUuid &uid : remaining)
+		{
+			bool isUsed = false;
+			for (const QUuid &other : remaining)
+			{
+				if (other!=uid && dependsOn(other,uid))
+				{
+					isUsed = true;
+					break;
+				}
+			}
+			if (!isUsed)
+			{
+				next = uid;
+				break;
+			}
+		}
+		if (next.isNull())
+			next = *remaining.constBegin();   // dependency cycle, fall back
+		unloadPlugin(next);
+		remaining.remove(next);
+	}
 
 	QCoreApplication::removeTranslator(FQtTranslator);
 	QCoreApplication::removeTranslator(FUtilsTranslator);
